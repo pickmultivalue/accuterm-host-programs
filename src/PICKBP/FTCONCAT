@@ -1,0 +1,85 @@
+SUBROUTINE FTCONCAT(CC,ID,ITM,MV,SV,VL)
+**************************************************************************
+*Copyright (c) 1995-2020 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTCONCAT
+* AUTHOR: PJS
+* VERSION: 8.0.1
+* CREATED: 01/01/1995
+* UPDATED: 02/11/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.1
+*  PJS 02/11/2020
+*   Minor modification in LOOP/WHILE/REPEAT for MVON# compatibility.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* PERFORM CONCATENATE CONVERSION
+*
+**************************************************************************
+**************************************************************************
+*
+* FTCONCAT() SUBROUTINE INTERFACE
+*
+* INPUT:
+*         CC    = CONVERSION CODE STRING
+*         ID    = CURRENT ITEM ID
+*         ITM   = CURRENT ITEM BODY
+*         MV    = CURRENT MV POSITION
+*         SV    = CURRENT SV POSITION
+*         VL    = CURRENT VALUE
+*
+* OUTPUT:
+*         VL    = CONVERTED VALUE
+*
+* ACTION:
+*
+* THIS SUBROUTINE PERFORMS THE STANDARD "ACCESS" CONCATENATE
+* CONVERSION, SINCE THE CONVERSION CANNOT BE DONE BY THE OCONV()
+* FUNCTION (NO REFERENCE TO ID, ITM, MV, SV).
+*
+**************************************************************************
+*
+NEW.VL=''
+IF CC[2,1]=';' THEN CC=CC[2,999]
+CC.LN=LEN(CC)
+FOR EACH.CC=2 TO CC.LN
+ C=CC[EACH.CC,1]
+ * ADD NEXT ITEM
+ BEGIN CASE
+  CASE C='*'; NEW.VL=NEW.VL:VL
+  CASE C MATCHES '1N'
+   N = C
+   LOOP EACH.CC=EACH.CC+1; C=CC[EACH.CC,1] WHILE C MATCHES '1N' DO
+    N=N:C
+   REPEAT
+   IF N>0 THEN NEW.VL=NEW.VL:ITM<N,MV,SV> ELSE NEW.VL=NEW.VL:ID
+   EACH.CC=EACH.CC-1
+  CASE 1
+   K=INDEX(CC[EACH.CC+1,CC.LN],C,1)
+   IF K=0 THEN K=CC.LN-EACH.CC+1
+   NEW.VL=NEW.VL:CC[EACH.CC+1,K-1]
+   EACH.CC=EACH.CC+K
+ END CASE
+ * ADD SEPARATOR
+ EACH.CC=EACH.CC+1
+ C=CC[EACH.CC,1]
+ IF C<>';' THEN NEW.VL=NEW.VL:C
+NEXT EACH.CC
+VL=NEW.VL
+RETURN
+END

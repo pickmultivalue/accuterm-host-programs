@@ -1,0 +1,280 @@
+*INCLUDE
+**************************************************************************
+*Copyright (c) 2004 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: SUI.TERMDEF
+* AUTHOR: PJS
+* VERSION: 1.0.1
+* CREATED: 06/01/2004
+* UPDATED: 07/20/2004
+*
+* MAINTENANCE RECORD:
+*
+* 1.0.1
+*  PJS 07/20/2004
+*   Added the ESCAPE key to the keyboard commands.
+*
+*************************************************************************
+*************************************************************************
+*
+* SMART USER INTERFACE Terminal Definitions
+*
+*   This module defines all of the terminal elements used by
+*   the SMART USER INTERFACE routines. This is an "INCLUDE"
+*   Module. This module must be INCLUDEd before SUI.CONFIG.
+*   Call SUI.GET.TERM to initialize the terminal definitions.
+*
+*************************************************************************
+*************************************************************************
+*
+* The following comments are copied to the terminal definition
+* template by the MAKE.TERM.ITEM utlility.
+***
+*************************************************************************
+*
+* Terminal definition record
+*
+* The ID of this file is "TERMDEF.XXX" where XXX
+* is the term type code returned by SYSTEM(7).
+*
+* To create synonym terminal definitions, create a
+* one-line definition with the label "USE:" followed
+* by the ID of the actual terminal definition. E.G.
+*
+* USE: WY60
+*
+*************************************************************************
+*
+DIM TermDef(120)
+*
+* TERMINAL INFORMATION
+*
+EQU TERM.DESC        TO TermDef(1)   ;* TERMINAL DESCRIPTION
+EQU TERM.ATTRTYPE    TO TermDef(2)   ;* 0 = CHARACTER, 1 = EMBEDDED, 2 = TAG
+EQU TERM.HICTL       TO TermDef(4)   ;* 1 = TREAT ASCII 128-159 AS CONTROL CHARACTERS (ANSI)
+EQU TERM.NORMWD      TO TermDef(5)   ;* NORMAL WIDTH (80)
+EQU TERM.NORMHT      TO TermDef(6)   ;* NORMAL HEIGHT (24)
+EQU TERM.EXTWD       TO TermDef(7)   ;* EXTENDED WIDTH (132)
+EQU TERM.EXTHT       TO TermDef(8)   ;* EXTENDED HEIGHT (24)
+EQU TERM.PAGES       TO TermDef(9)   ;* NUMBER OF PAGES SUPPORTED BY TERMINAL
+EQU TERM.SPECIAL     TO TermDef(10)  ;* 1 = USE ACCUTERM SPECIAL FEATURES
+*
+* TERMINAL STATE COMMANDS
+*
+EQU TERM.RESET       TO TermDef(11)  ;* ANY COMMANDS NEEDED TO RESET TERMINAL STATE
+EQU TERM.NORMAL      TO TermDef(12)  ;* NORMAL (80 COLUMN) MODE
+EQU TERM.EXTENDED    TO TermDef(13)  ;* EXTENDED (132 COLUMN) MODE
+EQU TERM.CSRON       TO TermDef(14)  ;* DISPLAY THE CURSOR
+EQU TERM.CSROFF      TO TermDef(15)  ;* HIDE THE CURSOR
+EQU TERM.CSRLINE     TO TermDef(16)  ;* SET CUSROR STYLE TO UNDERLINE
+EQU TERM.CSRBLK      TO TermDef(17)  ;* SET CURSOR STYLE TO BLOCK
+EQU TERM.AUXON       TO TermDef(18)  ;* ENABLE TRANSPARENT PRINT
+EQU TERM.AUXOFF      TO TermDef(19)  ;* DISABLE TRANSPARENT PRINT
+EQU TERM.SELPAGE     TO TermDef(20)  ;* SELECT PAGE (USES VARIABLE 'PG')
+*
+* EDITING COMMANDS
+*
+EQU TERM.CLEAR       TO TermDef(21)  ;* CLEAR ENTIRE SCREEN
+EQU TERM.CEOS        TO TermDef(22)  ;* CLEAR TO END OF SCREEN
+EQU TERM.CEOL        TO TermDef(23)  ;* CLEAR TO END OF LINE
+EQU TERM.INSCHR      TO TermDef(24)  ;* INSERT CHARACTER
+EQU TERM.DELCHR      TO TermDef(25)  ;* DELETE CHARACTER
+EQU TERM.INSLINE     TO TermDef(26)  ;* INSERT LINE
+EQU TERM.DELLINE     TO TermDef(27)  ;* DELETE LINE
+EQU TERM.CPYBLK      TO TermDef(28)  ;* COPY BLOCK (USES VARIABLES 'SRC', 'LEFT', 'TOP', 'RIGHT', 'BOTTOM', 'DEST', 'COL', 'ROW')
+EQU TERM.CLRBLK      TO TermDef(29)  ;* CLEAR BLOCK (USES VARIABLES 'LEFT', 'TOP', 'RIGHT', 'BOTTOM')
+*
+* VIDEO ATTRIBUTES
+*
+EQU TERM.ATT$        TO 31           ;* INDEX TO ATTRIBUTES IN TERM.REC ARRAY
+EQU TERM.NV          TO TermDef(31)  ;* NORMAL VIDEO
+EQU TERM.BV          TO TermDef(32)  ;* BLINKING VIDEO
+EQU TERM.RV          TO TermDef(33)  ;* REVERSE VIDEO
+EQU TERM.RBV         TO TermDef(34)  ;* REVERSE BLINKING VIDEO
+EQU TERM.UV          TO TermDef(35)  ;* UNDERLINE VIDEO
+EQU TERM.UBV         TO TermDef(36)  ;* UNDERLINED BLINK VIDEO
+EQU TERM.URV         TO TermDef(37)  ;* UNDERLINED REVERSE VIDEO
+EQU TERM.URBV        TO TermDef(38)  ;* UNDERLINE REVERSE BLINK VIDEO
+EQU TERM.DV          TO TermDef(39)  ;* DIM VIDEO
+EQU TERM.DBV         TO TermDef(40)  ;* DIM BLINKING VIDEO
+EQU TERM.DRV         TO TermDef(41)  ;* DIM REVERSE VIDEO
+EQU TERM.DRBV        TO TermDef(42)  ;* DIM REVERSE BLINKING VIDEO
+EQU TERM.DUV         TO TermDef(43)  ;* DIM UNDERLINE VIDEO
+EQU TERM.DUBV        TO TermDef(44)  ;* DIM UNDERLINE BLINK VIDEO
+EQU TERM.DURV        TO TermDef(45)  ;* DIM UNDERLINE REVERSE VIDEO
+EQU TERM.DURBV       TO TermDef(46)  ;* DIM UNDERLINE REVERSE BLINK VIDEO
+*
+* LINE DRAWING MODE
+*
+EQU TERM.GRON        TO TermDef(51)
+EQU TERM.GROFF       TO TermDef(52)
+*
+* SINGLE LINE CHARACTERS
+*
+EQU TERM.GH          TO TermDef(53) ;* GRAPHIC HORIZONAL CHARACTER
+EQU TERM.GV          TO TermDef(54) ;* VERTICAL CHARACTER
+EQU TERM.GTL         TO TermDef(55) ;* UPPER LEFT CORNER
+EQU TERM.GTI         TO TermDef(56) ;* UPPER INTERSECT
+EQU TERM.GTR         TO TermDef(57) ;* UPPER RIGHT CORNER
+EQU TERM.GLI         TO TermDef(58) ;* LEFT INTERSECT
+EQU TERM.GCI         TO TermDef(59) ;* CENTER INTERSECT
+EQU TERM.GRI         TO TermDef(60) ;* RIGHT INTERSECT
+EQU TERM.GBL         TO TermDef(61) ;* LOWER LEFT CORNER
+EQU TERM.GBI         TO TermDef(62) ;* LOWER INTERSECT
+EQU TERM.GBR         TO TermDef(63) ;* LOWER RIGHT CORNER
+*
+* DOUBLE LINE CHARACTERS
+*
+EQU TERM.DGH         TO TermDef(64) ;* GRAPHIC HORIZONAL CHARACTER
+EQU TERM.DGV         TO TermDef(65) ;* VERTICAL CHARACTER
+EQU TERM.DGTL        TO TermDef(66) ;* UPPER LEFT CORNER
+EQU TERM.DGTI        TO TermDef(67) ;* UPPER INTERSECT
+EQU TERM.DGTR        TO TermDef(68) ;* UPPER RIGHT CORNER
+EQU TERM.DGLI        TO TermDef(69) ;* LEFT INTERSECT
+EQU TERM.DGCI        TO TermDef(70) ;* CENTER INTERSECT
+EQU TERM.DGRI        TO TermDef(71) ;* RIGHT INTERSECT
+EQU TERM.DGBL        TO TermDef(72) ;* LOWER LEFT CORNER
+EQU TERM.DGBI        TO TermDef(73) ;* LOWER INTERSECT
+EQU TERM.DGBR        TO TermDef(74) ;* LOWER RIGHT CORNER
+*
+* RESERVE 75 - 90 FOR SINGLE / DOUBLE CONNECTORS
+*
+*************************************************************************
+* KEYBOARD COMMANDS
+*************************************************************************
+*
+* EDITING KEYS
+*
+EQU TERM.ENTER$      TO 1  ;* KBD CARRIAGE RETURN
+EQU TERM.BKSP$       TO 2  ;* KBD BACKSPACE
+EQU TERM.UP$         TO 3  ;* KBD UP ARROW
+EQU TERM.DOWN$       TO 4  ;* KBD DOWN ARROW
+EQU TERM.LEFT$       TO 5  ;* KBD LEFT ARROW
+EQU TERM.RIGHT$      TO 6  ;* KBD RIGHT ARROW
+EQU TERM.PGUP$       TO 7  ;* KBD PAGE UP
+EQU TERM.PGDN$       TO 8  ;* KBD PAGE DOWN
+EQU TERM.HOME$       TO 9  ;* KBD HOME KEY
+EQU TERM.END$        TO 10 ;* KBD END KEY
+EQU TERM.INS$        TO 11 ;* KBD INSERT KEY
+EQU TERM.DEL$        TO 12 ;* KBD DELETE KEY
+EQU TERM.TAB$        TO 13 ;* KBD TAB KEY
+EQU TERM.ESCAPE$     TO 15 ;* KBD ESC KEY
+*
+* SHIFTED EDITING KEYS
+*
+EQU TERM.SENTER$     TO 16 ;* KBD SHIFT CARRIAGE RETURN
+EQU TERM.SBKSP$      TO 17 ;* KBD SHIFT BACKSPACE
+EQU TERM.SUP$        TO 18 ;* KBD SHIFT UP ARROW
+EQU TERM.SDOWN$      TO 19 ;* KBD SHIFT DOWN ARROW
+EQU TERM.SLEFT$      TO 20 ;* KBD SHIFT LEFT ARROW
+EQU TERM.SRIGHT$     TO 21 ;* KBD SHIFT RIGHT ARROW
+EQU TERM.SPGUP$      TO 22 ;* KBD SHIFT PAGE UP
+EQU TERM.SPGDN$      TO 23 ;* KBD SHIFT PAGE DOWN
+EQU TERM.SHOME$      TO 24 ;* KBD SHIFT HOME KEY
+EQU TERM.SEND$       TO 25 ;* KBD SHIFT END KEY
+EQU TERM.SINS$       TO 26 ;* KBD SHIFT INSERT KEY
+EQU TERM.SDEL$       TO 27 ;* KBD SHIFT DELETE KEY
+EQU TERM.STAB$       TO 28 ;* KBD SHIFT TAB KEY
+*
+* RESERVE 31 - 60 FOR CONTROL EDITING KEYS
+*
+*
+* FUNCTION KEY VALUES
+*
+EQU TERM.F1$         TO 61 ;* KBD F1 KEY
+EQU TERM.F2$         TO 62 ;* KBD F2 KEY
+EQU TERM.F3$         TO 63 ;* KBD F3 KEY
+EQU TERM.F4$         TO 64 ;* KBD F4 KEY
+EQU TERM.F5$         TO 65 ;* KBD F5 KEY
+EQU TERM.F6$         TO 66 ;* KBD F6 KEY
+EQU TERM.F7$         TO 67 ;* KBD F7 KEY
+EQU TERM.F8$         TO 68 ;* KBD F7 KEY
+EQU TERM.F9$         TO 69 ;* KBD F9 KEY
+EQU TERM.F10$        TO 70 ;* KBD F10 KEY
+EQU TERM.F11$        TO 71 ;* KBD F11 KEY
+EQU TERM.F12$        TO 72 ;* KBD F12 KEY
+EQU TERM.F13$        TO 73 ;* KBD F13 KEY
+EQU TERM.F14$        TO 74 ;* KBD F14 KEY
+EQU TERM.F15$        TO 75 ;* KBD F15 KEY
+EQU TERM.F16$        TO 76 ;* KBD F16 KEY
+*
+* SHIFTED FUNCTION KEY VALUES
+*
+EQU TERM.SF1$        TO 81 ;* KBD SHIFT F1 KEY
+EQU TERM.SF2$        TO 82 ;* KBD SHIFT F2 KEY 
+EQU TERM.SF3$        TO 83 ;* KBD SHIFT F3 KEY
+EQU TERM.SF4$        TO 84 ;* KBD SHIFT F4 KEY
+EQU TERM.SF5$        TO 85 ;* KBD SHIFT F5 KEY
+EQU TERM.SF6$        TO 86 ;* KBD SHIFT F6 KEY
+EQU TERM.SF7$        TO 87 ;* KBD SHIFT F7 KEY
+EQU TERM.SF8$        TO 88 ;* KBD SHIFT F8 KEY
+EQU TERM.SF9$        TO 89 ;* KBD SHIFT F9 KEY
+EQU TERM.SF10$       TO 90 ;* KBD SHIFT F10 KEY
+EQU TERM.SF11$       TO 91 ;* KBD SHIFT F11 KEY
+EQU TERM.SF12$       TO 92 ;* KBD SHIFT F12 KEY
+EQU TERM.SF13$       TO 93 ;* KBD SHIFT F13 KEY
+EQU TERM.SF14$       TO 94 ;* KBD SHIFT F14 KEY
+EQU TERM.SF15$       TO 95 ;* KBD SHIFT F15 KEY
+EQU TERM.SF16$       TO 96 ;* KBD SHIFT F16 KEY
+*
+* RESERVE 101 - 140 FOR CONTROL FUNCTION KEYS
+*
+*
+* MOUSE BUTTONS - SINGLE CLICK
+*
+EQU TERM.LEFTBUTTON$      TO 151 ;* KBD LEFT MOUSE BUTTON
+EQU TERM.RIGHTBUTTON$     TO 152 ;* KBD RIGHT MOUSE BUTTON
+EQU TERM.MIDBUTTON$       TO 153 ;* KBD MIDDLE MOUSE BUTTON
+*
+* MOUSE BUTTONS - DOUBLE CLICK
+*
+EQU TERM.DBLLEFTBUTTON$   TO 154 ;* KBD LEFT MOUSE DOUBLE CLICK
+EQU TERM.DBLRIGHTBUTTON$  TO 155 ;* KBD RIGHT MOUSE DOUBLE CLICK
+EQU TERM.DBLMIDBUTTON$    TO 156 ;* KBD MIDDLE MOUSE DOUBLE CLICK
+*
+!
+*
+* PSEUDO KEYS
+*
+EQU TERM.HOTKEY$          TO 995 ;* BUTTON INPUT ALPHA OR DIGIT KEY PRESSED
+EQU TERM.FAKEWIN$         TO 998 ;* LAST WINDOW OPENED IS FAKE (CLOSING WONT RESTORE SCREEN)
+EQU TERM.REFRESH$         TO 999 ;* CALLING PROGRAM MUST REFRESH SCREEN (WINDOWING NOT SUPPORTED)
+*
+*************************************************************************
+* RUN-TIME ELEMENTS (INITIALIZED BY GET.TERM.REC)
+*************************************************************************
+*
+* COMPILED INPUT STRINGS
+*
+EQU TERM.INPSTR      TO TermDef(101) ;* COMPILED KEY STRINGS
+EQU TERM.CMDSTR      TO TermDef(102) ;* KEY COMMAND NUMBERS
+*
+* CURRENT TERMINAL STATE
+*
+EQU TERM.WIDTH       TO TermDef(103) ;* CURRENT WIDTH IN CHARACTERS
+EQU TERM.HEIGHT      TO TermDef(104) ;* CURRENT HEIGHT IN LINES
+EQU TERM.PAGE        TO TermDef(105) ;* CURRENT PAGE NUMBER (0 = FIRST PAGE)
+EQU TERM.ECHO        TO TermDef(106) ;* ECHO ENABLED?
+EQU TERM.CURSOR      TO TermDef(107) ;* CURSOR ON?
+EQU TERM.MOUSEADDR   TO TermDef(108) ;* LAST MOUSE CLICK ADDRESS
+EQU TERM.WINDOW      TO TermDef(109) ;* WINDOWING STATE (DYNAMIC ARRAY)
+*
+*
+*************************************************************************
+* ERROR CODES RETURNED IN RtnCom
+*************************************************************************
+*
+EQU SUI.ERROR$               TO -1  ;* GENERAL FAILURE
+EQU SUI.ERROR.NOTSUPPORTED$  TO -2  ;* FEATURE NOT SUPPORTED BY TERMINAL
+EQU SUI.ERROR.BADVAR$        TO -3  ;* SUBSTITUTE VARIABLE BAD
+EQU SUI.ERROR.INVPOS$        TO -4  ;* THE SPECIFIED POSITION IS INVALID
+EQU SUI.ERROR.INVSIZE$       TO -5  ;* THE SPECIFIED SIZE IS INVALID
+EQU SUI.ERROR.INVMODE$       TO -6  ;* THE MODE OR STYLE IS INVALID
+EQU SUI.ERROR.INVSTYLE$      TO -7  ;* THE SPECIFIED STYLE IS INVALID
+EQU SUI.ERROR.INVID$         TO -8  ;* THE SPECIFIED WINDOW ID IS INVALID
+*

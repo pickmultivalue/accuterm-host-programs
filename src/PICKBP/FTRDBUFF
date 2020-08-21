@@ -1,0 +1,157 @@
+SUBROUTINE FTRDBUFF(BUF,CNT,MAX,EOF,CAN,ERR,MAT PARAMS,MAT VARS)
+**************************************************************************
+*Copyright (c) 1993-2007 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTRDBUFF
+* AUTHOR: PJS
+* VERSION: 5.3.2
+* CREATED: 01/01/1993
+* UPDATED: 047/10/2007
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.2
+*  PJS 04/10/2007
+*   Minor rework of stat calculation (ICNT & BCNT).
+*
+* 5.3.1
+*  PJS 07/24/2006
+*   Changed size of VARS() array from 25 to 26, defining VARS(26)
+*   as MD. Define previously unused VARS(24) as DFILE, the file
+*   variable for the dictionary.
+*
+* 5.0.2
+*  PJS 09/29/2004
+*   Changed max string length from 9999999 to 999999999
+*
+* 5.0.1
+*  PJS 09/10/2002
+*   Added column name list (CLST) to VARS() array as VARS(15).
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* READ BUFFER (NO FILE I/O)
+*
+**************************************************************************
+**************************************************************************
+*
+* FTRDBUFF() SUBROUTINE INTERFACE
+*
+* INPUT:
+*         BUF   = VARIABLE TO RETURN DATA (APPEND)
+*         CNT   = LEN(BUF)
+*         MAX   = MAXIMUM LENGTH OF BUF
+*         CAN   = 1 TO DISCARD REST OF CURRENT ITEM,
+*                 2 IF TRANSACTION TERMINATED, ELSE 0
+*
+* OUTPUT:
+*         BUF   = UPDATED (NEW DATA APPENDED)
+*         CNT   = LEN(BUF)
+*         EOF   = 1 IF NO MORE DATA FOR THIS ITEM, 2 IF NO MORE ITEMS
+*         ERR   = ERROR STATUS (STRING)
+*
+* ACTION:
+*
+* THIS ROUTINE IS CALLED BY THE FILE TRANSFER PROTOCOL TO RETURN
+* DATA TO BE TRANSMITTED.  ON FIRST ENTRY, IDMODE MUST BE SET TO ZERO,
+* AND ITEM MUST CONTAIN THE DATA TO BE TRANSMITTED.  DATA IS RETURNED TO
+* THE PROTOCOL BY APPENDING THE NEXT DATA TO BUF AND RETURNING.
+* WHEN THERE IS NO MORE DATA LEFT IN THE ITEM, RETURNS WITH EOF
+* SET TO ONE.
+*
+* THE NEXT CALL TO THIS ROUTINE AFTER EOF WILL RETURN WITH EOF=2.
+*
+* UPON ENTRY AND EXIT, CNT REFLECTS THE SIZE OF BUF.
+*
+* IF TXT.FLG.PARAM IS SET, THEN AN EXTRA AM IS ADDED TO THE END
+* OF THE ACTUAL ITEM DATA.
+*
+**************************************************************************
+*
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30),VARS(26)
+EQU TXT.FLG.PARAM TO PARAMS(13)
+EQU ICNT TO VARS(1)
+EQU BCNT TO VARS(2)
+EQU IDMODE TO VARS(3)
+EQU ALST TO VARS(4)
+EQU HDR TO VARS(5)
+EQU EXP TO VARS(6)
+EQU GEN TO VARS(7)
+EQU PFX TO VARS(8)
+EQU SID TO VARS(9)
+EQU SKP TO VARS(10)
+EQU FILE TO VARS(11)
+EQU FNAME TO VARS(12)
+EQU ID TO VARS(13)
+EQU IDLST TO VARS(14)
+EQU CLST TO VARS(15)
+EQU IDS TO VARS(16)
+EQU ISIZ TO VARS(17)
+EQU ISEQ TO VARS(18)
+EQU ITEM TO VARS(19)
+EQU XSIZ TO VARS(20)
+EQU PATH TO VARS(21)
+EQU FN TO VARS(22)
+EQU FNLST TO VARS(23)
+EQU DFILE TO VARS(24)
+EQU FNS TO VARS(25)
+EQU MD TO VARS(26)
+*
+**************************************************************************
+*
+* EXTRACT DATA FROM CURRENT ITEM...
+*
+**************************************************************************
+*
+IF CAN THEN
+ ITEM=''
+ IDMODE=2
+ EOF=CAN
+ RETURN
+END
+*
+BCNT=BCNT+XSIZ
+IF BCNT>0 THEN ICNT=1
+XSIZ=0
+*
+IDMODE=IDMODE+0
+BEGIN CASE
+ CASE IDMODE EQ 0
+  FN=FNLST<1>
+  IF TXT.FLG.PARAM THEN ITEM=ITEM:AM
+  ISIZ=LEN(ITEM)
+  IDMODE=1
+ CASE IDMODE EQ 2
+  EOF=2
+  RETURN
+END CASE
+*
+IF ISIZ>0 THEN
+ IF ISIZ>MAX THEN N=MAX ELSE N=ISIZ
+ BUF=BUF:ITEM[1,N]
+ ITEM=ITEM[N+1,999999999]
+ CNT=CNT+N
+ ISIZ=ISIZ-N
+ XSIZ=XSIZ+N
+ EOF=0
+ RETURN
+END
+*
+EOF=1
+IDMODE=2
+RETURN
+*
+END

@@ -1,0 +1,428 @@
+*
+**************************************************************************
+*Copyright (c) 1993-2013 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FT
+* AUTHOR: PJS
+* VERSION: 7.2.1
+* CREATED: 01/01/1993
+* UPDATED: 10/08/2013
+*
+* MAINTENANCE RECORD:
+*
+* 7.2.1
+*  PJS 10/08/2013
+*   Modified all INPUT statements to accept an optional exit string
+*   specified in KMTCFG<62>.
+*
+* 5.3.4
+*  PJS 11/08/2006
+*   Fixed bug where select statement entered at IDLIST prompt was parsed
+*   as if a list of IDs was entered instead of saving the statement.
+*   Added NO.PAGE=@(0,0) to disable pagination for QM, ON, etc.
+*
+* 5.3.3
+*  PJS 08/29/2006
+*   Changed DICT file open syntax to accomodate funky D3 & Ehnanced
+*   R83 path syntax.
+*
+* 5.3.2
+*  PJS 07/24/2006
+*   Changed size of VARS() array from 25 to 26, defining VARS(26)
+*   as MD. Define previously unused VARS(24) as DFILE, the file
+*   variable for the dictionary. These files are now opened up
+*   front in this routine.
+*
+* 5.3.1
+*  PJS 05/08/2006
+*   Updated for 5.3a release. Combined old calls to FTINIT and
+*   FTCLIENV to call new FTINITEX subroutine.
+*
+* 5.0.4
+*  PJS 11/29/2002
+*   Added new ID list processing to accept a select statement if
+*   IDLIST starts with ">".
+*
+* 5.0.3
+*  PJS 10/08/2002
+*   Added new ULTX (ancient Ultimate) platform type which does
+*   not support test for stacked input (YUK!)
+*
+* 5.0.2
+*  PJS 09/10/2002
+*   Added column name list (CLST) to VARS() array as VARS(15).
+*
+* 5.0.1
+*  PJS 02/17/2002
+*  Added new element to CLIENV() array for FTBP library version number.
+*
+* 4.0.2
+*  PJS 11/03/2000
+*   Added system specific support code for Ultimate
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*   ADDED SUPPORT FOR AUTOMATIC CHARACTER SET CONVERSIONS
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM FILE TRANSFER - FRONT END
+*
+**************************************************************************
+**************************************************************************
+*
+DIM PARAMS(30),VARS(26),CLIENV(10)
+*
+EQU DIR.FLG.PARAM TO PARAMS(21)
+EQU OEM.CHR.PARAM TO PARAMS(24)
+EQU PRO.FLG.PARAM TO PARAMS(25)
+*
+EQU ICNT TO VARS(1)
+EQU BCNT TO VARS(2)
+EQU IDMODE TO VARS(3)
+EQU ALST TO VARS(4)
+EQU HDR TO VARS(5)
+EQU EXP TO VARS(6)
+EQU GEN TO VARS(7)
+EQU PFX TO VARS(8)
+EQU SID TO VARS(9)
+EQU SKP TO VARS(10)
+EQU FILE TO VARS(11)
+EQU FNAME TO VARS(12)
+EQU ID TO VARS(13)
+EQU IDLST TO VARS(14)
+EQU CLST TO VARS(15)
+EQU IDS TO VARS(16)
+EQU ISIZ TO VARS(17)
+EQU ISEQ TO VARS(18)
+EQU ITEM TO VARS(19)
+EQU XSIZ TO VARS(20)
+EQU PATH TO VARS(21)
+EQU FN TO VARS(22)
+EQU FNLST TO VARS(23)
+EQU DFILE TO VARS(24)
+EQU FNS TO VARS(25)
+EQU MD TO VARS(26)
+*
+EQU CLI.PLATFORM TO CLIENV(1)
+EQU CLI.PRODUCT TO CLIENV(2)
+EQU CLI.RELEASE TO CLIENV(3)
+EQU CLI.CAPAS TO CLIENV(4)
+EQU CLI.SVCS TO CLIENV(5)
+EQU CLI.SERIAL TO CLIENV(6)
+EQU CLI.LICENSE TO CLIENV(7)
+EQU CLI.USER TO CLIENV(8)
+EQU CLI.VERSION TO CLIENV(9)
+EQU CLI.CONFIG TO CLIENV(10)
+*
+NO.PAGE=@(0,0);* DISABLE PAGINATION (QM, ON)
+*
+**************************************************************************
+*
+* CHECK IF FTCHK HAS BEEN RUN SINCE THIS PROGRAM WAS INSTALLED
+*
+PRINT 'You should RUN FTBP FTCHK and select your host platform';*#GENERIC#*
+PRINT 'before you run this program!';*#GENERIC#*
+SLEEP 3;*#GENERIC#*
+*
+**************************************************************************
+*
+* VALIDATE CONFIGURATION & INITIALIZE PARAMETERS
+*
+**************************************************************************
+*
+MAT VARS=''
+CALL FTINITEX('',MAT PARAMS,MAT CLIENV,FV,STAT)
+IF STAT<>'' THEN
+ PRINT STAT
+ STOP
+END
+OPEN 'MD' TO MD ELSE
+ OPEN 'VOC' TO MD ELSE STOP 201,'MD'
+END
+*
+**************************************************************************
+*
+* PROMPT FOR DESIRED ACTION
+*
+**************************************************************************
+*
+PRINT
+PRINT 'AccuTerm File Transfer Utility'
+PRINT
+*
+* TEST ACCUTERM CLIENT CAPABILITIES
+IF CLI.PLATFORM=0 THEN
+ PRINT 'FT requires AccuTerm to run!'
+ STOP
+END
+IF INDEX(CLI.CAPAS,'Z',1) THEN
+ PRINT 'Upper case / lower case inversion must be disabled to run FT.'
+ PRINT 'Try typing "PTERM CASE NOINVERT" before running FT.'
+ STOP
+END
+*
+IF (INDEX(CLI.CAPAS,'D',1) + INDEX(CLI.CAPAS,'U',1)) = 0 THEN
+ PRINT 'This version of AccuTerm does not support file transfers.'
+ STOP
+END
+*
+PROMPT ''
+*
+LOOP
+ GOSUB 2222; IF NOT(CHKSTKINP) THEN
+  PRINT
+  PRINT '(S)end, (R)eceive, (C)onfigure, (O)ptions, (H)elp or (E)xit ? ':
+ END
+ INPUT ANS; GOSUB 2233; MODE=ANS
+ MODE=OCONV(MODE[1,1],'MCU')
+UNTIL MODE EQ 'S' OR MODE EQ 'R' DO
+ BEGIN CASE
+  CASE MODE EQ '' OR MODE EQ 'X' OR MODE EQ 'E'; STOP
+  CASE MODE EQ 'C'; CALL FTCONFIG('13-15,17,24',MAT PARAMS,FV)
+  CASE MODE EQ 'O'; CALL FTOPTION('13-15',0,MAT PARAMS,FV)
+  CASE MODE EQ 'H'; CALL FTHELP(1,FV)
+ END CASE
+REPEAT
+*
+IF MODE EQ 'S' THEN
+ IF INDEX(CLI.CAPAS,'D',1) = 0 THEN
+  PRINT 'This version of AccuTerm does not support file downloads.'
+  STOP
+ END
+END ELSE
+ IF INDEX(CLI.CAPAS,'U',1) = 0 THEN
+  PRINT 'This version of AccuTerm does not support file uploads.'
+  STOP
+ END
+END
+*
+**************************************************************************
+*
+* SELECT PROTOCOL
+*
+**************************************************************************
+*
+LOOP
+ GOSUB 2222; IF NOT(CHKSTKINP) THEN
+  PRINT
+  PRINT 'File transfer protocol: (A)SCII or (K)ERMIT ? ':
+ END
+ INPUT ANS; GOSUB 2233; PROTOCOL=ANS
+ PROTOCOL=OCONV(PROTOCOL[1,1],'MCU')
+UNTIL PROTOCOL EQ 'A' OR PROTOCOL EQ 'K' DO
+ BEGIN CASE
+  CASE PROTOCOL EQ '' OR PROTOCOL EQ 'X' OR PROTOCOL EQ 'E'; STOP
+  CASE PROTOCOL EQ 'H' OR PROTOCOL EQ '?'; CALL FTHELP(7,FV)
+ END CASE
+REPEAT
+IF PROTOCOL EQ 'A' THEN PRO.FLG.PARAM=0 ELSE PRO.FLG.PARAM=1
+*
+**************************************************************************
+*
+* SEND ITEMS
+*
+**************************************************************************
+*
+IF MODE EQ 'S' THEN
+ DIR.FLG.PARAM = 1
+ SUBNAME='FTRDITMS'
+ LOOP
+  GOSUB 2222; IF NOT(CHKSTKINP) THEN
+   PRINT
+   PRINT 'Enter source (PICK) file name: ':
+  END
+  INPUT ANS; GOSUB 2233; FNAME=ANS
+ WHILE FNAME EQ '?' DO
+  CALL FTHELP(41,FV)
+ REPEAT
+ IF FNAME[1,5] EQ 'DICT ' THEN
+  OPEN FNAME TO FILE ELSE STOP 201,FNAME
+  DFILE = MD
+  FNAME=FNAME[6,99]
+ END ELSE
+  OPEN FNAME TO FILE ELSE STOP 201,FNAME
+  OPEN 'DICT',FNAME TO DFILE ELSE STOP 201,'DICT ':FNAME
+ END
+ LOOP
+  GOSUB 2222; IF NOT(CHKSTKINP) THEN
+   PRINT
+   PRINT 'Enter source (PICK) item list: ':
+  END
+  INPUT ANS; GOSUB 2233; IDLIST=ANS
+ WHILE IDLIST EQ '?' DO
+  CALL FTHELP(42,FV)
+ REPEAT
+ IF IDLIST[1,1] = '>' THEN
+  IDLST=IDLIST
+ END ELSE
+  IDLST=''
+  LOOP
+   LOOP C=IDLIST[1,1] WHILE C EQ ' ' DO IDLIST=IDLIST[2,9999] REPEAT
+  UNTIL C EQ '' DO
+   IF C EQ '"' OR C EQ "'" OR C EQ '\' THEN IDLIST=IDLIST[2,9999] ELSE C=' '
+   K=INDEX(IDLIST,C,1)
+   IF NOT(K) THEN K=LEN(IDLIST)+1
+   IDLST<-1>=IDLIST[1,K-1]
+   IDLIST=IDLIST[K+1,9999]
+  REPEAT
+ END
+ LOOP
+  GOSUB 2222; IF NOT(CHKSTKINP) THEN
+   PRINT
+   PRINT 'Enter target (DOS) directory (d:\directory): ':
+  END
+  INPUT ANS; GOSUB 2233; PATH=ANS
+ WHILE PATH EQ '?' DO
+  CALL FTHELP(43,FV)
+ REPEAT
+ LOOP
+  GOSUB 2222; IF NOT(CHKSTKINP) THEN
+   PRINT
+   PRINT 'Enter target (DOS) file name (file.ext): ':
+  END
+  INPUT ANS; GOSUB 2233; FNLIST=ANS
+ WHILE FNLIST EQ '?' DO
+  CALL FTHELP(49,FV)
+ REPEAT
+ FNLST=''
+ LOOP
+  LOOP C=FNLIST[1,1] WHILE C EQ ' ' DO FNLIST=FNLIST[2,9999] REPEAT
+ UNTIL C EQ '' DO
+  IF C EQ '"' OR C EQ "'" OR C EQ '\' THEN FNLIST=FNLIST[2,9999] ELSE C=' '
+  K=INDEX(FNLIST,C,1)
+  IF NOT(K) THEN K=LEN(FNLIST)+1
+  FNLST<-1>=FNLIST[1,K-1]
+  FNLIST=FNLIST[K+1,9999]
+ REPEAT
+ PRINT
+END ELSE
+*
+**************************************************************************
+*
+* RECEIVE ITEMS
+*
+**************************************************************************
+*
+ DIR.FLG.PARAM = 0
+ SUBNAME='FTWTITMS'
+ LOOP
+  GOSUB 2222; IF NOT(CHKSTKINP) THEN
+   PRINT
+   PRINT 'Enter source (DOS) directory (d:\directory): ':
+  END
+  INPUT ANS; GOSUB 2233; PATH=ANS
+ WHILE PATH EQ '?' DO
+  CALL FTHELP(45,FV)
+ REPEAT
+ LOOP
+  GOSUB 2222; IF NOT(CHKSTKINP) THEN
+   PRINT
+   PRINT 'Enter source (DOS) file name (file.ext): ':
+  END
+  INPUT ANS; GOSUB 2233; FNLIST=ANS
+ WHILE FNLIST EQ '?' DO
+  CALL FTHELP(53,FV)
+ REPEAT
+ FNLST=''
+ LOOP
+  LOOP C=FNLIST[1,1] WHILE C EQ ' ' DO FNLIST=FNLIST[2,9999] REPEAT
+ UNTIL C EQ '' DO
+  IF C EQ '"' OR C EQ "'" OR C EQ '\' THEN FNLIST=FNLIST[2,9999] ELSE C=' '
+  K=INDEX(FNLIST,C,1)
+  IF NOT(K) THEN K=LEN(FNLIST)+1
+  FNLST<-1>=FNLIST[1,K-1]
+  FNLIST=FNLIST[K+1,9999]
+ REPEAT
+ LOOP
+  GOSUB 2222; IF NOT(CHKSTKINP) THEN
+   PRINT
+   PRINT 'Enter target (PICK) file name: ':
+  END
+  INPUT ANS; GOSUB 2233; FNAME=ANS
+ WHILE FNAME EQ '?' DO
+  CALL FTHELP(47,FV)
+ REPEAT
+ IF FNAME[1,5] EQ 'DICT ' THEN
+  OPEN FNAME TO FILE ELSE STOP 201,FNAME
+  DFILE = MD
+  FNAME=FNAME[6,99]
+ END ELSE
+  OPEN FNAME TO FILE ELSE STOP 201,FNAME
+  OPEN 'DICT',FNAME TO DFILE ELSE STOP 201,'DICT ':FNAME
+ END
+ LOOP
+  GOSUB 2222; IF NOT(CHKSTKINP) THEN
+   PRINT
+   PRINT 'Enter target (PICK) item list: ':
+  END
+  INPUT ANS; GOSUB 2233; IDLIST=ANS
+ WHILE IDLIST EQ '?' DO
+  CALL FTHELP(48,FV)
+ REPEAT
+ IDLST=''
+ LOOP
+  LOOP C=IDLIST[1,1] WHILE C EQ ' ' DO IDLIST=IDLIST[2,9999] REPEAT
+ UNTIL C EQ '' DO
+  IF C EQ '"' OR C EQ "'" OR C EQ '\' THEN IDLIST=IDLIST[2,9999] ELSE C=' '
+  K=INDEX(IDLIST,C,1)
+  IF NOT(K) THEN K=LEN(IDLIST)+1
+  IDLST<-1>=IDLIST[1,K-1]
+  IDLIST=IDLIST[K+1,9999]
+ REPEAT
+ PRINT
+END
+*
+**************************************************************************
+*
+* PERFORM TRANSFER
+*
+**************************************************************************
+*
+CALL FTMODE(STAT,SUBNAME,MAT PARAMS,MAT VARS,MAT CLIENV)
+IF STAT EQ '' THEN STAT='Successful transfer.'
+PRINT
+PRINT 'Transfer status: ':STAT
+IF ICNT THEN PRINT 'Transferred ':ICNT:' items, ':BCNT:' bytes.'
+STOP
+*
+**************************************************************************
+*
+* SUBROUTINE TO CHECK FOR STACKED INPUT
+*
+**************************************************************************
+*
+2222 *
+CHKSTKINP=0;*#GENERIC#*
+*#DEFAULT#*CHKSTKINP=SYSTEM(10)
+*#ULT#*CHKSTKINP=SYSTEM(29)
+*#ULTX#*CHKSTKINP=0
+RETURN
+*
+**************************************************************************
+*
+* SUBROUTINE TO CHECK FOR EXIT STRING (CHECKS VARIABLE 'ANS')
+*
+**************************************************************************
+*
+2233 *
+XITSTRS=CLI.CONFIG<1,62>
+NBRXITSTRS=DCOUNT(XITSTRS,' ')
+FOR XITSTRIDX=1 TO NBRXITSTRS
+ XITSTR=TRIM(FIELD(XITSTRS,' ',XITSTRIDX))
+ IF XITSTR<>'' THEN
+  IF ANS=XITSTR THEN STOP
+ END
+NEXT XITSTRIDX
+RETURN
+*
+END

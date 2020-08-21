@@ -1,0 +1,197 @@
+SUBROUTINE ATGUICLEAREVENTS(APPID, FORMID, CTLID, EVTMSK, MODE, ERRORS, STATE)
+**************************************************************************
+*Copyright (c) 2007 Zumasys,Inc. as an unpublished work. All rights      *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUICLEAREVENTS
+* AUTHOR: PJS
+* VERSION: 5.3.2
+* CREATED: 04/10/2007
+* UPDATED: 07/18/2007
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.2
+*  PJS 07/18/2007
+*   Fixed bug when passing null for any ID variable, which should
+*   match any app, form or control.
+*
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.1
+*  PJS 04/10/2007
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI MANAGER - CLEAR EVENTS FROM EVENT QUEUE
+*
+* CALL THIS SUBROUTINE TO REMOVE EVENTS FROM THE EVENT QUEUE.
+* CLEARS EVENTS FOR SPECIFIC GUI OBJECTS, OR EVENTA THAT
+* MATCH A MASK.
+*
+* INPUT: ITEMS
+*  APPID      application identifier (null for all applications)
+*  FORMID     form identifier (null for all forms)
+*  CTLID      control identifier (null for all controls)
+*  EVTMSK     event code mask to remove specific events, or zero
+*             to remove all events; mask is formed by adding event
+*             codes defined in ATGUIEQUATES (e.g. GEACTIVATE + GECLICK)
+*  MODE       0 = clear events originating from specified GUI object
+*             1 = clear events originating from specified object or
+*                 one of its decendents
+*             8 (added to other MODE values): check local queue only,
+*                bypassing check for pending events in client queue
+*
+* OUTPUT:
+*  ERRORS     ERRORS<1> is non-zero if errors have occurred
+*
+* OTHER:
+*  STATE      internal use only - do not modify
+*
+**************************************************************************
+*
+$INCLUDE ATGUIEQUATES
+EQU THISPGM TO 'ATGUICLEAREVENTS'
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30), CLIENV(10)
+ERRORS = GRSUCCESS
+IF NOT(STATE<1>) THEN
+ CALL ATGUIERROR(3, THISPGM, '', 0, GRFATAL, '', ERRORS)
+ RETURN
+END
+*
+* CHECK IF RECORDING MACRO (CANNOT CLEAR EVENTS WHEN RECORDING MACRO!)
+*
+IF STATE<2> THEN
+ CALL ATGUIERROR(2, THISPGM, '', 0, GRNOPOST, '', ERRORS)
+ RETURN
+END
+*
+* CONSTRUCT ID
+IF APPID = '' AND FORMID = '' AND CTLID = '' THEN
+ ID = ''
+ LVL = 0
+END ELSE
+ ID = APPID
+ IF FORMID NE '' THEN
+  ID = ID : '*' : FORMID
+  IF CTLID NE '' THEN
+   ID = ID : '*' : CTLID
+   LVL = 3
+  END ELSE
+   LVL = 2
+  END
+ END ELSE
+  IF CTLID NE '' THEN
+   ID = ID : '**' : CTLID
+   LVL = 3
+  END ELSE
+   LVL = 1
+  END
+ END
+ ID = OCONV(ID,'MCU') ;* IGNORE CASE COMPARING IDS
+END
+*
+* GET PENDING EVENTS FROM CLIENT 
+*
+XMD = MODE
+IF REM(INT(XMD/8),2) = 0 THEN
+ FOR I = 1 TO 30
+  PARAMS(I) = STATE<20,I>
+ NEXT I
+ FOR I = 1 TO 10
+  CLIENV(I) = STATE<20+I>
+ NEXT I
+ K = 51 + STATE<5>
+ LOOP
+  REC = GCCHECKEVENT : VM : '0'
+  CALL FTOBJREQ('g', REC, RSP, 0, MAT PARAMS, MAT CLIENV)
+  IF RSP<1,1,1> > 0 AND RSP<1,1,5> = GRNOEVENT THEN
+   EVT = 0 ;* NO FORMS VISIBLE - IGNORE ERROR
+  END ELSE
+   CALL ATGUIERRORS(RSP, ERRORS)
+   EVT = RSP<1,2,1> + 0
+  END
+ WHILE EVT DO
+  M = RSP<1,2,2> + 0 ;* NEW EVENT RESPONSE INCLUDES ATTRIBUTE COUNT IN RSP<I,2,2>
+  IF M = 0 THEN RSP<1,2,2> = DCOUNT(RSP, AM) ;* OLD EVENT RESPONSE DOES NOT INCLUDE ATTRIBUTE COUNT, SO ADD IT BEFORE SAVING IN LOCAL QUEUE
+  STATE<K> = RSP
+  K = K + COUNT(RSP, AM) + 1
+  IF M > 0 THEN GOTO XLOOP
+ REPEAT
+XLOOP: *
+ STATE<5> = K - 51
+END ELSE
+ XMD = XMD - 8
+END
+*
+* DISCARD PENDING EVENTS THAT WERE SOURCED FROM SPECIFIED OBJECT AND MATCH EVENT MASK
+*
+IF STATE<5> THEN
+ M = STATE<5>
+ K = 0
+ LOOP WHILE K < M DO
+  N = STATE<51+K,2,2>
+  IF N < 1 THEN N = 1
+  EVT = STATE<51+K,2,1>
+  DISCARD = 0
+  IF EVTMSK THEN
+   * IT WOULD BE NICE TO HAVE SOME BITWISE OPERATORS HERE (WE COULD DO A BITWISE and)!
+   TSTEVT = 1
+   TSTMSK = EVTMSK
+   FOR J = 1 TO 31
+    IF REM(TSTMSK,2) THEN ;* TEST LSB OF TEST MASK
+     IF TSTEVT = EVT AND EVT NE GEQUIT THEN ;* COMPARE TEST CODE WITH EVENT
+      DISCARD = 1
+      J = 31
+     END
+    END
+    TSTEVT = TSTEVT + TSTEVT ;* SHIFT TEST CODE LEFT
+    TSTMSK = INT(TSTMSK/2)   ;* SHIFT TEST MASK RIGHT
+   NEXT J
+  END ELSE
+   IF EVT NE GEQUIT THEN DISCARD = 1 ;* CANNOT DISCARD THE QUIT EVENT!
+  END
+  IF DISCARD THEN
+   IF LVL > 0 THEN
+    * COMPARE IDS
+    EVTID = OCONV(STATE<51+K,1,1>,'MCU')
+    IF XMD = 0 THEN
+     IF ID NE EVTID THEN DISCARD = 0
+    END ELSE
+     FOR J = 1 TO LVL
+      XID = FIELD(ID,'*',J)
+      IF XID NE '' THEN          
+       IF XID NE FIELD(EVTID,'*',J) THEN DISCARD = 0
+      END
+     NEXT J
+    END
+   END
+  END
+  *
+  * DISCARD THE EVENT?
+  *
+  IF DISCARD THEN
+   * DISCARD
+   FOR I = 1 TO N
+    STATE = DELETE(STATE,51+K)
+   NEXT I
+   M = M - N
+   STATE<5> = M
+  END ELSE
+   * SKIP
+   K = K + N
+  END
+ REPEAT
+END
+RETURN
+*
+END

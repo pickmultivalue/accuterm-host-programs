@@ -1,0 +1,31 @@
+*INCLUDE
+* SMART USER INTERFACE Clear Typeahead
+*
+*   This INCLUDE item is platform-dependant!
+* 
+*   Clears the typeahead buffer
+*
+* D3/AP/mvBase:
+*#PICK#*TA CLEAR
+*#AP#*TA CLEAR
+*
+* Cache:
+*#CACHE#*INPUTCLEAR
+*
+* mvBase:
+*#MVBASE#*INPUTCLEAR
+*
+* MVON#:
+*#MVON#*INPUTCLEAR
+*
+* OASYS:
+*#OAS#*INPUTCLEAR
+*
+* QM:
+*#QM#*INPUTCLEAR
+*
+* UniData:
+*#UD#*INPUTCLEAR
+*
+* Universe:
+*#UV#*INPUTCLEAR

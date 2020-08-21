@@ -1,0 +1,70 @@
+SUBROUTINE SUI.INPUT(Left, Top, Width, Height, Opts, MaxLen, Value, MAT TermDef)
+**************************************************************************
+*Copyright (c) 2005 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: SUI.INPUT
+* AUTHOR: PJS
+* VERSION: 1.0.0
+* CREATED: 02/15/2005
+* UPDATED: 
+*
+* MAINTENANCE RECORD:
+*
+*************************************************************************
+*************************************************************************
+*
+* SMART USER INTERFACE: Input
+*
+*************************************************************************
+*************************************************************************
+*
+* This routine is a wrapper for SUI.INPUT.TEXT, and is designed to be
+* a drop-in replacement for normal INPUT statements. It simply calls
+* SUI.INPUT.TEXT in a loop and exits only when RtnCom is ENTER. All other
+* funcion and editing keys are ignored, as are mouse clicks outside the
+* current field.
+*
+*   Input Interface:
+*
+*    Left, Top: upper-left corner of text field (relative to current window)
+*
+*    Width, Height: size of text field
+*
+*    Opts:    options
+*              R = read-only
+*              S = select the field initially (overrides the SUICFG.SELECT.TEXT
+*                  configuration setting.
+*              N = do not select the field initially (overrides the
+*                  SUICFG.SELECT.TEXT configuration setting.
+*              P = password entry - echo asterisks.
+*
+*    MaxLen:  if non-zero, this is the maximum number of characters that
+*             can be entered for the field. If Width = 1, it implies that
+*             MaxLen = 1.
+*
+*    Value:   current value of text field (multiline may include line breaks)
+*
+*    TermDef: terminal definitions as set up by SUI.GET.TERM
+*
+*
+*   Output Interface:
+*
+*    Value:   new value of text field
+*
+*************************************************************************
+*
+$INCLUDE SUI.TERMDEF
+*
+BegPos = 0
+CurPos = 0
+LOOP
+ CALL SUI.INPUT.TEXT(Left, Top, Width, Height, Opts, MaxLen, Value, BegPos, CurPos, RtnCom, MAT TermDef)
+UNTIL RtnCom = TERM.ENTER$ OR RtnCom < 0 DO REPEAT
+IF NOT(TERM.CURSOR) THEN PRINT TERM.CSRON:; TERM.CURSOR = 1
+RETURN
+END

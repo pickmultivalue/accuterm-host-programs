@@ -1,0 +1,89 @@
+SUBROUTINE ATGUILOADVALUES(APPID, FORMID, CTLIDS, VALUES, ERRORS, STATE)
+**************************************************************************
+*Copyright (c) 1999-2006 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUILOADVALUES
+* AUTHOR: PJS
+* VERSION: 4.0.1
+* CREATED: 11/01/1999
+* UPDATED: 06/12/2006
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.1
+*  PJS 06/12/2006
+*   Updated to use new version of FTOBJREQ, which requires that
+*   the PARAMS and CLIENV arrays be completely initialized.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI MANAGER - LOAD VALUES
+*
+* CALL THIS SUBROUTINE TO SET THE VALUES OF SEVERAL CONTROLS.
+*
+* INPUT:
+*  APPID      application identifier (use same ID when deleting app)
+*  FORMID     form identifier of form being created
+*  CTLIDS     control identifiers whose values are to be set separated by AM
+*  VALUES     corresponding values separated by AM
+*
+* OUTPUT:
+*  ERRORS     ERRORS<1> is non-zero if errors have occurred
+*
+* OTHER:
+*  STATE      internal use only - do not modify
+*
+**************************************************************************
+*
+$INCLUDE ATGUIEQUATES
+EQU THISPGM TO 'ATGUILOADVALUES'
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30), CLIENV(10)
+ERRORS = GRSUCCESS
+ FOR I = 1 TO 30
+  PARAMS(I) = STATE<20,I>
+ NEXT I
+ FOR I = 1 TO 10
+  CLIENV(I) = STATE<20+I>
+ NEXT I
+ IF NOT(STATE<1>) THEN
+ CALL ATGUIERROR(3, THISPGM, '', 0, GRFATAL, '', ERRORS)
+ RETURN
+END
+ID = APPID
+IF FORMID NE '' THEN
+ ID = ID : '*' : FORMID
+END
+REC = ''
+N = DCOUNT(CTLIDS, AM)
+FOR I = 1 TO N
+ IF I > 1 THEN REC = REC : AM
+ REC = REC : GCSETPROP : VM : ID : '*' : CTLIDS<I> : VM : GPVALUE : VM : VM : VM : VALUES<I>
+NEXT I
+*
+* CHECK IF RECORDING MACRO
+*
+IF STATE<2> THEN
+ STATE = STATE : AM : REC ;* APPEND TO MACRO
+ RETURN
+END
+*
+* SEND COMMAND TO SERVER
+*
+CALL FTOBJREQ('g', REC, RSP, 0, MAT PARAMS, MAT CLIENV)
+CALL ATGUIERRORS(RSP, ERRORS)
+RETURN
+*
+END

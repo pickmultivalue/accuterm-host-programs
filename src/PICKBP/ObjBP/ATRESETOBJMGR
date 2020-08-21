@@ -1,0 +1,50 @@
+SUBROUTINE ATRESETOBJMGR
+**************************************************************************
+*Copyright (c) 1998-2000 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATRESETOBJMGR
+* AUTHOR: PJS
+* VERSION: 4.0.2
+* CREATED: 01/01/1998
+* UPDATED: 10/26/2004
+*
+* MAINTENANCE RECORD:
+*
+* 4.0.2
+*  PJS 10/26/2004
+*   Force client services to 'a' to ensure that FTOBJREQ actually
+*   sends the reset request to the automation server (tests in
+*   FTOBJREQ caused it to ignore the request if desired service was
+*   not indicated in the client services.)
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM OBJECT MANAGER - RESET
+*
+* CALL THIS SUBROUTINE TO RESET THE ACCUTERM OBJECT MANAGER.
+* THIS RELEASES ALL OBJECTS YOU HAVE CREATED OR HAVE REFERENCES TO.
+* ALL OBJECT ID'S THAT YOU CURRENTLY HAVE ARE INVALID AFTER CALLING
+* THIS ROUTINE.
+*
+**************************************************************************
+*
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30),CLIENV(10)
+MAT PARAMS=''; PARAMS(1) = 250; PARAMS(10) = 0
+MAT CLIENV=''; CLIENV(5)='a'
+CALL FTOBJREQ('a','99',RSP,0,MAT PARAMS,MAT CLIENV)
+RETURN
+*
+END

@@ -1,0 +1,486 @@
+SUBROUTINE FTWTDATA(BUF,CNT,MAX,EOF,CAN,ERR,MAT PARAMS,MAT VARS)
+**************************************************************************
+*Copyright (c) 1993-2020 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTWTDATA
+* AUTHOR: PJS
+* VERSION: 8.0.1
+* CREATED: 01/01/1993
+* UPDATED: 02/11/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.1
+*  PJS 02/11/2020
+*   Added support for MVON# platform (MVON).
+*
+* 7.1.3
+*  PJS 03/19/2014
+*   Added support for OASYS platform
+*
+* 7.1.2
+*  PJS 11/12/2013
+*   Changed variable name APPEND to APPND to work around new jbase reserved
+*   word.
+*
+* 7.1.1
+*  PJS 11/08/2012
+*   Added ON ERROR clause to WRITE statement for platforms which support it.
+*   NOTE: the only indication that an error ocurred is that the item count
+*   will be less than the number expected!
+*
+* 5.4.2
+*  PJS 12/20/2007
+*   Added support for CACHE platform.
+*
+* 5.4.1
+*  PJS 04/18/2007
+*   Added support for extended delimiters, including user-defined
+*   delimiter in hex - see local subroutine 900. Rewrote field
+*   extraction code (local subroutine 1000) to handle variable-
+*   length delimiter (most Pick implementations of the FIELD()
+*   function only support single-character delimiter).
+*
+* 5.3.1
+*  PJS 07/24/2006
+*   Changed size of VARS() array from 25 to 26, defining VARS(26)
+*   as MD. Define previously unused VARS(24) as DFILE, the file
+*   variable for the dictionary.
+*
+* 5.1.2
+*  PJS 09/29/2004
+*   Changed max string length from 9999999 to 999999999
+*
+* 5.1.1
+*  PJS 09/15/2002
+*   Added column name list (CLST) to VARS() array as VARS(15).
+*   Let attribute list override header row (wizard sends attribute
+*   list and sets header row because source data may actually have
+*   a header row that needs processing by converter, but it may
+*   not have real attribute names, hence the attribute list.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* WRITE DATA RECORDS
+*
+**************************************************************************
+**************************************************************************
+*
+* FTWTDATA() SUBROUTINE INTERFACE
+*
+* INPUT:
+*         BUF   = DATA TO WRITE
+*         CNT   = LEN(BUF)
+*         MAX   = MAX BYTES TO ACCUMULATE IN BUF
+*         EOF   = 1 IF END OF FILE, 2 IF END OF TRANSACTION
+*         CAN   = 1 IF DISCARD CURRENT ITEM, ELSE 0
+*
+* OUTPUT:
+*         BUF   = UPDATED (WRITTEN DATA REMOVED)
+*         CNT   = LEN(BUF)
+*         MAX   = MAX BYTES TO ACCUMULATE IN BUF (UPDATED DURING FIRST CALL)
+*         CAN   = 1 IF CANNOT UPDATE ITEM, 2 TO CANCEL REST OF TRANSACTION
+*         ERR   = ERROR STATUS (STRING)
+*
+* ACTION:
+*
+* THIS ROUTINE IS CALLED BY THE FILE TRANSFER PROTOCOL TO UPDATE
+* ITEMS WITH RECEIVED DATA.  ON FIRST ENTRY, IDMODE MUST BE SET TO ZERO.
+*
+* THIS ROUTINE REMOVES DATA FROM BUF, AND EITHER BUILDS NEW ITEMS
+* FROM RECEIVED DATA (DELIMITED FIELDS), OR UPDATES EXISTING ITEMS
+* WITH RECEIVED DATA.
+*
+* IF THIS ROUTINE IS CALLED WITH EOF SET, THERE IS NO MORE DATA TO
+* RECEIVE FOR THE FILE.
+*
+* UPON ENTRY AND EXIT, CNT REFLECTS THE LENGTH OF BUF
+*
+* WHEN EOF IS SET (NO MORE DATA FOR THIS FILE), CAN WILL BE
+* SET TO 2 (TERMINATE TRANSACTION) BEFORE RETURNING.
+*
+**************************************************************************
+*
+DIM PARAMS(30),VARS(26)
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+EQU TAB TO CHAR(9), CR TO CHAR(13), LF TO CHAR(10)
+EQU OVR.FLG.PARAM TO PARAMS(15)
+EQU DCH.FLG.PARAM TO PARAMS(18)
+EQU EXTRA.AM.PARAM TO PARAMS(20)
+EQU ICNT TO VARS(1)
+EQU BCNT TO VARS(2)
+EQU IDMODE TO VARS(3)
+EQU ALST TO VARS(4)
+EQU HDR TO VARS(5)
+EQU EXP TO VARS(6)
+EQU GEN TO VARS(7)
+EQU PFX TO VARS(8)
+EQU SID TO VARS(9)
+EQU SKP TO VARS(10)
+EQU FILE TO VARS(11)
+EQU FNAME TO VARS(12)
+EQU ID TO VARS(13)
+EQU IDLST TO VARS(14)
+EQU CLST TO VARS(15)
+EQU IDS TO VARS(16)
+EQU ISIZ TO VARS(17)
+EQU ISEQ TO VARS(18)
+EQU ITEM TO VARS(19)
+EQU XSIZ TO VARS(20)
+EQU PATH TO VARS(21)
+EQU FN TO VARS(22)
+EQU FNLST TO VARS(23)
+EQU DFILE TO VARS(24)
+EQU FNS TO VARS(25)
+EQU MD TO VARS(26)
+*
+**************************************************************************
+*
+IF CAN THEN
+ CAN=2; BUF=''; CNT=0
+ RETURN
+END
+*
+IDMODE=IDMODE+0
+IF IDMODE EQ 0 THEN
+ IF MAX < 5000 THEN MAX=5000
+ IF HDR AND (ALST NE '') THEN
+  *ATTRIBUTE LIST OVERRIDES HEADER - SKIP!
+  HDR=0
+  SKP=1
+ END
+ IF NOT(HDR) THEN
+  IF ALST<2> EQ '' THEN CALL FTPARSE(FNAME,ALST,ERR,DFILE,MD)
+  IF ERR NE '' THEN CAN=2; BUF=''; CNT=0; RETURN
+  IF ALST<1,1> NE '*' AND NOT(GEN) THEN
+   LOCATE('0',ALST,2;K) ELSE
+    ERR='Must define ITEM-ID attribute'
+    CAN=2; BUF=''; CNT=0
+    RETURN
+   END
+  END
+ END
+ BEGIN CASE
+  CASE HDR; IDMODE=1
+  CASE SKP; IDMODE=2
+  CASE 1; IDMODE=3
+ END CASE
+END
+GOSUB 900
+IF DELIM EQ '' THEN
+ IF ERR EQ '' THEN ERR='Invalid text file field delimiter'
+ CAN=2; BUF=''; CNT=0
+ RETURN
+END
+RECORDS=COUNT(BUF,AM)
+IF EOF AND CNT THEN
+ IF BUF[CNT,1] NE AM THEN
+  BUF=BUF:AM
+  CNT=CNT+1
+  RECORDS=RECORDS+1
+ END
+END
+FNO=ALST<10>; * IN CASE OF PARTIAL ITEM LAST TIME
+IF RECORDS=0 AND CNT>MAX THEN RECORDS=1; PARTIAL=1 ELSE PARTIAL=0
+FOR RECORD=1 TO RECORDS
+ Ln=BUF<RECORD>
+ ON IDMODE GOTO 100,200,300,400
+ RETURN
+*
+**************************************************************************
+*
+100 * PROCESS HEADER RECORD
+*
+**************************************************************************
+*
+ EOD=(Ln EQ '')
+ LOOP UNTIL EOD DO
+  GOSUB 1000
+  IF VL NE '' THEN ALST<1,-1>=VL
+ REPEAT
+ CALL FTPARSE(FNAME,ALST,ERR,DFILE,MD)
+ IF ERR NE '' THEN CAN=2; BUF=''; CNT=0; RETURN
+ IF ALST<1,1> NE '*' AND NOT(GEN) THEN
+  LOCATE('0',ALST,2;K) ELSE
+   ERR='Must define ITEM-ID attribute'
+   CAN=2; BUF=''; CNT=0
+   RETURN
+  END
+ END
+ IF SKP THEN IDMODE=2 ELSE IDMODE=3
+ GOTO 500
+*
+**************************************************************************
+*
+200 * SKIP RECORD
+*
+**************************************************************************
+*
+ SKP=SKP-1
+ IF SKP <= 0 THEN IDMODE=3
+ GOTO 500
+*
+**************************************************************************
+*
+300 * BEGIN NEXT ITEM
+*
+**************************************************************************
+*
+* FIRST, GET ITEM ID (IF OBVIOUS)
+*
+ ITEM=''
+ BEGIN CASE
+  CASE GEN
+   ID=PFX:SID
+   SID=SID+1
+  CASE ALST<1,1> EQ '*'
+   GOSUB 1000
+   ID=VL
+  CASE 1
+   ID=''
+ END CASE
+ FNO=1; * NOT PARTIAL ITEM
+*
+**************************************************************************
+*
+400 * EXTRACT DATA
+*
+**************************************************************************
+*
+* EXTRACT ITEM FROM ALL FIELDS
+*
+ IF ALST<1,1> EQ '*' OR ALST<1,1> EQ '+' THEN
+  EOD=(Ln EQ '')
+  LOOP UNTIL EOD DO
+   GOSUB 1000
+   IF NOT(PARTIAL AND EOD) THEN
+    ITEM=ITEM:VL
+    IF NOT(EOD) THEN ITEM=ITEM:AM
+   END
+  REPEAT
+  IF PARTIAL THEN
+   PARTIAL=RL
+   IDMODE=4
+  END ELSE
+   IDMODE=3
+   IF EXTRA.AM.PARAM THEN
+    IF ITEM[LEN(ITEM),1] EQ AM THEN ITEM=ITEM:AM
+   END
+   BEGIN CASE
+    CASE OVR.FLG.PARAM EQ 1
+     APPND=0
+     GOSUB 600
+    CASE OVR.FLG.PARAM EQ 2
+     APPND=1
+     GOSUB 600
+    CASE 1
+     READV DUMMY FROM FILE,ID,1 ELSE
+      APPND=0
+      GOSUB 600
+     END
+   END CASE
+   ITEM=''
+  END
+*
+ END ELSE
+*
+* EXTRACT SPECIFIED FIELDS
+*
+  NATT=DCOUNT(ALST<2>,VM)
+  EOD=(Ln EQ '')
+  LOOP UNTIL EOD DO
+   GOSUB 1000
+   IF NOT(PARTIAL AND EOD) THEN
+    IF FNO <= NATT THEN
+     NCONV=DCOUNT(ALST<4,FNO>,SVM)
+     NMV=DCOUNT(VL,VM)
+     FOR MV=1 TO NMV
+      NSV=DCOUNT(VL<1,MV>,SVM)
+      FOR SV=1 TO NSV
+       FOR EACH.CONV=1 TO NCONV
+        VL<1,MV,SV>=ICONV(VL<1,MV,SV>,ALST<4,FNO,EACH.CONV>)
+       NEXT EACH.CONV
+      NEXT SV
+     NEXT MV
+     ANM=ALST<2,FNO>
+     BEGIN CASE
+      CASE ANM EQ 0; ID=VL
+      CASE ANM > 0; ITEM<ANM>=VL
+     END CASE
+    END
+    FNO=FNO+1
+   END
+  REPEAT
+  IF PARTIAL THEN
+   PARTIAL=RL
+   IDMODE=4
+   ALST<10>=FNO
+  END ELSE
+   IDMODE=3
+   BEGIN CASE
+    CASE OVR.FLG.PARAM EQ 1
+     APPND=0
+     GOSUB 600
+    CASE OVR.FLG.PARAM EQ 2
+     READ OLD.ITEM FROM FILE,ID ELSE OLD.ITEM=''
+     FOR EACH.ATT=1 TO NATT
+      ANM=ALST<2,EACH.ATT>
+      IF ANM > 0 THEN OLD.ITEM<ANM>=ITEM<ANM>
+     NEXT EACH.ATT
+     ITEM=OLD.ITEM
+     OLD.ITEM=''
+     APPND=0
+     GOSUB 600
+    CASE 1
+     READV DUMMY FROM FILE,ID,1 ELSE
+      APPND=0
+      GOSUB 600
+     END
+   END CASE
+   ITEM=''
+  END
+ END
+*
+500 *
+*
+NEXT RECORD
+IF PARTIAL THEN
+ K=CNT-PARTIAL
+END ELSE
+ IF RECORDS THEN
+  K=INDEX(BUF,AM,RECORDS)
+  IF NOT(K) THEN K=CNT
+ END ELSE K=0
+END
+BCNT=BCNT+K
+BUF=BUF[K+1,999999999]
+CNT=LEN(BUF)
+RETURN
+*
+**************************************************************************
+*
+600 * WRITE ITEM TO FILE
+*
+**************************************************************************
+*
+OK=1
+IF APPND THEN
+ READ OLD.ITEM FROM FILE,ID ELSE OLD.ITEM=''
+ IF OLD.ITEM <> '' THEN OLD.ITEM=OLD.ITEM:AM
+ ITEM=OLD.ITEM:ITEM
+END
+WRITE ITEM ON FILE,ID;*#GENERIC#*
+*#DEFAULT#*WRITE ITEM ON FILE,ID
+*#CACHE#*WRITE ITEM ON FILE,ID ON ERROR OK=0
+*#JB#*WRITE ITEM ON FILE,ID ON ERROR OK=0
+*#MD#*WRITE ITEM ON FILE,ID
+*#MVON#*WRITE ITEM ON FILE,ID ON ERROR OK=0 ELSE OK=0
+*#NR#*WRITE ITEM ON FILE,ID
+*#OAS#*WRITE ITEM ON FILE,ID ON ERROR OK=0
+*#OI#*WRITE ITEM ON FILE,ID ELSE OK=0
+*#ON#*WRITE ITEM ON FILE,ID ON ERROR OK=0
+*#PICK#*WRITE ITEM ON FILE,ID ON ERROR OK=0
+*#QM#*WRITE ITEM ON FILE,ID ON ERROR OK=0
+*#SEQ#*WRITE ITEM ON FILE,ID
+*#UD#*WRITE ITEM ON FILE,ID ON ERROR OK=0
+*#ULT#*WRITE ITEM ON FILE,ID
+*#ULTX#*WRITE ITEM ON FILE,ID
+*#UV#*WRITE ITEM ON FILE,ID ON ERROR OK=0 ELSE OK=0
+IF OK THEN ICNT=ICNT+1
+RETURN
+*
+**************************************************************************
+*
+900 * SORT OUT DELIMITER
+*
+**************************************************************************
+*
+DCH = OCONV(DCH.FLG.PARAM,'MCU')
+BEGIN CASE
+ CASE (DCH EQ "0" AND LEN(DCH) EQ 1) OR DCH EQ "" OR DCH EQ "TAB"
+  DELIM = TAB; DL=1; CSV=0
+ CASE (DCH EQ "1" AND LEN(DCH) EQ 1) OR DCH EQ "COMMA"
+  DELIM = ","; DL=1; CSV=1
+ CASE (DCH EQ "2" AND LEN(DCH) EQ 1) OR DCH EQ "CRLF"
+  * CANNOT USE CRLF AS FIELD DELIMITER (AMBIGUOUS)
+   ERR='Field delimiter cannot contain CR/LF!'
+   DELIM=''; DL=0; CSV=0
+ CASE 1
+  DELIM = ICONV(DCH,'MX');*#GENERIC#*
+*#DEFAULT#*  DELIM = ICONV(DCH,'MX')
+*#CACHE#*  DELIM = OCONV(DCH,'MCXA')
+*#JB#*  DELIM = ICONV(DCH,'MX0C')
+*#MD#*  DELIM = ICONV(DCH,'MX')
+*#MVON#*  DELIM = ICONV(DCH,'MX0C')
+*#NR#*  DELIM = ICONV(DCH,'MX')
+*#OAS#*  DELIM = ICONV(DCH,'MX0C')
+*#OI#*  DELIM = ICONV(DCH,'MX')
+*#ON#*  DELIM = ICONV(DCH,'MX0C')
+*#PICK#*  DELIM = ICONV(DCH,'MX')
+*#QM#*  DELIM = ICONV(DCH,'MX0C')
+*#SEQ#*  DELIM = ICONV(DCH,'MX')
+*#UD#*  DELIM = ICONV(DCH,'MX0C')
+*#ULT#*  DELIM = ICONV(DCH,'MX')
+*#ULTX#*  DELIM = ICONV(DCH,'MX')
+*#UV#*  DELIM = ICONV(DCH,'MX0C')
+  * CHECK FOR CRLF IN CUSTOM DELIMITER (THIS IS AMBIGUOUS, SINCE CRLF IS RECORD DELIMITER)
+  IF INDEX(DELIM,CR:LF,1) + INDEX(DELIM,AM,1) THEN
+   ERR='Field delimiter cannot contain CR/LF or attribute mark!'
+   DELIM=''
+  END
+  DL=LEN(DELIM)
+  CSV=0
+END CASE
+RETURN
+*
+**************************************************************************
+*
+1000 * EXTRACT NEXT FIELD
+*
+**************************************************************************
+*
+RL=LEN(Ln);* IN CASE OF PARTIAL RECORD, NEED NUMBER OF BYTES REMAINING
+VL=''
+N2=0
+IF CSV AND Ln[1,1]='"' THEN
+ * QUOTED FIELD IN CSV TEXT FILE
+ N1=2
+ NQ=2
+ DONE=0
+ LOOP
+  N2=INDEX(Ln,'"',NQ)
+  IF N2=0 THEN N2=RL+1
+  IF Ln[N2+1,1]='"' THEN
+   * FOUND EMBEDDED QUOTE (2 CONSECUTIVE QUOTES)
+   VL=VL:Ln[N1,N2-N1+1]
+   N1=N2+2
+   NQ=NQ+2
+  END ELSE
+   * FOUND CLOSING QUOTE
+   VL=VL:Ln[N1,N2-N1]
+   DONE=1
+  END
+ UNTIL DONE DO REPEAT
+ Ln=Ln[N2+1,999999999] 
+END
+N1=INDEX(Ln,DELIM,1)
+IF N1=0 THEN N1=999999999
+VL=VL:Ln[1,N1-1]
+N1=N1+DL
+IF N1+N2>RL THEN EOD=1 ELSE EOD=0
+Ln=Ln[N1,999999999]
+RETURN
+*
+END

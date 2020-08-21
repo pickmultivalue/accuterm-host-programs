@@ -1,0 +1,32 @@
+// AccuTerm VSCode Workspace Template
+//
+// To change the maximum number of items to list from any file,
+// change RestFS.MaxItems. To show items in a dictionary level
+// file, change RestFS.SelAttr to 208.
+{
+  "folders":[{"uri":"RestFS:/","name":"<ACCOUNT>"}],
+  "extensions":{"recommendations":["mvextensions.mvbasic"]},
+  "settings":{
+    "files.associations":{"*":"mvbasic"},
+    "files.exclude":{
+      "**/.git": true,
+      "**/.vscode": true,
+      "**/node_modules": true,
+      "**/pom.xml": true},
+    "files.eol":"\n",
+    "MVBasic.ServerName":"<SESSIONID>",
+    "MVBasic.Account":"<ACCOUNT>",
+    "MVBasic.RestPath":"http://localhost:3181/mvsvr/restfs",
+    "MVBasic.UseRestFS":true,
+    "MVBasic.languageType":"<DIALECT>",
+    "MVBasic.RestFS.AutoConnect":true,
+    "MVBasic.RestFS.RestAPI":1,
+    "MVBasic.RestFS.MaxItems":250,
+    "MVBasic.RestFS.SelAttr":32976,
+    "MVBasic.RestFS.CaseSensitive":<CASE>,
+    "MVBasic.EditFiles":[
+<ITEMS>
+    ]
+    }
+  }
+}

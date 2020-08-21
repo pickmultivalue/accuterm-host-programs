@@ -1,0 +1,222 @@
+*
+**************************************************************************
+*Copyright (c) 1993-2020 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTSERVER
+* AUTHOR: PJS
+* VERSION: 8.0.2
+* CREATED: 01/01/1993
+* UPDATED: 02/11/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.1
+*  PJS 02/11/2020
+*   Added support for MVON# platform (MVON).
+*
+* 7.1.1
+*  PJS 03/19/2014
+*   Added support for OASYS platform.
+*
+* 5.4.1
+*  PJS 01/23/2008
+*   Added support for ATCLIENT connections (QM), which specify server
+*   ID as command line argument.
+*
+* 5.3.4
+*  PJS 12/20/2007
+*   Added support for CACHE platform.
+*
+* 5.3.3
+*  PJS 11/08/2006
+*   Added NO.PAGE=@(0,0) to disable pagination for QM, ON, etc.
+*   Added support for ON (ONWare MVON) platform.
+*
+* 5.3.2
+*  PJS 07/24/2006
+*   Added support for OI (OpenInsight CTO) platform.
+*
+* 5.3.1
+*  PJS 05/08/2006
+*   Updated for 5.3a release. Combined old calls to FTINIT and
+*   FTCLIENV to call new FTINITEX subroutine.
+*
+* 5.1.4
+*  PJS 03/05/2004
+*   Added new NR (Northgate Reality 9+) platform type, same as
+*   old MD, except uses the SENTENCE() function for command line.
+*
+* 5.1.3
+*  PJS 10/24/2003
+*   Integrated QM platform specific code per mods from Martin
+*   Phillips.
+*
+* 5.1.2
+*  PJS 10/08/2002
+*   Added new ULTX (ancient Ultimate) platform type.
+*
+* 5.1.1
+*  PJS 09/15/2002
+*   Added command-line argument "1" to cause the server to automatically
+*   terminate when all client connections are closed. Note: this
+*   feature does not work on R83 or MD platforms. Also, defaulted
+*   server name to "MultiValue Host" if no name specified in FTSETUP.
+*
+* 5.0.1
+*  PJS 02/17/2002
+*  Added new element to CLIENV() array for FTBP library version number.
+*
+* 4.1.1
+*  PJS 09/12/2001
+*   Changed version to 1.4. Added SESSIONID argument to FTSVRSUB.
+*
+* 4.0.3
+*  PJS 06/04/2001
+*   Argument list to FTSVRSUB added FV variable
+*
+* 4.0.2
+*  PJS 11/03/2000
+*   Test that FTCHK has been run after installation
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*   ADDED CLIENV() TO CONTAIN ACCUTERM INFORMATION
+*   CALLS FTSVRSUB TO IMPLEMENT "SERVER MODE"
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM PICK SERVER
+*
+**************************************************************************
+**************************************************************************
+*
+EQU REL TO '2.0'
+EQU AM TO CHAR(254), CR TO CHAR(13), LF TO CHAR(10)
+EQU ESC TO CHAR(27), STX TO CHAR(2)
+EQU OUTPKTSZ TO 2000
+*
+DIM FTCONF(30)
+EQU MAX.POS.PARAM TO FTCONF(1)
+EQU MCP.FLG.PARAM TO FTCONF(10)
+EQU EXTRA.AM.PARAM TO FTCONF(20)
+EQU SVRNAME TO FTCONF(26)
+EQU READ.OK TO FTCONF(27)
+EQU WRITE.OK TO FTCONF(28)
+EQU CONV.OK TO FTCONF(29)
+EQU EXEC.OK TO FTCONF(30)
+*
+DIM CLIENV(10)
+EQU CLI.PLATFORM TO CLIENV(1)
+EQU CLI.PRODUCT TO CLIENV(2)
+EQU CLI.RELEASE TO CLIENV(3)
+EQU CLI.CAPAS TO CLIENV(4)
+EQU CLI.SVCS TO CLIENV(5)
+EQU CLI.SERIAL TO CLIENV(6)
+EQU CLI.LICENSE TO CLIENV(7)
+EQU CLI.USER TO CLIENV(8)
+EQU CLI.VERSION TO CLIENV(9)
+EQU CLI.CONFIG TO CLIENV(10)
+*
+NO.PAGE=@(0,0);* DISABLE PAGINATION (QM, ON)
+*
+**************************************************************************
+*
+*SERVER COMMANDS:
+*
+*EXECUTE,CAPTURE;COMMAND :AM: DATA ...
+*READ,FILENAME,ID,ATTR,VAL,SVAL
+*WRITE,FILENAME,ID,ATTR,VAL,SVAL;DATA
+*ADD,FILENAME,ID;DATA
+*READNEXT,FILENAME,ATTR,VAL,SVAL
+*CALL,SUBNAME,FUNC;DATA
+*CONV,I/O;CODE :AM: DATA
+*EXIT
+*
+**************************************************************************
+*
+* CHECK IF FTCHK HAS BEEN RUN SINCE THIS PROGRAM WAS INSTALLED
+*
+PRINT 'You should RUN FTBP FTCHK and select your host platform';*#GENERIC#*
+PRINT 'before you run this program!';*#GENERIC#*
+SLEEP 3;*#GENERIC#*
+*
+**************************************************************************
+*
+CALL FTINITEX('',MAT FTCONF,MAT CLIENV,FV,STAT)
+IF STAT NE '' THEN
+ PRINT STAT
+ STOP
+END
+*
+**************************************************************************
+*
+IF TRIM(SVRNAME) = "" THEN
+ SVRNAME='MultiValue Host'
+END
+*
+PROMPT ""
+*
+IF CLI.PLATFORM<2 THEN
+ PRINT 'FTSERVER requires AccuTerm/Windows to run!'
+ STOP
+END
+IF INDEX(CLI.CAPAS,'Z',1) THEN
+ PRINT 'Upper case / lower case inversion must be disabled to run FTSERVER.'
+ PRINT 'Try typing "PTERM CASE NOINVERT" before running FTSERVER.'
+ STOP
+END
+IF INDEX(CLI.CAPAS,'H',1)=0 THEN
+ PRINT 'This version of AccuTerm does not support server mode!'
+ STOP
+END
+*
+*#ADDS#*CMDLINE = SENTENCE()
+*#AP#*TCLREAD CMDLINE
+*#CACHE#*CMDLINE = @SENTENCE
+*#ENH#*CMDLINE = SENTENCE()
+*#JB#*CMDLINE = @SENTENCE
+*#MD#*CMDLINE=''; *NOT SUPPORTED
+*#MVBASE#*CMDLINE = SENTENCE()
+*#MVON#*CMDLINE = @SENTENCE
+*#NR#*CMDLINE = SENTENCE()
+*#OAS#*CMDLINE = @SENTENCE
+*#OI#*CMDLINE = @SENTENCE
+*#ON#*CMDLINE = @SENTENCE
+*#PICK#*TCLREAD CMDLINE
+*#QM#*CMDLINE = @SENTENCE
+*#R83#*CMDLINE=''; *NOT SUPPORTED
+*#SEQ#*CMDLINE = SENTENCE()
+*#UD#*CMDLINE = @SENTENCE
+*#ULT#*CMDLINE = @SENTENCE; CONVERT AM TO ' ' IN CMDLINE
+*#ULTX#*CMDLINE = @SENTENCE; CONVERT AM TO ' ' IN CMDLINE
+*#UV#*CMDLINE = @SENTENCE
+*#VIS#*CMDLINE = SENTENCE()
+*#DEFAULT#*CMDLINE=''
+CMDLINE=TRIM(CMDLINE)
+*
+OPT=FIELD(CMDLINE,' ',2)
+BEGIN CASE
+ CASE OPT=1
+  SVRID='$':TIME() ;* AUTO-CLOSE SERVER
+ CASE OPT[1,1]='$'
+  SVRID=FIELD(OPT,' ',1) ;* AUTO-CLOSE WITH SPECIFIED SERVER ID
+ CASE 1
+  SVRID='' ;* PERSISTANT SERVER
+END CASE
+*
+PRINT 'AccuTerm MultiValue Server ':REL
+PRINT
+*
+CALL FTSVRSUB(SVRID,MAT FTCONF,MAT CLIENV,FV)
+STOP
+*
+END

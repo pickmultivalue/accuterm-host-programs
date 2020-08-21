@@ -1,0 +1,196 @@
+*
+**************************************************************************
+*Copyright (c) 2000-2006 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: LOAD-ACCUTERM-OBJBP
+* AUTHOR: PJS
+* VERSION: 5.3.1
+* CREATED: 09/25/2000
+* UPDATED: 11/08/2006
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.1
+*  PJS 11/08/2006
+*   Added NO.PAGE=@(0,0) to disable pagination for QM, ON, etc.
+*
+* 5.3.0
+*  PJS 03/01/2006
+*   Changed instruction to reload to "RUN FTBP LOAD-ACCUTERM-OBJBP"
+*   so we don't need to catalog this program.
+*
+* 4.0.4
+*  PJS 03/05/2004
+*   Added new NR (Northgate Reality 9+) platform type, same as
+*   old MD platform.
+*
+* 4.0.3
+*  PJS 10/08/2002
+*   Update message text for AccuTerm 2K2
+*
+* 4.0.2
+*  PJS 11/03/2000
+*   Update installation instructions. Automatically compile & catalog.
+*   
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* LOAD ACCUTERM OBJECTBRIDGE PROGRAM FILE (OBJBP)
+*
+**************************************************************************
+**************************************************************************
+*
+* CHECK IF FTCHK HAS BEEN RUN SINCE THIS PROGRAM WAS INSTALLED
+*
+PRINT 'You must RUN FTBP FTCHK and select your host platform';*#GENERIC#*
+PRINT 'before you run this program!';*#GENERIC#*
+STOP;*#GENERIC#*
+*
+NO.PAGE=@(0,0);* DISABLE PAGINATION (QM, ON)
+*
+**************************************************************************
+*
+PRINT
+PRINT 'AccuTerm 2K2 ObjectBridge Program Installation'
+PRINT
+PRINT 'AccuTerm 2K2 includes a facility which provides OLE'
+PRINT 'Automation services for MultiValue platforms. To take'
+PRINT 'advantage of this feature, a library of programs must'
+PRINT 'be installed on your host computer.'
+PRINT
+PRINT 'AccuSoft suggests that you use OBJBP as the file name,'
+PRINT 'for the ObjectBridge host programs. Create the file with'
+PRINT 'a modulo of 3 (some platforms require that this be a'
+PRINT 'type 1 or DIR file).'
+PRINT
+PRINT
+PRINT 'Do you want to load (re-load) the ObjectBridge programs':
+INPUT ANS
+ANS=OCONV(ANS[1,1],'MCU')
+IF ANS NE 'Y' THEN GOTO 999
+*
+PRINT
+PGM.FILE='OBJBP'
+PRINT 'Enter host file to load ObjectBridge programs into (':PGM.FILE:') ':
+INPUT ANS
+IF ANS NE '' THEN PGM.FILE=ANS
+OPEN PGM.FILE TO PFL ELSE
+ PRINT 'Unable to open ':PGM.FILE:'.'
+ PRINT
+ PRINT 'If you want to install ObjectBridge, please create the program'
+ PRINT 'file, then type "RUN FTBP LOAD-ACCUTERM-OBJBP" from TCL.'
+ GOTO 999
+END
+*
+CALL FTVSINF(PLATFORM,'','',CAPABILITIES,SERVICES,'','','')
+IF PLATFORM < 3 THEN
+ PRINT 'You need AccuTerm 97 or later to load these programs.'
+ STOP
+END
+IF INDEX(CAPABILITIES,'U',1) EQ 0 THEN
+ PRINT 'Your workstation does not support file uploading.'
+ STOP
+END
+IF INDEX(SERVICES,'a',1) EQ 0 THEN
+ PRINT 'Your workstation does not support ObjectBridge.'
+ STOP
+END
+*
+CALL FTPGMDIR(PATH)
+PRINT
+OBJBP.PATH=PATH:'PickBP\ObjBP'
+PRINT 'Enter directory where the ObjectBridge program files are to'
+PRINT 'be loaded from (':OBJBP.PATH:') ':
+INPUT ANS
+IF ANS NE '' THEN OBJBP.PATH=ANS
+*
+PRINT
+PRINT 'Do you want to load the sample programs':
+INPUT ANS
+ANS=OCONV(ANS[1,1],'MCU')
+IF ANS EQ 'Y' THEN
+ LOAD.SAMPLES=1
+*
+ PRINT
+ SAMPLE.FILE='OBJBP'
+ PRINT 'Enter host file to load sample programs into (':SAMPLE.FILE:') ':
+ INPUT ANS
+ IF ANS NE '' THEN SAMPLE.FILE=ANS
+ OPEN SAMPLE.FILE TO SMP ELSE
+  PRINT 'Unable to open ':SAMPLE.FILE
+  GOTO 999
+ END
+*
+ PRINT
+ SAMPLE.PATH=PATH:'Samples\ObjBP'
+ PRINT 'Enter directory where the sample programs are to be'
+ PRINT 'loaded from (':SAMPLE.PATH:') ':
+ INPUT ANS
+ IF ANS NE '' THEN SAMPLE.PATH=ANS
+END ELSE
+ LOAD.SAMPLES=0
+END
+PRINT
+*
+* LOAD OBJBP USING FT...
+DATA 'O'
+DATA '1=T'
+DATA '3=Y'
+DATA ''
+DATA 'R'
+DATA 'K'
+DATA OBJBP.PATH
+DATA '*.'
+DATA PGM.FILE
+DATA ''
+*#DEFAULT#*EXECUTE 'FT'
+*#MD#*PERFORM 'FT'
+*#NR#*PERFORM 'FT'
+*
+IF LOAD.SAMPLES THEN
+* LOAD OBJBP USING FT...
+ DATA 'O'
+ DATA '1=T'
+ DATA '3=Y'
+ DATA ''
+ DATA 'R'
+ DATA 'K'
+ DATA SAMPLE.PATH
+ DATA '*'
+ DATA SAMPLE.FILE
+ DATA ''
+*#DEFAULT#* EXECUTE 'FT'
+*#MD#* PERFORM 'FT'
+END
+* CUSTOMIZE PROGRAMS FOR PLATFORM, COMPILE & CATALOG
+DATA PGM.FILE
+DATA ''
+DATA 'Y'
+*#DEFAULT#*EXECUTE 'RUN FTBP FTCHK'
+*#MD#*PERFORM 'RUN FTBP FTCHK'
+* DONE
+PRINT 'ObjectBridge host programs loaded'
+PRINT
+STOP
+999 *
+PRINT
+PRINT 'You can load (reload) the ObjectBridge programs and samples'
+PRINT 'by typing "RUN FTBP LOAD-ACCUTERM-OBJBP" from TCL.'
+PRINT
+PROMPT ''
+PRINT 'Press <Enter> to continue':
+INPUT ANS
+STOP
+*
+END

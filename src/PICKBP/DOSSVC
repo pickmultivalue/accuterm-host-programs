@@ -1,0 +1,76 @@
+SUBROUTINE DOSSVC(CMD, SEND.PATH, SEND.FILE, SEND.DATA, GET.PATH, GET.FILE, GET.DATA)
+**************************************************************************
+*Copyright (c) 1993-2003 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: DOSSVC
+* AUTHOR: PJS
+* VERSION: 5.0.1
+* CREATED: 01/01/1993
+* UPDATED: 09/11/2003
+*
+* MAINTENANCE RECORD:
+*
+* 5.0.1
+*  PJS 09/11/2003
+*   Modified PRINT expressions for UniVerse because concatenated
+*   expressions are sent in separate packets in NT version of
+*   UniVerse causing TCP "delayed ack" performance issues.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* PERFORM DOS SERVICE (ACCUTERM)
+*
+**************************************************************************
+**************************************************************************
+*
+* DOSSVC() SUBROUTINE INTERFACE
+*
+* INPUT:
+*   CMD       = DOS COMMAND TO EXECUTE
+*   SEND.PATH = DOS DIRECTORY TO SEND SEND.DATA TO BEFORE CMD
+*   SEND.FILE = DOS FILE NAME TO SEND SEND.DATA TO BEFORE CMD
+*   SEND.DATA = DATA TO SEND TO SEND.FILE
+*   GET.PATH  = DOS DIRECTORY TO GET GET.DATA FROM AFTER CMD
+*   GET.FILE  = DOS FILE NAME TO GET GET.DATA FROM AFTER CMD
+*
+* OUTPUT:
+*   GET.DATA  = DATA RECEIVED FROM GET.FILE
+*
+* NOTE: SEND.DATA AND GET.DATA MUST BE DIFFERENT VARIABLES!
+*
+***********************************************************************
+*
+EQU ESC TO CHAR(27), STX TO CHAR(2), CR TO CHAR(13)
+*
+CALL FTVSINF(PLATFORM,'','','','','','','')
+IF PLATFORM=0 THEN
+ PRINT 'AccuTerm is required to call DOSSVC subroutine'
+ RETURN
+END
+IF SEND.FILE NE '' THEN CALL FTS('S,K,T,O', SEND.PATH, SEND.FILE, SEND.DATA, STAT)
+IF CMD NE '' THEN
+ PROMPT ''
+ ECHO OFF; PRINT '':(ESC:STX:'I'):; INPUT INFO:; ECHO ON
+ IF PLATFORM > 1 THEN
+  PRINT '':(ESC:STX:'>':CMD:CR):
+ END ELSE
+  PRINT '':(ESC:STX:'<':CMD:CR):
+ END
+ ECHO OFF; PRINT '':(ESC:STX:'I'):; INPUT INFO:; ECHO ON
+ PROMPT '?'
+END
+IF GET.FILE NE '' THEN CALL FTS('R,K,T', GET.PATH, GET.FILE, GET.DATA, STAT)
+RETURN
+END

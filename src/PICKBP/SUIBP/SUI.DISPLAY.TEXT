@@ -1,0 +1,325 @@
+SUBROUTINE SUI.DISPLAY.TEXT(Left, Top, Width, Height, State, Opts, Value, BegPos, RtnCom, MAT TermDef)
+**************************************************************************
+*Copyright (c) 2004 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: SUI.DISPLAY.TEXT
+* AUTHOR: PJS
+* VERSION: 1.0.1
+* CREATED: 06/01/2004
+* UPDATED: 07/27/2004
+*
+* MAINTENANCE RECORD:
+*
+* 1.0.1
+*  PJS 07/27/2004
+*   Fixed problem causing BegPos variable to be changed if initial
+*   value was <= zero. Fixed problem with multi-line border even
+*   when 'M" option was specified.
+*
+*************************************************************************
+*************************************************************************
+*
+* SMART USER INTERFACE: Display Text Field
+*
+*************************************************************************
+*************************************************************************
+*
+*   Input Interface:
+*
+*    Left, Top: upper-left corner of label (relative to current window)
+*
+*    Width, Height: size of text field
+*
+*    State:   field display state
+*              0 = inactive
+*              1 = active
+*              2 = disabled
+*              3 = selected
+*
+*    Opts:    options
+*              P = password entry - echo asterisks.
+*              M = display message without border (may be multiline)
+*
+*    Value:   current value of text field (multiline may include line breaks)
+*
+*    BegPos:  character position displayed in upper-left corner of field.
+*             Set to 0 or 1 to display beginning of text, or -1 to display
+*             end of text. Otherwise text may be scrolled so that the
+*             specified character position is displayed in the upper-left
+*             corner.
+*
+*    TermDef: terminal definitions as set up by SUI.GET.TERM
+*
+*
+*   Output Interface:
+*
+*    RtnCom:   zero if success, else error code
+*
+*************************************************************************
+*
+$INCLUDE SUI.TERMDEF
+$INCLUDE SUI.WINDEF
+$INCLUDE SUI.CONFIG
+*
+EQU AM TO CHAR(254)
+EQU ESC TO CHAR(27), STX TO CHAR(2), CR TO CHAR(13)
+*
+IF Width < 1 OR Height < 1 THEN RETURN ;* Invalid size!
+TextWd = Width
+TextHt = Height
+*
+* Adjust screen positions based on current window
+BegCol = Left ;* Screen beginning column
+BegRow = Top ;* Screen row
+WinInf = TERM.WINDOW<1,2>
+IF WinInf EQ '' THEN
+ WinWd = TERM.WIDTH
+ WinHt = TERM.HEIGHT
+END ELSE
+ BegCol = BegCol + WinInf<1,1,SUI.WINLEFT$> + WinInf<1,1,SUI.CLILEFT$>
+ BegRow = BegRow + WinInf<1,1,SUI.WINTOP$> + WinInf<1,1,SUI.CLITOP$>
+ WinWd = WinInf<1,1,SUI.CLIWIDTH$>
+ WinHt = WinInf<1,1,SUI.CLIHEIGHT$>
+END
+IF Left < 0 THEN
+ RtnCom = SUI.ERROR.INVPOS$ ;* Invalid position
+ RETURN
+END
+IF Left + TextWd > WinWd THEN
+ TextWd = WinWd - Left
+ IF TextWd <= 0 OR (TextWd < 1 AND Width > 1) THEN
+  RtnCom = SUI.ERROR.INVSIZE$ ;* Invalid size
+  RETURN
+ END
+END
+IF Top < 0 THEN
+ RtnCom = SUI.ERROR.INVPOS$ ;* Invalid position
+ RETURN
+END
+IF Top + TextHt > WinHt THEN
+ TextHt = WinHt - Top
+ IF TextHt <= 0 OR (TextHt < 1 AND Height > 1) THEN
+  RtnCom = SUI.ERROR.INVSIZE$ ;* Invalid size
+  RETURN
+ END
+END
+EndCol = BegCol + TextWd - 1 ;* Ending screen column
+EndRow = BegRow + TextHt - 1 ;* Ending screen row
+*
+* Decode options
+OptPasswd = INDEX(Opts,'P',1)
+OptMessage = (INDEX(Opts,'M',1) > 0)
+*
+IF TextHt = 1 THEN
+ *
+ * Display single-line text field
+ *
+ * Sort out initial display position
+ *  MyBegPos is the character position in Value of the first displayed character (at BegCol)
+ CurRow = BegRow
+ CurLen = LEN(Value)
+ MaxBegPos = CurLen - TextWd + 2 ;* Leave one extra space at end of entry area so we can append
+ IF MaxBegPos < 1 THEN MaxBegPos = 1
+ BEGIN CASE
+  CASE TextWd = 1
+   * Special case - single character input
+   Value = Value[1,1]
+   CurLen = LEN(Value)
+   MaxBegPos = 1
+   MyBegPos = 1
+  CASE BegPos = 0
+   * Display first character of value with cursor at the beginning
+   MyBegPos = 1
+   IF TextWd > CurLen + 1 THEN X = CurLen + 1 ELSE X = TextWd
+  CASE BegPos < 0
+   * Display last character of value with cursor at the end
+   MyBegPos = MaxBegPos
+  CASE 1
+   * Display specified position in value with specified cursor location
+   IF BegPos > MaxBegPos THEN MyBegPos = MaxBegPos ELSE MyBegPos = BegPos
+ END CASE
+ *
+ * Display current value
+ AttrLast = -1 ;* Initialize attribute for first call to DSPVALUE
+ DspPos = MyBegPos
+ GOSUB DSPSINGLE
+ * 
+END ELSE
+ *
+ * Display multi-line text field
+ *
+ * Fold current value to fit window
+ BegLine = 1
+ LinePos = ''
+ CALL SUI.FOLD.TEXT(Value, TextWd, SUICFG.NEWLINE, LinePos, 0, 0, 0)
+ LineCnt = DCOUNT(LinePos,AM) - 1
+ *
+ * Sort out initial display position
+ *
+ *  Value is the actual string value being entered, including hard line-break characters
+ *  CurLen is the length of Value
+ *  LinePos is a dynamic array containing line-breaks in character positions
+ *      - one attribute for each line after breaking/folding
+ *      - one final attribute = LEN(Value) + 1 for convienence
+ *  LineCnt is the number of (folded) lines
+ *  BegLine is the line number of the first displayed line (@ BegRow): range is 1 to MAX(LineCnt-TextHt+1,1)
+ *  CurLine is the line number of the current (cursor) line
+ *  LineLen is the length of the current (cursor) line
+ *  MyBegPos is the character position in Value of the first displayed character = LinePos<BegLine>
+ *
+ MaxBegLine = LineCnt - TextHt + 1
+ IF MaxBegLine < 1 THEN MaxBegLine = 1
+ BEGIN CASE
+  CASE BegPos = 0
+   * Display first character of value at upper-left position of display area
+   BegLine = 1
+   MyBegPos = 1
+  CASE BegPos < 0
+   * Display last character of value with cursor at the end
+   BegLine = MaxBegLine
+   MyBegPos = LinePos<BegLine>
+  CASE 1
+   * Display specified position in value with specified cursor location
+   MyBegPos = BegPos
+   FOR BegLine = 1 TO MaxBegLine UNTIL LinePos<BegLine+1> > MyBegPos
+   NEXT BegLine
+   IF BegLine > MaxBegLine THEN BegLine = MaxBegLine
+ END CASE
+ *
+ * Display current value
+ AttrLast = -1 ;* Initialize attribute for first call to DSPVALUE
+ DspBeg = 1
+ DspEnd = 999999
+ GOSUB DSPMULTI
+*
+END
+*
+IF TERM.ATTRTYPE NE 1 THEN PRINT TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL):
+RETURN
+*
+DSPSINGLE: * Display current value in proper visual attribute
+*
+* First character to display = DspPos
+*
+IF State = 0 THEN Attr = SUICFG.TEXT.INACTIVE ELSE
+ IF State = 3 THEN Attr = SUICFG.TEXT.SELECTED ELSE
+  IF State = 2 THEN Attr = SUICFG.TEXT.DISABLED ELSE Attr = SUICFG.TEXT.ACTIVE
+ END
+END
+Dsp = ''
+IF AttrLast < 0 AND SUICFG.TEXT.BORDER AND INDEX(TERM.SPECIAL,'B',1) AND NOT(OptMessage) THEN
+ * Draw text border using AccuTerm Visual Styles
+ Dsp = Dsp:ESC:STX:'r':BegCol:',':CurRow:',':EndCol:',':CurRow:',N,':'NIRB'[SUICFG.TEXT.BORDER+1,1]:CR
+END
+IF Attr = AttrLast THEN
+ DspCol = DspPos - MyBegPos + BegCol
+ Dsp = Dsp:@(DspCol,CurRow)
+END ELSE
+ DspPos = MyBegPos
+ DspCol = BegCol
+ IF TERM.ATTRTYPE = 1 THEN
+  IF EndCol >= TERM.WIDTH - 1 THEN
+   IF CurRow < TERM.HEIGHT - 1 THEN Dsp = Dsp:@(0,CurRow+1):TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+  END ELSE
+   Dsp = Dsp:@(EndCol+1,CurRow):TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+  END
+  IF BegCol = 0 THEN
+   IF CurRow > 0 THEN Dsp = Dsp:@(TERM.WIDTH-1,CurRow-1):TermDef(TERM.ATT$+Attr)
+  END ELSE
+   Dsp = Dsp:@(BegCol-1,CurRow):TermDef(TERM.ATT$+Attr)
+  END
+  Dsp = Dsp:@(BegCol,CurRow)
+ END ELSE
+  Dsp = Dsp:@(BegCol,CurRow):TermDef(TERM.ATT$+Attr)
+ END
+END
+dlen = TextWd - DspPos + MyBegPos ;* Total display width from DspPos to end of display area
+vlen = CurLen - DspPos + 1
+IF vlen > dlen THEN vlen = dlen ;* Length of Value to display
+slen = dlen - vlen ;* Length of padding to display
+IF OptPasswd THEN
+ Dsp = Dsp:STR('*',vlen)
+END ELSE
+ Dsp = Dsp:Value[DspPos,vlen]
+END
+Dsp = Dsp:SPACE(slen)
+IF Attr NE SUICFG.DISPLAY.NORMAL AND TERM.ATTRTYPE NE 1 THEN
+ Dsp = Dsp:TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+END
+PRINT Dsp:
+AttrLast = Attr
+RETURN
+!
+DSPMULTI: * Display current value in proper visual attribute
+*
+* Display lines from DspBeg to DspEnd
+*
+DspCol = BegCol ;* Always display complete lines
+IF State = 0 THEN Attr = SUICFG.TEXT.INACTIVE ELSE
+ IF State = 2 THEN Attr = SUICFG.TEXT.SELECTED ELSE
+  IF State = 3 THEN Attr = SUICFG.TEXT.DISABLED ELSE Attr = SUICFG.TEXT.ACTIVE
+ END
+END
+IF Attr NE AttrLast THEN
+ DspBeg = BegLine
+ DspEnd = DspBeg + TextHt - 1
+END
+IF DspBeg < BegLine THEN DspBeg = BegLine ELSE IF DspBeg > BegLine + TextHt - 1 THEN DspBeg = BegLine + TextHt - 1
+IF DspEnd < BegLine THEN DspEnd = BegLine ELSE IF DspEnd > BegLine + TextHt - 1 THEN DspEnd = BegLine + TextHt - 1
+Dsp = ''
+IF AttrLast < 0 AND SUICFG.TEXT.BORDER AND INDEX(TERM.SPECIAL,'B',1) AND NOT(OptMessage) THEN
+ * Draw text border using AccuTerm Visual Styles
+ Dsp = Dsp:ESC:STX:'r':BegCol:',':BegRow:',':EndCol:',':EndRow:',N,':'NIRB'[SUICFG.TEXT.BORDER+1,1]:CR
+END
+FOR DspLine = DspBeg TO DspEnd
+ DspRow = BegRow + DspLine - BegLine
+ IF Attr = AttrLast THEN
+  Dsp = Dsp:@(DspCol,DspRow)
+ END ELSE
+  IF TERM.ATTRTYPE = 1 THEN
+   IF EndCol + 1 >= TERM.WIDTH THEN
+    IF DspRow + 1 < TERM.HEIGHT THEN Dsp = Dsp:@(0,DspRow+1):TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+   END ELSE
+    Dsp = Dsp:@(EndCol + 1, DspRow):TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+   END
+   IF BegCol = 0 THEN
+    IF DspRow > 0 THEN Dsp = Dsp:@(TERM.WIDTH-1,DspRow-1):TermDef(TERM.ATT$+Attr)
+   END ELSE
+    Dsp = Dsp:@(BegCol-1,DspRow):TermDef(TERM.ATT$+Attr)
+   END
+   Dsp = Dsp:@(BegCol,DspRow)
+  END ELSE
+   Dsp = Dsp:@(BegCol,DspRow):TermDef(TERM.ATT$+Attr)
+  END
+ END
+ IF DspLine <= LineCnt THEN
+  X1 = LinePos<DspLine> + DspCol - BegCol
+  X2 = LinePos<DspLine+1>
+  plen = X2 - X1; IF plen < 0 THEN plen = 0
+  dlen = TextWd - DspCol + BegCol ;* Total display width from DspCol to end of display area
+  slen = dlen - plen ;* Length of padding to display
+  IF plen > 0 THEN
+   IF Value[X1+plen-1,1] = SUICFG.NEWLINE THEN
+    Dsp = Dsp:Value[X1,plen-1]:('< '[OptMessage+1,1])
+   END ELSE
+    Dsp = Dsp:Value[X1,plen]
+   END
+  END
+ END ELSE
+  slen = TextWd - DspCol + BegCol ;* Unused lines are blank
+ END
+ Dsp = Dsp:SPACE(slen)
+ DspCol = BegCol
+NEXT DspLine
+IF Attr NE SUICFG.DISPLAY.NORMAL AND TERM.ATTRTYPE NE 1 THEN
+ Dsp = Dsp:TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+END
+PRINT Dsp:
+AttrLast = Attr
+RETURN
+END

@@ -1,0 +1,393 @@
+SUBROUTINE FTWTPICK(BUF,CNT,MAX,EOF,CAN,ERR,MAT PARAMS,MAT VARS)
+**************************************************************************
+*Copyright (c) 1996-2020 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTWTPICK
+* AUTHOR: PJS
+* VERSION: 8.0.1
+* CREATED: 01/01/1996
+* UPDATED: 02/11/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.1
+*  PJS 02/11/2020
+*   Added support for MVON# platform (MVON).
+*
+* 7.1.3
+*  PJS 08/04/2106
+*   Fixed typo "*#GENERIC*#" should be "*#GENERIC#*".
+*
+* 7.1.2
+*  PJS 03/19/2014
+*   Added support for OASYS platform.
+*
+* 7.1.1
+*  PJS 11/07/2012
+*   Added support for QM ECS (UTF8). Extended protocol with new 'U' record
+*   type for items which contain any extended (non-8-bit) characters. When
+*   receiving UTF8 records on a non-ECS system or file, 'U' type records
+*   are discarded.
+*
+* 5.3.2
+*  PJS 03/05/2007
+*   Fixed bug in ULT & ULTX platform (IF FNAME ...). Removed bogus D3
+*   platform code (the correct platform for D3 is 'PICK', not 'D3').
+*
+* 5.3.1
+*  PJS 07/24/2006
+*   Changed size of VARS() array from 25 to 26, defining VARS(26)
+*   as MD. Define previously unused VARS(24) as DFILE, the file
+*   variable for the dictionary. Added platform-specific code for
+*   setting DCHK, instead of trying to open VOC file.
+*
+* 4.0.2
+*  PJS 09/29/2004
+*   Changed max string length from 9999999 to 999999999
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* WRITE PICK DATA ITEMS
+*
+**************************************************************************
+**************************************************************************
+*
+* FTWTPICK() SUBROUTINE INTERFACE
+*
+* INPUT:
+*         BUF   = DATA TO WRITE
+*         CNT   = LEN(BUF)
+*         MAX   = MAX BYTES TO ACCUMULATE IN BUF
+*         EOF   = 1 IF END OF FILE, 2 IF END OF TRANSACTION
+*         CAN   = 1 IF DISCARD CURRENT ITEM, ELSE 0
+*
+* OUTPUT:
+*         BUF   = UPDATED (WRITTEN DATA REMOVED)
+*         CNT   = LEN(BUF)
+*         MAX   = MAX BYTES TO ACCUMULATE IN BUF (UPDATED DURING FIRST CALL)
+*         CAN   = 1 IF CANNOT UPDATE ITEM, 2 TO CANCEL REST OF TRANSACTION
+*         ERR   = ERROR STATUS (STRING)
+*
+* ACTION:
+*
+* THIS ROUTINE IS CALLED BY THE FILE TRANSFER PROTOCOL TO UPDATE
+* ITEMS WITH RECEIVED DATA.  ON FIRST ENTRY, IDMODE MUST BE SET TO ZERO.
+*
+* THIS ROUTINE REMOVES DATA FROM BUF, AND EITHER BUILDS NEW ITEMS
+* FROM RECEIVED DATA, OR OVERWRITES EXISTING ITEMS, DEPENDING ON OPTIONS.
+*
+* IF THIS ROUTINE IS CALLED WITH EOF SET, THERE IS NO MORE DATA TO
+* RECEIVE FOR THE FILE.
+*
+* UPON ENTRY AND EXIT, CNT REFLECTS THE LENGTH OF BUF
+*
+* WHEN EOF IS SET (NO MORE DATA FOR THIS FILE), CAN WILL BE
+* SET TO 2 (TERMINATE TRANSACTION) BEFORE RETURNING.
+*
+**************************************************************************
+*
+DIM PARAMS(30),VARS(26)
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+EQU TAB TO CHAR(9)
+EQU OVR.PCK.PARAM TO PARAMS(19)
+EQU EXTRA.AM.PARAM TO PARAMS(20)
+EQU ICNT TO VARS(1)
+EQU BCNT TO VARS(2)
+EQU IDMODE TO VARS(3)
+EQU AUTO TO VARS(4)
+EQU HDR TO VARS(5)
+EQU DISC TO VARS(6)
+EQU TARGET TO VARS(7)
+EQU DCHK TO VARS(8)
+EQU ECSFLG TO VARS(9)
+EQU FILE TO VARS(11)
+EQU FNAME TO VARS(12)
+EQU ID TO VARS(13)
+EQU IDLST TO VARS(14)
+EQU IDS TO VARS(16)
+EQU ISIZ TO VARS(17)
+EQU ISEQ TO VARS(18)
+EQU ITEM TO VARS(19)
+EQU XSIZ TO VARS(20)
+EQU PATH TO VARS(21)
+EQU FN TO VARS(22)
+EQU FNLST TO VARS(23)
+EQU DFILE TO VARS(24)
+EQU FNS TO VARS(25)
+EQU MD TO VARS(26)
+*
+**************************************************************************
+*
+IDMODE=IDMODE+0
+IF IDMODE EQ 0 THEN
+ IF EOF > 1 THEN RETURN
+ IDMODE=1
+ DISC=0
+ XSIZ=0
+ ISIZ=0
+ ITEM=''
+ HDR=0
+ ECSFLG=0
+ MAX=200; * FORCE EARLY CALL TO PROCESS FIRST HEADER
+END ELSE
+ IF MAX < 5000 THEN MAX=5000
+END
+*
+* LOOP THROUGH RECEIVED DATA
+*
+DONE=0
+LOOP UNTIL DONE DO
+ IF HDR=0 THEN
+  * EXTRACT NEXT HEADER
+  IF CNT>=11 THEN
+   OK=0
+   K=INDEX(BUF,AM,1)
+   IF K>0 THEN
+    HDR=INDEX('FIXU',BUF[K+1,1],1)
+    IF HDR>0 THEN
+     IF BUF[K+10,1] EQ AM THEN
+      IF BUF[K+2,8] MATCHES '8N' THEN
+       OK=1
+      END
+     END
+    END
+   END
+   IF OK THEN
+    * GOOD HEADER
+    DISC=DISC+K-1
+    XSIZ=(BUF[K+2,8])+0
+    BUF=BUF[K+11,999999999]
+    CNT=CNT-(K+10)
+    GOSUB 100; * DECODE HEADER
+    BCNT=BCNT+11
+   END ELSE
+    * BAD HEADER
+    IF K=0 THEN
+     K=CNT
+     BUF=''
+    END ELSE
+     BUF=BUF[K+1,999999999]
+    END
+    CNT=CNT-K
+    DISC=DISC+K; * COUNT DISCARDED BYTES
+   END
+  END ELSE
+   DONE=1; * NEED AT LEAST 11 BYTES FOR COMPLETE HEADER
+  END
+ END ELSE
+  * EXTRACT NEXT RECORD
+  IF XSIZ > 0 THEN
+   * FINISH READING CURRENT RECORD
+   N=XSIZ-ISIZ; * NUMBER OF BYTES REQUIRED TO COMPLETE RECORD
+   IF N>CNT THEN N=CNT
+   ITEM=ITEM:BUF[1,N]
+   BUF=BUF[N+1,999999999]
+   ISIZ=ISIZ+N
+   CNT=CNT-N
+   IF ISIZ>=XSIZ THEN
+    GOSUB 200; * PROCESS RECORD
+   END ELSE
+    DONE=1; * NEED COMPLETE RECORD
+   END
+  END ELSE
+   HDR=0
+  END
+ END
+REPEAT
+*
+IF EOF AND BCNT>0 THEN
+ IF IDMODE<3 THEN
+  IF ERR EQ '' THEN
+   IF IDMODE EQ 1 THEN
+    ERR='Invalid file format!'
+   END ELSE
+    ERR='Missing PICK file trailer record!'
+   END
+  END
+  CAN=2
+ END
+END
+RETURN
+*
+**************************************************************************
+*
+100 * DECODE HEADER
+*
+**************************************************************************
+*
+BEGIN CASE
+ CASE HDR EQ 1
+  IF IDMODE EQ 1 THEN IDMODE=2
+  IF BCNT+0=0 THEN DISC=0
+  RETURN
+ CASE HDR EQ 2 OR HDR EQ 4
+  IF IDMODE EQ 2 THEN RETURN
+ CASE HDR EQ 3
+  IF IDMODE EQ 2 THEN IDMODE=3
+  RETURN
+END CASE
+DONE=1
+CAN=2
+ERR='Invalid record header encountered in data!'
+RETURN
+*
+**************************************************************************
+*
+200 * PROCESS DATA RECORD
+*
+**************************************************************************
+*
+BEGIN CASE
+ CASE HDR EQ 1
+  FNAME=ITEM<1>
+  OPTS=ITEM<2>
+  DCHK=0
+*#QM_ECS#*  ECSFLG=SYSTEM(1044) 
+  * CHECK OVERWRITE OPTION
+  OK=1
+  IF INDEX(OPTS,'O',1) THEN
+   IF NOT(OVR.PCK.PARAM) THEN
+    OK=0
+    ERR='Overwrite permission denied!'
+    CAN=2
+    BUF=''
+    CNT=0
+    DONE=1
+   END
+  END ELSE
+   OVR.PCK.PARAM=0
+  END
+  IF OK AND AUTO THEN
+   * CHECK IF FILENAME CONTAINS UNICODE CHARACTERS
+   IF INDEX(OPTS,'U',1) THEN
+    OK=0
+*#QM_ECS#*    IF ECSFLG THEN
+*#QM_ECS#*     FNAME=ICONV(FNAME,'XUTF8')
+*#QM_ECS#*     OK=1
+*#QM_ECS#*    END
+    IF NOT(OK) THEN
+     ERR='Illegal file name (contains Unicode characters)'
+     CAN=2
+     BUF=''
+     CNT=0
+     DONE=1
+    END
+   END 
+   * OPEN TARGET FILE NOW
+   IF OK THEN
+    OPEN FNAME TO FILE ELSE
+     OK=0
+     ERR='Unable to open file: ':FNAME
+     CAN=2
+     BUF=''
+     CNT=0
+     DONE=1
+    END
+   END
+   *COULD THERE BE D-POINTERS IN THE FILE DICT OR MD?
+   IF OK THEN
+*#ADDS#*    IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#AP#*    IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#ENH#*    IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#MD#*    IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#MVBASE#*    IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#NR#*    IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#PICK#*    IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#R83#*    IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#SEQ#*    IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#ULT#*    IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#ULTX#*    IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#VIS#*    IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+   END
+  END
+  * UPDATE UNICODE CAPABILITIES (ECSFLG) AFTER OPENING FILE
+  IF ECSFLG THEN
+*#QM_ECS#*   IF FILEINFO(FILE,1026)=0 AND FILEINFO(FILE,1028)='' THEN ECSFLG=0
+  END
+  BCNT=BCNT+ISIZ
+ CASE HDR EQ 2 OR HDR EQ 4
+  IF HDR EQ 4 THEN
+   * RECORD HAS UNICODE CHARACTERS - CHECK IF TARGET FILE SUPPORTS UNICODE
+   OK=0
+   IF ECSFLG THEN
+    * CONVERT FROM UTF-8 TO UNICODE
+*#QM_ECS#*    ITEM=SWAPMARKS(ICONV(ITEM,'XUTF8')); OK=1
+   END ELSE
+    * TARGET FILE DOES NOT SUPPORT UNICODE - DISCARD
+    OK=0
+   END
+  END ELSE
+   OK=1
+  END
+  IF OK THEN
+   * CHECK IF OVERWRITING EXISTING ITEM
+   ID=ITEM<1>
+   IF OVR.PCK.PARAM THEN OK=1 ELSE
+    OK=0
+    READV DUMMY FROM FILE,ID,1 ELSE OK=1
+   END
+  END
+  IF OK AND DCHK THEN
+   * CHECK IF UPDATING OR OVERWRITING D-POINTER
+   READ DUMMY FROM FILE,ID ELSE DUMMY=''
+   IF OCONV(DUMMY<1>,'MCU') MATCHES '"D"0A' AND DUMMY<2> MATCHES '1N0N' THEN OK=0; *D-POINTER?
+   IF OCONV(ITEM<2>,'MCU') MATCHES '"D"0A' AND ITEM<3> MATCHES '1N0N' THEN OK=0; *D-POINTER?
+  END
+  IF OK THEN
+   * WRITE ITEM ON TARGET FILE
+   IF EXTRA.AM.PARAM THEN
+    ISIZ=LEN(ITEM)
+    IF ITEM[ISIZ,1] EQ AM THEN ITEM=ITEM:AM
+   END
+   WRITE DELETE(ITEM,1,0,0) ON FILE,ID;*#GENERIC#*
+*#DEFAULT#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID
+*#ADDS#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID
+*#AP#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID
+*#CACHE#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID ON ERROR OK=0
+*#ENH#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID
+*#JB#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID ON ERROR OK=0
+*#MD#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID
+*#MVBASE#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID
+*#MVON#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID ON ERROR OK=0 ELSE OK=0
+*#NR#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID
+*#OAS#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID ON ERROR OK=0
+*#OI#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID ELSE OK=0
+*#ON#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID ON ERROR OK=0
+*#PICK#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID ON ERROR OK=0
+*#QM#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID ON ERROR OK=0
+*#QM_ECS#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID ON ERROR OK=0
+*#R83#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID
+*#SEQ#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID
+*#UD#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID ON ERROR OK=0
+*#ULT#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID
+*#ULTX#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID
+*#UV#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID ON ERROR OK=0 ELSE OK=0
+*#VIS#*   WRITE DELETE(ITEM,1,0,0) ON FILE,ID
+  END
+  IF OK THEN
+   * UPDATE GOOD STATS
+   ICNT=ICNT+1
+   BCNT=BCNT+ISIZ
+  END ELSE
+   * UPDATE DISCARDED STATS
+   DISC=DISC+LEN(ITEM)
+  END
+END CASE
+ITEM=''
+ISIZ=0
+HDR=0; * NEED NEW HEADER NEXT
+RETURN
+*
+END

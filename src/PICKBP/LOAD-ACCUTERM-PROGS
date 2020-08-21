@@ -1,0 +1,1560 @@
+*
+**************************************************************************
+*Copyright (c) 2006-2020 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: LOAD-ACCUTERM-PROGS
+* AUTHOR: PJS
+* VERSION: 8.0.2
+* CREATED: 05/10/2006
+* UPDATED: 02/11/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.2
+*  PJS 02/11/2020
+*   Added support for MVON# platform (MVON).
+*
+* 8.0.1
+*  PJS 10/18/2019
+*   Added new option "Install all items needed by phiReport" to dialog box.
+*
+* 7.1.3
+*  PJS 09/13/2017
+*   Modified GET.ACCOUNT.NAME for jBase because @WHO returns login name
+*   instead of account name when running in an EXECUTE @IM:'k' process,
+*   which is how the initial install script runs LOAD-ACCUTERM-PROGS.
+*
+* 7.1.2
+*  PJS 03/19/2014
+*   Added support for OASYS platform.
+*
+* 7.1.1
+*  PJS 08/22/2012
+*   Image files used in demos are now in the Images folder, so we don't
+*   need to explicitly copy them when installing the demo programs. On
+*   Vista/Win7, the copy would probably fail due to UAC, anyway.
+*
+* 7.0.1
+*  PJS 11/02/2009
+*   Added step in POST.INSTALL to recompile FTCHK
+*
+* 5.4.3
+*  PJS 04/01/2009
+*   Changed UniVision CREATE-FILE to CREATE-BFILE for program files.
+*
+* 5.4.2
+*  PJS 12/20/2007
+*   Added support for CACHE platform.
+*
+* 5.4.1
+*  PJS 06/20/2007
+*   Call new FTRECV subroutine instead of EXECUTing FT to upload programs.
+*   
+* 5.3.7
+*  PJS 11/08/2006
+*   Added NO.PAGE=@(0,0) to disable pagination for QM, ON, etc.
+*   Added support for ON (ONWare MVON) platform.
+*
+* 5.3.6
+*  PJS 10/27/2006
+*   Updated Unidata post-install routine to convert A-correlatives
+*   into I-descriptors. Added COMPILE.DICT to Unidata & QM post-
+*   install.
+*
+* 5.3.5
+*  PJS 07/31/2006
+*   OI platform cannot use CHAIN to recompile FTBP, so we use a script
+*   instead.
+*
+* 5.3.4
+*  PJS 07/24/2006
+*   Added support for OI (OpenInsight CTO) platform. Changed NR platform
+*   to use @ACCOUNT & @LOGNAME instead of U50BB. Removed extra EXECUTE
+*   from NR platform code.
+*
+* 5.3.3
+*  PJS 06/12/2006
+*   More timing tweaks.
+*
+* 5.3.2
+*  PJS 05/10/2006
+*   Tweaked some timing issues. Added option to reload FTBP.
+*
+* 5.3.1
+*  PJS 03/01/2006
+*   Initial release
+*
+**************************************************************************
+**************************************************************************
+*
+*
+*
+* LOAD ACCUTERM HOST PROGRAMS AND SAMPLE DATA
+* 
+*
+* OPTION CODES & FILENAME FIELD NUMBER:
+*  F = FTBP (1)
+*  G = GUIBP (2)
+*  X = GUI SAMPLES (3,4)
+*  O = OBJBP (5)
+*  Y = OBJBP SAMPLES (6)
+*  S = SUIBP (7)
+*  M = SAMPLES (8)
+*  D = DEMOS (9)
+*  T = GUI TUTORIAL EXAMPLES (10,11)
+*  U = UIEX EXAMPLES (12)
+*  Z = SAMPLE DATA (FIXED FILE NAMES)
+*
+*  R = Reload FTBP
+*
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+EQU ESC TO CHAR(27), STX TO CHAR(2), CR TO CHAR(13), EM TO CHAR(25)
+EQU DEFAULT.TARGETS TO 'FTBP|GUIBP|GUIBP|GUIAPPS|OBJBP|OBJBP|SUIBP|SAMPLES|DEMOBP|GUIBP|GUIAPPS|UIEX'
+EQU SAMPLE.DATA.FILES TO 'CUST.SAMPLE|CUST.SAMPLE.XREF|CUST.SAMPLE.CTRL|INV.SAMPLE|INV.SAMPLE.CTRL|PROD.SAMPLE'
+EQU SAMPLE.DATA.SOURCE TO 'CUSTSAMPLE|CUSTSAMPLE_XREF|CUSTSAMPLE_CTRL|INVSAMPLE|INVSAMPLE_CTRL|PRODSAMPLE'
+EQU SAMPLE.DICT.FILES TO 'DICT CUST.SAMPLE|DICT INV.SAMPLE|DICT PROD.SAMPLE'
+EQU SAMPLE.DICT.SOURCE TO 'DICT_CUSTSAMPLE|DICT_INVSAMPLE|DICT_PRODSAMPLE'
+*
+*#DEFAULT#*EQU CHAIN.OK TO 1
+*#ADDS#*EQU CHAIN.OK TO 1
+*#AP#*EQU CHAIN.OK TO 1
+*#CACHE#*EQU CHAIN.OK TO 1
+*#ENH#*EQU CHAIN.OK TO 1
+*#JB#*EQU CHAIN.OK TO 1
+*#MD#*EQU CHAIN.OK TO 1
+*#MVBASE#*EQU CHAIN.OK TO 1
+*#MVON#*EQU CHAIN.OK TO 1
+*#NR#*EQU CHAIN.OK TO 1
+*#OAS#*EQU CHAIN.OK TO 1
+*#OI#*EQU CHAIN.OK TO 0
+*#ON#*EQU CHAIN.OK TO 1
+*#PICK#*EQU CHAIN.OK TO 1
+*#QM#*EQU CHAIN.OK TO 1
+*#R83#*EQU CHAIN.OK TO 1
+*#SEQ#*EQU CHAIN.OK TO 1
+*#UD#*EQU CHAIN.OK TO 1
+*#ULT#*EQU CHAIN.OK TO 1
+*#ULTX#*EQU CHAIN.OK TO 1
+*#UV#*EQU CHAIN.OK TO 1
+*#VIS#*EQU CHAIN.OK TO 1
+*
+NO.PAGE=@(0,0);* DISABLE PAGINATION (QM, ON)
+*
+**************************************************************************
+**************************************************************************
+*
+* LOAD ACCUTERM HOST PROGRAMS & SAMPLE DATA
+*
+**************************************************************************
+**************************************************************************
+*
+* CHECK IF FTCHK HAS BEEN RUN SINCE THIS PROGRAM WAS INSTALLED
+*
+PRINT 'You must RUN FTBP FTCHK and select your host platform';*#GENERIC#*
+PRINT 'before you run this program!';*#GENERIC#*
+STOP;*#GENERIC#*
+*
+* Ensure we are running a compatible version of AccuTerm
+*
+CALL FTVSINF(PLATFORM,'',REL,CAPABILITIES,SERVICES,'','','')
+IF PLATFORM = 0 THEN
+ PRINT 'You must run this program from a computer running AccuTerm.'
+ STOP
+END
+IF REL < 4 THEN
+ PRINT 'The version of AccuTerm you are running is too old to run this program.'
+ PRINT 'AccuTerm 2000 or later is required.'
+ STOP
+END
+IF INDEX(CAPABILITIES,'Z',1) THEN
+ PRINT 'Upper case / lower case inversion must be disabled to run this program.'
+ PRINT 'Try typing "PTERM CASE NOINVERT" at a command prompt before running.'
+ STOP
+END
+IF (INDEX(CAPABILITIES,'U',1)>0) + (INDEX(CAPABILITIES,'K',1)>0) + (INDEX(CAPABILITIES,'T',1)>0) < 3 THEN
+ PRINT 'The version of AccuTerm you are running does support file transfer'
+ PRINT 'functions which are required by this program.'
+ STOP
+END
+IF INDEX(CAPABILITIES,'S',1) = 0 THEN
+ PRINT 'The version of AccuTerm you are running does not support VBA scripting'
+ PRINT 'which is required by this program.'
+ STOP
+END
+*
+* Check which files are already loaded and pre-select those options
+*
+OPTS = ''
+*
+OPEN 'FTBP' TO FTBP.FV THEN
+ OPTS = OPTS : 'F';* FTBP EXISTS
+END ELSE
+ PRINT 'The AccuTerm File Transfer programs (FTBP) must be installed'
+ PRINT 'before you can use LOAD-ACCUTERM-PROGS!'
+ STOP
+END
+*
+OPEN 'GUIBP' TO FV THEN
+ OPTS = OPTS : 'G';* GUIBP EXISTS
+ READ X FROM FV,'CM' THEN OPTS = OPTS : 'X';* CM PRESENT PROBABLY MEANS GUI SAMPLES LOADED
+ READ X FROM FV,'OE1' THEN OPTS = OPTS : 'T';* OE1 PRESENT PROBABLY MEANS GUI TUTORIAL LOADED
+END
+*
+OPEN 'OBJBP' TO FV THEN
+ OPTS = OPTS : 'O';* OBJBP EXISTS
+ READ X FROM FV,'CREATE.WORD.LETTER' THEN OPTS = OPTS : 'Y';* CREATE.WORD.LETTER PROGRAM EXISTS PROBABLY MEANS OBJBP SAMPLES LOADED
+END
+*
+OPEN 'SUIBP' TO FV THEN
+ OPTS = OPTS : 'S';* SUIBP EXISTS
+END
+*
+OPEN 'SAMPLES' TO FV THEN
+ OPTS = OPTS : 'M';* SAMPLES EXISTS
+END
+*
+OPEN 'DEMOBP' TO FV THEN
+ OPTS = OPTS : 'D';* DEMOBP EXISTS
+END
+*
+OPEN 'UIEX' TO FV THEN
+ OPTS = OPTS : 'U';* UIEX EXISTS
+END
+*
+OPEN 'CUST.SAMPLE' TO FV THEN
+ OPTS = OPTS : 'Z';* SAMPLE DATA FILES EXIST
+END
+TARGETS = DEFAULT.TARGETS
+*
+*
+* Display installation options dialog
+GOSUB SHOW.OPTIONS.DIALOG
+IF OPTS = '' THEN GOTO 999 ;* User cancelled
+*
+* Check for FTBP reload
+ITEM.COUNT = 0
+CALL FTPGMDIR(EXE.PATH)
+IF INDEX(OPTS,'R',1) THEN
+ MSG.TEXT = 'You are about to reload the FTBP file, which contains the'
+ MSG.TEXT<-1> = 'core AccuTerm host programs.'
+ MSG.TEXT<-1> = AM:'Are you sure?'
+ GOSUB SHOW.MESSAGE.YESNO
+ IF NOT(MSG.OK) THEN GOTO 999
+ LOAD.SAMPLE.DATA = 0
+ PGM.PATH = EXE.PATH:'PICKBP'
+ PGM.FILE = 'FTBP'
+ PGM.OPTS = 'X'
+ GOSUB LOAD.PROGRAM.FILE
+ IF LOAD.OK THEN
+  GOSUB POST.INSTALL
+  IF CHAIN.OK THEN
+   DATA 'FTBP'
+   DATA ''
+   DATA 'Y'
+   CHAIN 'RUN FTBP FTCHK'
+  END ELSE
+   SCR='If InitSession.WaitFor(1,2,">",":") Then':EM
+   SCR=SCR:'InitSession.Output "RUN FTBP FTCHK" & vbCR':EM
+   SCR=SCR:'InitSession.Output "FTBP" & vbCR & vbCR & "Y" & vbCR':EM
+   SCR=SCR:'Else':EM
+   SCR=SCR:'MsgBox "You need to RUN FTBP FTCHK to complete this installation."':EM
+   SCR=SCR:'End If'
+   PRINT ESC:STX:'P':SCR:CR:
+  END
+ END
+ STOP
+END
+*
+* Check if installing demos into ACCUTERM account
+IF INDEX(OPTS,'X',1) + INDEX(OPTS,'Y',1) + INDEX(OPTS,'M',1) + INDEX(OPTS,'D',1) + INDEX(OPTS,'T',1) + INDEX(OPTS,'U',1) + INDEX(OPTS,'Z',1) > 0 THEN
+ GOSUB WARN.IF.NOT.ACCUTERM
+ IF NOT(WHO.OK) THEN
+  MSG.TEXT = 'The following items will not be installed:':AM
+  K = INDEX(OPTS,'X',1)
+  IF K > 0 THEN
+   OPTS = OPTS[1,K-1]:OPTS[K+1,999]
+   MSG.TEXT<-1> = 'GUI Sample programs'
+  END
+  K = INDEX(OPTS,'Y',1)
+  IF K > 0 THEN
+   OPTS = OPTS[1,K-1]:OPTS[K+1,999]
+   MSG.TEXT<-1> = 'ObjectBridge Sample programs'
+  END
+  K = INDEX(OPTS,'M',1)
+  IF K > 0 THEN
+   OPTS = OPTS[1,K-1]:OPTS[K+1,999]
+   MSG.TEXT<-1> = 'AccuTerm Sample programs'
+  END
+  K = INDEX(OPTS,'D',1)
+  IF K > 0 THEN
+   OPTS = OPTS[1,K-1]:OPTS[K+1,999]
+   MSG.TEXT<-1> = 'AccuTerm Demo programs'
+  END
+  K = INDEX(OPTS,'T',1)
+  IF K > 0 THEN
+   OPTS = OPTS[1,K-1]:OPTS[K+1,999]
+   MSG.TEXT<-1> = 'GUI Tutorial examples'
+  END
+  K = INDEX(OPTS,'U',1)
+  IF K > 0 THEN
+   OPTS = OPTS[1,K-1]:OPTS[K+1,999]
+   MSG.TEXT<1> = 'Smart User Interface examples'
+  END
+  K = INDEX(OPTS,'Z',1)
+  IF K > 0 THEN
+   OPTS = OPTS[1,K-1]:OPTS[K+1,999]  
+   MSG.TEXT<-1> = 'sample data files'
+  END
+  GOSUB SHOW.MESSAGE.OK
+ END
+END
+*
+ACTION.TEXT = ''
+LOAD.SAMPLE.DATA = 0
+*
+* VERIFY GUI
+LOAD.GUIBP = 0
+LOAD.GUIS = 0
+IF INDEX(OPTS,'G',1) THEN
+ TARGET.FILE = FIELD(TARGETS,'|',2);* TARGET FILE FOR GUIBP
+ SOURCE.PATH = EXE.PATH:'PICKBP\GUIBP'
+ GOSUB CHECK.SOURCE.PATH
+ IF SOURCE.OK THEN
+  TARGET.MODULO = 3
+  GOSUB CHECK.TARGET.PROGRAM.FILE
+  IF TARGET.OK THEN
+   GUIBP.TARGET.FILE = TARGET.FILE
+   GUIBP.SOURCE.PATH = SOURCE.PATH
+   LOAD.GUIBP = 1
+   ACTION.TEXT<-1> = 'Load GUI support programs into ':GUIBP.TARGET.FILE
+   IF INDEX(OPTS,'X',1) THEN
+    * INCLUDE SAMPLES
+    SOURCE.PATH = EXE.PATH:'SAMPLES\GUIBP'
+    GOSUB CHECK.SOURCE.PATH
+    IF SOURCE.OK THEN
+     TARGET.FILE = FIELD(TARGETS,'|',3)
+     GOSUB CHECK.TARGET.PROGRAM.FILE
+     IF TARGET.OK THEN
+      GUIPROGS.TARGET.FILE = TARGET.FILE
+      GUIPROGS.SOURCE.PATH = SOURCE.PATH
+      SOURCE.PATH = EXE.PATH:'SAMPLES\GUIAPPS'
+      GOSUB CHECK.SOURCE.PATH
+      IF SOURCE.OK THEN
+       TARGET.FILE = FIELD(TARGETS,'|',4)
+       GOSUB CHECK.TARGET.DATA.FILE
+       IF TARGET.OK THEN
+        GUIAPPS.TARGET.FILE = TARGET.FILE
+        GUIAPPS.SOURCE.PATH = SOURCE.PATH
+        LOAD.GUIS = 1
+        ACTION.TEXT<-1> = 'Load GUI sample programs into ':GUIPROGS.TARGET.FILE:' and ':GUIAPPS.TARGET.FILE
+       END
+      END
+     END
+    END
+   END
+  END
+ END
+END
+*
+* VERIFY OBJECTBRIDGE
+LOAD.OBJBP = 0
+LOAD.OBJS = 0
+IF INDEX(OPTS,'O',1) THEN
+ TARGET.FILE = FIELD(TARGETS,'|',5);* TARGET FILE FOR OBJBP
+ SOURCE.PATH = EXE.PATH:'PICKBP\OBJBP'
+ GOSUB CHECK.SOURCE.PATH
+ IF SOURCE.OK THEN
+  TARGET.MODULO = 1
+  GOSUB CHECK.TARGET.PROGRAM.FILE
+  IF TARGET.OK THEN
+   OBJBP.TARGET.FILE = TARGET.FILE
+   OBJBP.SOURCE.PATH = SOURCE.PATH
+   LOAD.OBJBP = 1
+   ACTION.TEXT<-1> = 'Load ObjectBridge subroutines into ':OBJBP.TARGET.FILE
+   IF INDEX(OPTS,'Y',1) THEN
+    * INCLUDE SAMPLES
+    SOURCE.PATH = EXE.PATH:'SAMPLES\OBJBP'
+    GOSUB CHECK.SOURCE.PATH
+    IF SOURCE.OK THEN
+     TARGET.FILE = FIELD(TARGETS,'|',6)
+     GOSUB CHECK.TARGET.PROGRAM.FILE
+     IF TARGET.OK THEN
+      OBJS.TARGET.FILE = TARGET.FILE
+      OBJS.SOURCE.PATH = SOURCE.PATH
+      LOAD.OBJS = 1
+      ACTION.TEXT<-1> = 'Load ObjectBridge sample programs into ':OBJS.TARGET.FILE
+     END
+    END
+   END
+  END
+ END
+END
+*
+* VERIFY SUI
+LOAD.SUIBP = 0
+IF INDEX(OPTS,'S',1) THEN
+ TARGET.FILE = FIELD(TARGETS,'|',7);* TARGET FILE FOR SUI
+ SOURCE.PATH = EXE.PATH:'PICKBP\SUIBP'
+ GOSUB CHECK.SOURCE.PATH
+ IF SOURCE.OK THEN
+  TARGET.MODULO = 1
+  GOSUB CHECK.TARGET.PROGRAM.FILE
+  IF TARGET.OK THEN
+   SUIBP.TARGET.FILE = TARGET.FILE
+   SUIBP.SOURCE.PATH = SOURCE.PATH
+   LOAD.SUIBP = 1
+   ACTION.TEXT<-1> = 'Load Smart User Interface Library into ':SUIBP.TARGET.FILE
+  END
+ END
+END
+*
+* VERIFY ACCUTERM SAMPLES
+LOAD.SAMPLES = 0
+IF INDEX(OPTS,'M',1) THEN
+ TARGET.FILE = FIELD(TARGETS,'|',8);* TARGET FILE FOR SAMPLES
+ SOURCE.PATH = EXE.PATH:'SAMPLES\PICKBP'
+ GOSUB CHECK.SOURCE.PATH
+ IF SOURCE.OK THEN
+  TARGET.MODULO = 1
+  GOSUB CHECK.TARGET.PROGRAM.FILE
+  IF TARGET.OK THEN
+   SAMPLES.TARGET.FILE = TARGET.FILE
+   SAMPLES.SOURCE.PATH = SOURCE.PATH
+   LOAD.SAMPLES = 1
+   ACTION.TEXT<-1> = 'Load AccuTerm sample programs into ':SAMPLES.TARGET.FILE
+  END
+ END
+END
+*
+* VERIFY ACCUTERM DEMOS
+LOAD.DEMOBP = 0
+IF INDEX(OPTS,'D',1) THEN
+ TARGET.FILE = FIELD(TARGETS,'|',9);* TARGET FILE FOR DEMOS
+ SOURCE.PATH = EXE.PATH:'SAMPLES\DEMOBP'
+ GOSUB CHECK.SOURCE.PATH
+ IF SOURCE.OK THEN
+  TARGET.MODULO = 3
+  GOSUB CHECK.TARGET.PROGRAM.FILE
+  IF TARGET.OK THEN
+   DEMOBP.TARGET.FILE = TARGET.FILE
+   DEMOBP.SOURCE.PATH = SOURCE.PATH
+   LOAD.DEMOBP = 1
+   ACTION.TEXT<-1> = 'Load AccuTerm Demo programs into ':DEMOBP.TARGET.FILE
+  END
+ END
+END
+*
+* VERIFY TUTORIAL
+LOAD.TUTOR = 0
+IF INDEX(OPTS,'T',1) THEN
+ TARGET.FILE = FIELD(TARGETS,'|',10);* TARGET FILE FOR TUTORIAL PROGRAMS
+ SOURCE.PATH = EXE.PATH:'SAMPLES\TUTORIAL\GUIPROGS'
+ GOSUB CHECK.SOURCE.PATH
+ IF SOURCE.OK THEN
+  TARGET.MODULO = 1
+  GOSUB CHECK.TARGET.PROGRAM.FILE
+  IF TARGET.OK THEN
+   TUTOR.TARGET.FILE = TARGET.FILE
+   TUTOR.SOURCE.PATH = SOURCE.PATH
+   TARGET.FILE = FIELD(TARGETS,'|',11);* TARGET FILE FOR TUTORIAL TEMPLATES
+   SOURCE.PATH = EXE.PATH:'SAMPLES\TUTORIAL\GUIAPPS'
+   GOSUB CHECK.SOURCE.PATH
+   IF SOURCE.OK THEN
+    GOSUB CHECK.TARGET.DATA.FILE
+    IF TARGET.OK THEN
+     TUTORAPPS.TARGET.FILE = TARGET.FILE
+     TUTORAPPS.SOURCE.PATH = SOURCE.PATH
+     LOAD.TUTOR = 1
+     ACTION.TEXT<-1> = 'Load GUI Tutorial examples into ':TUTOR.TARGET.FILE:' and ':TUTORAPPS.TARGET.FILE
+    END
+   END
+  END
+ END
+END
+*
+* VERIFY UIEX
+LOAD.UIEX = 0
+IF INDEX(OPTS,'U',1) THEN
+ TARGET.FILE = FIELD(TARGETS,'|',12);* TARGET FILE FOR UIEX
+ SOURCE.PATH = EXE.PATH:'SAMPLES\UIEX'
+ GOSUB CHECK.SOURCE.PATH
+ IF SOURCE.OK THEN
+  TARGET.MODULO = 1
+  GOSUB CHECK.TARGET.PROGRAM.FILE
+  IF TARGET.OK THEN
+   UIEX.TARGET.FILE = TARGET.FILE
+   UIEX.SOURCE.PATH = SOURCE.PATH
+   LOAD.UIEX = 1
+   ACTION.TEXT<-1> = 'Load User Interface examples into ':UIEX.TARGET.FILE
+  END
+ END
+END
+*
+* VERIFY SAMPLE DATA
+LOAD.SAMPLE.DATA = 0
+IF INDEX(OPTS,'Z',1) THEN
+ SOURCE.PATH = EXE.PATH:'SAMPLES\GUIDATA'
+ GOSUB CHECK.SOURCE.PATH
+ IF SOURCE.OK THEN
+  MISSING.TARGET.FILES = ''
+  FOR I = 1 TO DCOUNT(SAMPLE.DATA.FILES,'|')
+   TARGET.FILE = FIELD(SAMPLE.DATA.FILES,'|',I)
+   OPEN TARGET.FILE TO FV ELSE
+    MISSING.TARGET.FILES<-1> = SPACE(5):TARGET.FILE
+   END
+  NEXT I
+  IF MISSING.TARGET.FILES <> '' THEN
+   MSG.TEXT = 'The following sample data files do not exist in this account:':AM
+   MSG.TEXT = MSG.TEXT : AM : MISSING.TARGET.FILES
+   MSG.TEXT = MSG.TEXT : AM : AM : 'Create these files?'
+   GOSUB SHOW.MESSAGE.YESNO
+   IF MSG.OK THEN
+    TARGET.MODULO = 1
+    LOAD.SAMPLE.DATA = 1
+    FOR I = 1 TO DCOUNT(MISSING.TARGET.FILES,AM)
+     TARGET.FILE = TRIM(MISSING.TARGET.FILES<I>)
+     GOSUB CREATE.TARGET.DATA.FILE
+     IF NOT(TARGET.OK) THEN
+      LOAD.SAMPLE.DATA = 0
+      I = 99
+     END      
+    NEXT I
+   END
+  END ELSE
+   LOAD.SAMPLE.DATA = 1
+  END
+  IF LOAD.SAMPLE.DATA THEN
+   ACTION.TEXT<-1> = 'Load sample data into CUST.SAMPLE, INV.SAMPLE, PROD.SAMPLE'
+   ACTION.TEXT<-1> = 'Load sample dictionaries into DICT CUST.SAMPLE, DICT INV.SAMPLE, DICT PROD.SAMPLE'
+   ACTION.TEXT<-1> = 'Load sample control files CUST.SAMPLE.XREF, CUST.SAMPLE.CTRL, INV.SAMPLE.CTRL'    
+  END
+ END
+END
+*
+* Confirm before loading anything
+*
+IF ACTION.TEXT = '' THEN GOTO 999
+MSG.TEXT = 'You are about to:':AM:AM:ACTION.TEXT:AM:AM:'Are you sure?'
+GOSUB SHOW.MESSAGE.YESNO
+IF NOT(MSG.OK) THEN GOTO 999
+*
+* Load verified files
+*
+GOSUB PRE.INSTALL
+*
+*
+IF LOAD.GUIBP THEN
+ PGM.OPTS = 'XC';* EXCLUDE FILES WITH EXTENSIONS, COMPILE & CATALOG
+ PGM.FILE = GUIBP.TARGET.FILE
+ PGM.PATH = GUIBP.SOURCE.PATH
+ GOSUB LOAD.PROGRAM.FILE
+END
+*
+IF LOAD.GUIS THEN
+ PGM.OPTS = 'C';* COMPILE & CATALOG
+ PGM.FILE = GUIPROGS.TARGET.FILE
+ PGM.PATH = GUIPROGS.SOURCE.PATH
+ GOSUB LOAD.PROGRAM.FILE
+ PGM.OPTS = '';* NO COMPILE
+ PGM.FILE = GUIAPPS.TARGET.FILE
+ PGM.PATH = GUIAPPS.SOURCE.PATH
+ GOSUB LOAD.PROGRAM.FILE
+* SOURCE.FILE = EXE.PATH:'SAMPLES\PIX\ZUMASYSLOGO.JPG'
+* TARGET.FILE = EXE.PATH:'IMAGES\ZUMASYSLOGO.JPG'
+* GOSUB COPY.DOS.FILE
+END
+*
+IF LOAD.OBJBP THEN
+ PGM.OPTS = 'XC';* EXCLUDE FILES WITH EXTENSIONS, COMPILE & CATALOG
+ PGM.FILE = OBJBP.TARGET.FILE
+ PGM.PATH = OBJBP.SOURCE.PATH
+ GOSUB LOAD.PROGRAM.FILE
+END
+*
+IF LOAD.OBJS THEN
+ PGM.OPTS = 'C';* COMPILE & CATALOG
+ PGM.FILE = OBJS.TARGET.FILE
+ PGM.PATH = OBJS.SOURCE.PATH
+ GOSUB LOAD.PROGRAM.FILE
+END
+*
+IF LOAD.SUIBP THEN
+ PGM.OPTS = 'C';* COMPILE & CATALOG
+ PGM.FILE = SUIBP.TARGET.FILE
+ PGM.PATH = SUIBP.SOURCE.PATH
+ GOSUB LOAD.PROGRAM.FILE
+END
+*
+IF LOAD.SAMPLES THEN
+ PGM.OPTS = 'C';* COMPILE & CATALOG
+ PGM.FILE = SAMPLES.TARGET.FILE
+ PGM.PATH = SAMPLES.SOURCE.PATH
+ GOSUB LOAD.PROGRAM.FILE
+END
+*
+IF LOAD.DEMOBP THEN
+ PGM.OPTS = 'C';* COMPILE & CATALOG
+ PGM.FILE = DEMOBP.TARGET.FILE
+ PGM.PATH = DEMOBP.SOURCE.PATH
+ GOSUB LOAD.PROGRAM.FILE
+* SOURCE.FILE = EXE.PATH:'SAMPLES\PIX\DEMO-BKGND.JPG'
+* TARGET.FILE = EXE.PATH:'IMAGES\DEMO-BKGND.JPG'
+* GOSUB COPY.DOS.FILE
+END
+*
+IF LOAD.TUTOR THEN
+ PGM.OPTS = 'XC';* EXCLUDE FILES WITH EXTENSIONS, COMPILE & CATALOG
+ PGM.FILE = TUTOR.TARGET.FILE
+ PGM.PATH = TUTOR.SOURCE.PATH
+ GOSUB LOAD.PROGRAM.FILE
+ PGM.FILE = TUTORAPPS.TARGET.FILE
+ PGM.PATH = TUTORAPPS.SOURCE.PATH
+ GOSUB LOAD.PROGRAM.FILE
+END
+*
+IF LOAD.UIEX THEN
+ PGM.OPTS = 'C';* COMPILE & CATALOG
+ PGM.FILE = UIEX.TARGET.FILE
+ PGM.PATH = UIEX.SOURCE.PATH
+ GOSUB LOAD.PROGRAM.FILE
+END
+*
+IF LOAD.SAMPLE.DATA THEN
+ SOURCE.PATH = EXE.PATH:'SAMPLES\GUIDATA\'
+ SAMPLE.TARGETS = SAMPLE.DICT.FILES:'|':SAMPLE.DATA.FILES
+ SAMPLE.SOURCES = SAMPLE.DICT.SOURCE:'|':SAMPLE.DATA.SOURCE
+ FOR I = 1 TO DCOUNT(SAMPLE.TARGETS,'|')
+  TARGET.FILE = FIELD(SAMPLE.TARGETS,'|',I)
+  SOURCE.FILE = SOURCE.PATH:FIELD(SAMPLE.SOURCES,'|',I)
+  * LAUNCH FTPICK TO LOAD THE SAMPLE DATA
+  DATA 'O'
+  DATA '1=Y'
+  DATA ''
+  DATA 'R'
+  DATA 'I'
+  DATA SOURCE.FILE
+  DATA TARGET.FILE
+  CMD = 'FTPICK'
+  GOSUB EXECUTE.CMD
+ NEXT I    
+END
+*
+*
+GOSUB POST.INSTALL
+*
+*
+MSG.TEXT = 'Selected host programs have been installed (':ITEM.COUNT:' items.) '
+MSG.TEXT = MSG.TEXT : 'You can reinstall the AccuTerm host programs at any time '
+MSG.TEXT = MSG.TEXT : 'by typing LOAD-ACCUTERM-PROGS at TCL.'
+IF LOAD.DEMOBP THEN
+ MSG.TEXT = MSG.TEXT : AM:AM:'Start the AccuTerm demo by typing ""DEMOMENU"" at TCL.'
+END
+GOSUB SHOW.MESSAGE.OK
+STOP
+*
+*
+999 * Cancel
+*
+MSG.TEXT = 'You can install the AccuTerm host programs at any time by typing LOAD-ACCUTERM-PROGS at TCL.'
+GOSUB SHOW.MESSAGE.OK
+STOP
+*
+*
+**************************************************************************
+*
+PRE.INSTALL: * Handle any platform-specific pre-installation steps
+*
+* For QM, write $BASIC.OPTIONS to VOC so it will apply to all files
+*#QM#*GOSUB GET.ACCOUNT.NAME
+*#QM#*IF INDEX(OCONV(ACCT,'MCU'),'ACCUTERM',1) > 0 THEN
+*#QM#* OPEN 'VOC' TO VOC THEN
+*#QM#*  READ Z FROM VOC,'$BASIC.OPTIONS' ELSE
+*#QM#*   OPT.REC = 'X'
+*#QM#*   OPT.REC<-1> = 'MODE PICK.ERRMSG'
+*#QM#*   WRITE OPT.REC ON VOC,'$BASIC.OPTIONS'
+*#QM#*  END
+*#QM#* END
+*#QM#*END
+RETURN
+*
+*
+**************************************************************************
+*
+POST.INSTALL: * Handle any platform-specific post-installation steps
+*
+* For OpenInsight, convert dictionaries to OI format
+*#OI#*IF LOAD.SAMPLE.DATA THEN
+*#OI#* FOR I = 1 TO DCOUNT(SAMPLE.DICT.FILES,'|')
+*#OI#*  FILE.NAME = FIELD(SAMPLE.DICT.FILES,'|',I)
+*#OI#*  DATA '':AM:'Y'
+*#OI#*  EXECUTE 'CONVERT ':FILE.NAME:' (O'
+*#OI#* NEXT I
+*#OI#*END
+* For ON, compile dictionaries so A-correlatives can use ITYPE() function
+*#ON#*IF LOAD.SAMPLE.DATA THEN
+*#ON#* LV = 0
+*#ON#* FOR I = 1 TO DCOUNT(SAMPLE.DICT.FILES,'|')
+*#ON#*  FILE.NAME = FIELD(SAMPLE.DICT.FILES,'|',I)
+*#ON#*  OPEN FILE.NAME TO FV THEN
+*#ON#*   SELECT FV TO LV
+*#ON#*   DONE = 0
+*#ON#*   LOOP
+*#ON#*    READNEXT ID FROM LV ELSE DONE = 1
+*#ON#*   UNTIL DONE DO
+*#ON#*    READ Z FROM FV,ID THEN
+*#ON#*     IF Z<1> = 'A' OR Z<1> = 'S' THEN
+*#ON#*      * Convert A-type and S-type dictionary items to D-type or I-type
+*#ON#*      Z<4> = Z<3>
+*#ON#*      Z<3> = Z<7>
+*#ON#*      Z<5> = Z<10>:Z<9>
+*#ON#*      IF Z<8>[1,1] = 'A' THEN
+*#ON#*       * Convert A-correlative to I-type expression
+*#ON#*       Z<1> = 'I'
+*#ON#*       EXPR = Z<8>[3,999]
+*#ON#*       LOOP K = INDEX(EXPR,'N(',1) WHILE K DO EXPR = EXPR[1,K-1]:EXPR[K+1,999] REPEAT
+*#ON#*       LOOP K = INDEX(EXPR,'S(',1) WHILE K DO EXPR = EXPR[1,K-1]:'SUM':EXPR[K+1,999] REPEAT
+*#ON#*       Z<2> = EXPR
+*#ON#*      END ELSE
+*#ON#*       IF Z<8>[1,1] = 'T' THEN
+*#ON#*        * Convert T-correlative to I-type TRANS() function
+*#ON#*        Z<1> = 'I'
+*#ON#*        TFILE = FIELD(Z<8>,';',1)[2,999]
+*#ON#*        IF TFILE = 'CUST.SAMPLE' THEN TKEY = 'CUST.NO' ELSE TKEY = 'UPC'
+*#ON#*        Z<2> = 'TRANS(':TFILE:',':TKEY:',':FIELD(Z<8>,';',4):',"':FIELD(Z<8>,';',2):'")'
+*#ON#*       END ELSE
+*#ON#*        Z<1> = 'D'
+*#ON#*       END
+*#ON#*      END
+*#ON#*      IF Z<16> = 'V' THEN Z<6> = 'MV' ELSE Z<6> = 'S'
+*#ON#*      Z<7> = ''
+*#ON#*      Z<8> = ''
+*#ON#*      Z<9> = ''
+*#ON#*      Z<10> = ''
+*#ON#*      WRITE Z ON FV,ID
+*#ON#*     END
+*#ON#*    END
+*#ON#*   REPEAT
+*#ON#*   EXECUTE 'COMPILE.DICT ':FILE.NAME CAPTURING JUNK
+*#ON#*  END
+*#ON#* NEXT I
+*#ON#*END
+* For QM, compile dictionaries so A-correlatives can use ITYPE() function
+*#QM#*IF LOAD.SAMPLE.DATA THEN
+*#QM#* LV = 0
+*#QM#* FOR I = 1 TO DCOUNT(SAMPLE.DICT.FILES,'|')
+*#QM#*  FILE.NAME = FIELD(SAMPLE.DICT.FILES,'|',I)
+*#QM#*  EXECUTE 'COMPILE.DICT ':FILE.NAME CAPTURING JUNK
+*#QM#* NEXT I
+*#QM#*END
+* For UniData, convert dictionaries to UD format
+*#UD#*IF LOAD.SAMPLE.DATA THEN
+*#UD#* LV = 0
+*#UD#* FOR I = 1 TO DCOUNT(SAMPLE.DICT.FILES,'|')
+*#UD#*  FILE.NAME = FIELD(SAMPLE.DICT.FILES,'|',I)
+*#UD#*  OPEN FILE.NAME TO FV THEN
+*#UD#*   SELECT FV TO LV
+*#UD#*   DONE = 0
+*#UD#*   LOOP
+*#UD#*    READNEXT ID FROM LV ELSE DONE = 1
+*#UD#*   UNTIL DONE DO
+*#UD#*    READ Z FROM FV,ID THEN
+*#UD#*     IF Z<1> = 'A' OR Z<1> = 'S' THEN
+*#UD#*      * Convert A-type and S-type dictionary items to D-type or I-type
+*#UD#*      Z<4> = Z<3>
+*#UD#*      Z<3> = Z<7>
+*#UD#*      Z<5> = Z<10>:Z<9>
+*#UD#*      IF Z<8>[1,1] = 'A' THEN
+*#UD#*       * Convert A-correlative to I-type expression
+*#UD#*       Z<1> = 'I'
+*#UD#*       EXPR = Z<8>[3,999]
+*#UD#*       LOOP K = INDEX(EXPR,'N(',1) WHILE K DO EXPR = EXPR[1,K-1]:EXPR[K+1,999] REPEAT
+*#UD#*       LOOP K = INDEX(EXPR,'S(',1) WHILE K DO EXPR = EXPR[1,K-1]:'SUM':EXPR[K+1,999] REPEAT
+*#UD#*       Z<2> = EXPR
+*#UD#*      END ELSE
+*#UD#*       IF Z<8>[1,1] = 'T' THEN
+*#UD#*        * Convert T-correlative to I-type TRANS() function
+*#UD#*        Z<1> = 'I'
+*#UD#*        TFILE = FIELD(Z<8>,';',1)[2,999]
+*#UD#*        IF TFILE = 'CUST.SAMPLE' THEN TKEY = 'CUST.NO' ELSE TKEY = 'UPC'
+*#UD#*        Z<2> = 'TRANS(':TFILE:',':TKEY:',':FIELD(Z<8>,';',4):',"':FIELD(Z<8>,';',2):'")'
+*#UD#*       END ELSE
+*#UD#*        Z<1> = 'D'
+*#UD#*       END
+*#UD#*      END
+*#UD#*      IF Z<16> = 'V' THEN Z<6> = 'MV' ELSE Z<6> = 'S'
+*#UD#*      Z<7> = ''
+*#UD#*      Z<8> = ''
+*#UD#*      Z<9> = ''
+*#UD#*      Z<10> = ''
+*#UD#*      WRITE Z ON FV,ID
+*#UD#*     END
+*#UD#*    END
+*#UD#*   REPEAT
+*#UD#*   EXECUTE 'COMPILE.DICT ':FILE.NAME CAPTURING JUNK
+*#UD#*  END
+*#UD#* NEXT I
+*#UD#*END
+*
+IF OPTS = 'R' THEN
+*
+* Recompile FTCHK after a reload (& other platform-specific steps)
+*
+*#DEFAULT#* EXECUTE 'BASIC FTBP FTCHK'
+*#ADDS#* EXECUTE 'BASIC FTBP FTCHK'
+*#AP#* EXECUTE 'BASIC FTBP FTCHK'
+*#CACHE#* EXECUTE 'BASIC FTBP FTCHK'
+*#ENH#* EXECUTE 'BASIC FTBP FTCHK'
+*#JB#* EXECUTE 'BASIC FTBP FTCHK'; EXECUTE 'CATALOG FTBP FTCHK'
+*#MD#* PERFORM 'BASIC FTBP FTCHK'
+*#MD#* READ Z FROM FTBP.FV,'FTCHK' THEN
+*#MD#*  LOOP K = INDEX(Z,'EXECUTE',1) WHILE K DO Z = Z[1,K-1]:'PERFORM':Z[K+7,99999] REPEAT
+*#MD#*  WRITE Z ON FTBP.FV,'FTCHK'
+*#MD#* END
+*#MVBASE#* EXECUTE 'BASIC FTBP FTCHK'
+*#MVON#* EXECUTE 'BASIC FTBP FTCHK'
+*#NR#* PERFORM 'BASIC FTBP FTCHK'
+*#NR#* READ Z FROM FTBP.FV,'FTCHK' THEN
+*#NR#*  LOOP K = INDEX(Z,'EXECUTE',1) WHILE K DO Z = Z[1,K-1]:'PERFORM':Z[K+7,99999] REPEAT
+*#NR#*  WRITE Z ON FTBP.FV,'FTCHK'
+*#NR#* END
+*#OAS#* EXECUTE 'BASIC FTBP FTCHK'
+*#OI#* EXECUTE 'BASIC FTBP FTCHK'
+*#ON#* EXECUTE 'BASIC FTBP FTCHK'
+*#PICK#* EXECUTE 'BASIC FTBP FTCHK'
+*#QM#* EXECUTE 'BASIC FTBP FTCHK NO.QUERY'
+*#R83#* EXECUTE 'BASIC FTBP FTCHK'
+*#SEQ#* EXECUTE 'BASIC FTBP FTCHK'
+*#UD#* EXECUTE 'BASIC FTBP FTCHK'
+*#ULT#* EXECUTE 'BASIC FTBP FTCHK'
+*#ULT#* WRITEV '$COMPATIBILITY R83PC' ON FTBP.FV,'LOAD-ACCUTERM-PROGS',1
+*#ULT#* WRITEV '$COMPATIBILITY R83PC' ON FTBP.FV,'LOAD-ACCUTERM-OBJBP',1
+*#ULT#* WRITEV '$COMPATIBILITY R83PC' ON FTBP.FV,'LOAD-ACCUTERM-GUIBP',1
+*#ULT#* WRITEV '$COMPATIBILITY R83PC' ON FTBP.FV,'LOAD-ACCUTERM-SUIBP',1
+*#ULTX#* EXECUTE 'BASIC FTBP FTCHK'
+*#UV#* EXECUTE 'BASIC FTBP FTCHK'
+*#VIS#* EXECUTE 'BASIC FTBP FTCHK'
+END
+RETURN
+*
+*
+**************************************************************************
+*
+LOAD.PROGRAM.FILE: * load program file from directory
+*
+IF INDEX(PGM.OPTS,'X',1) THEN WC = '*.' ELSE WC = '*'
+CALL FTRECV('K,O,T,P,U,Z',PGM.FILE,'',PGM.PATH,WC,K,0,STAT)
+ITEM.COUNT = ITEM.COUNT + K
+IF STAT = '' THEN LOAD.OK = 1 ELSE LOAD.OK = 0
+IF LOAD.OK THEN
+ IF INDEX(PGM.OPTS,'C',1) THEN
+  DATA PGM.FILE
+  DATA ''
+  DATA 'Y'
+  CMD = 'RUN FTBP FTCHK'
+  GOSUB EXECUTE.CMD
+ END
+END
+RETURN
+*
+*
+**************************************************************************
+*
+CHECK.SOURCE.PATH: * check if source directory exists
+*
+*Build script to check if directory exists
+*
+SCR='On Error Resume Next':EM
+SCR=SCR:'X=0':EM
+SCR=SCR:'X=GetAttr("':SOURCE.PATH:'")':EM
+SCR=SCR:'InitSession.Output CStr((X And 16) / 16) & Chr$(13)':EM
+PRINT ESC:STX:'P':SCR:CR:
+PROMPT ''
+ECHO OFF
+INPUT SOURCE.OK:
+ECHO ON
+PROMPT '?'
+RETURN
+*
+*
+**************************************************************************
+*
+CHECK.TARGET.PROGRAM.FILE: * check if file exists & prompt to create if not (program)
+*
+TARGET.OK = 0
+OPEN TARGET.FILE TO FV THEN
+ TARGET.OK = 1
+END ELSE
+ MSG.TEXT = 'File ':TARGET.FILE:' does not exist. Create this file?'
+ GOSUB SHOW.MESSAGE.YESNO
+ IF MSG.OK THEN GOSUB CREATE.TARGET.PROGRAM.FILE
+END
+RETURN
+*
+*
+**************************************************************************
+*
+CHECK.TARGET.DATA.FILE: * check if file exists & prompt to create if not (data)
+*
+TARGET.OK = 0
+OPEN TARGET.FILE TO FV THEN
+ TARGET.OK = 1
+END ELSE
+ MSG.TEXT = 'File ':TARGET.FILE:' does not exist. Create this file?'
+ GOSUB SHOW.MESSAGE.YESNO
+ IF MSG.OK THEN GOSUB CREATE.TARGET.DATA.FILE
+END
+RETURN
+*
+*
+**************************************************************************
+*
+CREATE.TARGET.PROGRAM.FILE: * create program file using platform-specific command
+*
+TARGET.OK = 0
+*#DEFAULT#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1,1 1,1'
+*#ADDS#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+*#AP#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+*#CACHE#*CMD = 'CREATE-FILE ':TARGET.FILE
+*#ENH#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+*#JB#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+*#MD#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1,1 ':TARGET.MODULO:',1'
+*#MVBASE#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+*#MVON#*CMD = 'CREATE-FILE ':TARGET.FILE:' TYPE=DIRECTORY'
+*#NR#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1,1 ':TARGET.MODULO:',1'
+*#OAS#*CMD = 'CREATE-FILE DIR ':TARGET.FILE
+*#OI#*CMD = 'CREATE-BFILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+*#ON#*CMD = 'CREATE-FILE ':TARGET.FILE
+*#PICK#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+*#QM#*CMD = 'CREATE-FILE ':TARGET.FILE:' DIRECTORY'
+*#R83#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+*#SEQ#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+*#UD#*CMD = 'CREATE-FILE DIR ':TARGET.FILE
+*#ULT#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1,1 ':TARGET.MODULO:',1'
+*#ULTX#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1,1 ':TARGET.MODULO:',1'
+*#UV#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1 1,1,1'
+*#VIS#*CMD = 'CREATE-BFILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+GOSUB EXECUTE.CMD
+OPEN TARGET.FILE TO FV THEN TARGET.OK = 1
+RETURN
+*
+*
+**************************************************************************
+*
+CREATE.TARGET.DATA.FILE: * create data file using platform-specific command
+*
+TARGET.OK = 0
+*#DEFAULT#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1,1 1,1'
+*#ADDS#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+*#AP#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+*#CACHE#*CMD = 'CREATE-FILE ':TARGET.FILE
+*#ENH#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+*#JB#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+*#MD#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1,1 ':TARGET.MODULO:',1'
+*#MVBASE#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+*#MVON#*CMD = 'CREATE-FILE ':TARGET.FILE
+*#NR#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1,1 ':TARGET.MODULO:',1'
+*#OAS#*CMD = 'CREATE-FILE ':TARGET.FILE:' ':TARGET.MODULO
+*#OI#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+*#ON#*CMD = 'CREATE-FILE ':TARGET.FILE
+*#PICK#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+*#QM#*CMD = 'CREATE-FILE ':TARGET.FILE
+*#R83#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+*#SEQ#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+*#UD#*CMD = 'CREATE-FILE ':TARGET.FILE:' ':TARGET.MODULO
+*#ULT#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1,1 ':TARGET.MODULO:',1'
+*#ULTX#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1,1 ':TARGET.MODULO:',1'
+*#UV#*CMD = 'CREATE-FILE ':TARGET.FILE:' 3 3' ;* best guess for both ideal & pick flavors
+*#VIS#*CMD = 'CREATE-FILE ':TARGET.FILE:' 1 ':TARGET.MODULO
+GOSUB EXECUTE.CMD
+OPEN TARGET.FILE TO FV THEN TARGET.OK = 1
+RETURN
+*
+*
+**************************************************************************
+*
+EXECUTE.CMD: *
+*#DEFAULT#*EXECUTE CMD
+*#ADDS#*EXECUTE CMD
+*#AP#*EXECUTE CMD
+*#CACHE#*EXECUTE CMD
+*#ENH#*EXECUTE CMD
+*#JB#*EXECUTE CMD
+*#MD#*PERFORM CMD
+*#MVBASE#*EXECUTE CMD
+*#MVON#*EXECUTE CMD
+*#NR#*PERFORM CMD
+*#OAS#*EXECUTE CMD
+*#OI#*EXECUTE CMD
+*#ON#*EXECUTE CMD
+*#PICK#*EXECUTE CMD
+*#QM#*EXECUTE CMD
+*#R83#*EXECUTE CMD
+*#SEQ#*EXECUTE CMD
+*#UD#*EXECUTE CMD
+*#ULT#*EXECUTE CMD
+*#ULTX#*EXECUTE CMD
+*#UV#*EXECUTE CMD
+*#VIS#*EXECUTE CMD
+GOSUB CLEAR.INPUT.BUFFER
+RETURN
+*
+*
+**************************************************************************
+*
+CLEAR.INPUT.BUFFER: *
+*
+PROMPT ''
+ECHO OFF
+*#ADDS#*INPUTCLEAR
+*#AP#*LOOP WHILE SYSTEM(14) DO IN X REPEAT
+*#CACHE#*INPUTCLEAR
+*#ENH#*LOOP WHILE SYSTEM(14) DO INPUT X,0 REPEAT
+*#JB#*INPUTCLEAR
+*#MVBASE#*INPUTCLEAR
+*#MVON#*INPUTCLEAR
+*#NR#*LOOP WHILE SYSTEM(14) DO INPUT X,0 REPEAT
+*#OAS#*INPUTCLEAR
+*#OI#*INPUTCLEAR
+*#ON#*INPUTCLEAR
+*#PICK#*INPUTCLEAR
+*#QM#*INPUTCLEAR
+*#R83#*LOOP WHILE SYSTEM(14) DO IN X REPEAT
+*#SEQ#*INPUTCLEAR
+*#UD#*INPUTCLEAR
+*#ULT#*LOOP WHILE SYSTEM(11) DO INPUT X,0 REPEAT
+*#ULTX#*LOOP WHILE SYSTEM(11) DO INPUT X,0 REPEAT
+*#UV#*INPUTCLEAR
+*#VIS#*INPUTCLEAR
+PRINT ESC:STX:'I':
+INPUT ANS:
+ECHO ON
+PROMPT '?'
+RETURN
+*
+*
+**************************************************************************
+*
+GET.ACCOUNT.NAME: * Get the account name (platform dependent)
+*
+ACCT = FIELD(OCONV('','U50BB'),' ',3); IF ACCT='' THEN ACCT=FIELD(OCONV('','U50BB'),' ',2);*#GENERIC#*
+*#DEFAULT#*ACCT = FIELD(OCONV('','U50BB'),' ',3); IF ACCT='' THEN ACCT=FIELD(OCONV('','U50BB'),' ',2)
+*#ADDS#*ACCT = FIELD(OCONV('','U50BB'),' ',3); IF ACCT='' THEN ACCT=FIELD(OCONV('','U50BB'),' ',2)
+*#AP#*ACCT = FIELD(OCONV('','U50BB'),' ',3); IF ACCT='' THEN ACCT=FIELD(OCONV('','U50BB'),' ',2)
+*#CACHE#*ACCT = @WHO
+*#ENH#*ACCT = FIELD(OCONV('','U50BB'),' ',3); IF ACCT='' THEN ACCT=FIELD(OCONV('','U50BB'),' ',2)
+*#JB#**JBASE IS DIFFERENT! @WHO MAY RETURN ORIGINAL LOGIN NAME INSTEAD OF ACCOUNT NAME
+*#JB#*ACCT = @WHO
+*#JB#*GETCWD.OK = GETCWD(ACCT)
+*#JB#*NS = COUNT(ACCT,'/')
+*#JB#*IF NS > 0 THEN
+*#JB#*ACCT = FIELD(ACCT,'/',NS+1)
+*#JB#*END ELSE
+*#JB#*NS = COUNT(ACCT,'\')
+*#JB#*IF NS > 0 THEN
+*#JB#*ACCT = FIELD(ACCT,'\',NS+1)
+*#JB#*END
+*#JB#*END
+*#MD#*ACCT = FIELD(OCONV('','U50BB'),' ',3); IF ACCT='' THEN ACCT=FIELD(OCONV('','U50BB'),' ',2)
+*#MVBASE#*ACCT = FIELD(OCONV('','U50BB'),' ',3); IF ACCT='' THEN ACCT=FIELD(OCONV('','U50BB'),' ',2)
+*#MVON#*ACCT = @WHO
+*#NR#*ACCT = @ACCOUNT
+*#OAS#*ACCT = @WHO
+*#OI#*ACCT = @APPID<1>
+*#ON#*ACCT = @WHO
+*#PICK#*ACCT = @ACCOUNT
+*#QM#*ACCT = @WHO
+*#R83#*ACCT = FIELD(OCONV('','U50BB'),' ',3); IF ACCT='' THEN ACCT=FIELD(OCONV('','U50BB'),' ',2)
+*#SEQ#*ACCT = FIELD(OCONV('','U50BB'),' ',3); IF ACCT='' THEN ACCT=FIELD(OCONV('','U50BB'),' ',2)
+*#UD#*ACCT = @WHO
+*#ULT#*ACCT = FIELD(OCONV('','U50BB'),' ',3); IF ACCT='' THEN ACCT=FIELD(OCONV('','U50BB'),' ',2)
+*#ULTX#*ACCT = FIELD(OCONV('','U50BB'),' ',3); IF ACCT='' THEN ACCT=FIELD(OCONV('','U50BB'),' ',2)
+*#UV#*ACCT = @WHO
+*#VIS#*ACCT = FIELD(OCONV('','U50BB'),' ',3); IF ACCT='' THEN ACCT=FIELD(OCONV('','U50BB'),' ',2)
+RETURN
+*
+*
+**************************************************************************
+*
+WARN.IF.NOT.ACCUTERM: * display warning message if not in ACCUTERM account
+*
+GOSUB GET.ACCOUNT.NAME
+IF INDEX(OCONV(ACCT,'MCU'),'ACCUTERM',1) = 0 THEN
+ MSG.TEXT = 'It appears that you are not currently logged in to the ACCUTERM account. '
+ MSG.TEXT = MSG.TEXT : 'AccuSoft strongly recommends that the AccuTerm sample programs, '
+ MSG.TEXT = MSG.TEXT : 'demo programs, examples and sample data files only be loaded to '
+ MSG.TEXT = MSG.TEXT : 'files in the ACCUTERM account, to avoid conflicts with existing '
+ MSG.TEXT = MSG.TEXT : 'file and cataloged program names.':AM:AM
+ MSG.TEXT = MSG.TEXT : 'All of the programs loaded by this installer will be cataloged. '
+ MSG.TEXT = MSG.TEXT : 'Some of the examples have common names like CUST.MAINT which might '
+ MSG.TEXT = MSG.TEXT : 'collide with production programs.':AM:AM
+ MSG.TEXT = MSG.TEXT : 'Are you sure you want to install in the current account (':ACCT:') ?'
+ GOSUB SHOW.MESSAGE.YESNO
+ WHO.OK = MSG.OK
+END ELSE
+ WHO.OK = 1
+END
+RETURN
+*
+*
+**************************************************************************
+*
+SHOW.MESSAGE.YESNO: * display message box with Yes/No buttons & get response
+*
+* MSG.TEXT variable contains message, response return as
+* MSG.OK = 1 if Yes button, or MSG.OK = 0 if No button
+*
+MSG.STYLE = 36
+GOSUB SHOW.MESSAGE.BOX
+IF MSG.RSP = 6 THEN MSG.OK = 1 ELSE MSG.OK = 0
+RETURN
+*
+*
+**************************************************************************
+*
+SHOW.MESSAGE.OK: * display message box with OK button
+*
+* MSG.TEXT variable contains message
+*
+MSG.STYLE = 0
+GOSUB SHOW.MESSAGE.BOX
+RETURN
+*
+*
+**************************************************************************
+*
+SHOW.MESSAGE.BOX: * display message box & get response
+*
+* MSG.TEXT variable contains message, response return as
+* MSG.RSP is response
+*
+*Build script to display message box
+SCR='On Error Resume Next':EM
+SCR=SCR:'Dim txt As String':EM
+SCR=SCR:'Dim rc As Integer':EM
+MSG.TEXT.CNT = DCOUNT(MSG.TEXT,AM)
+FOR MSG.TEXT.LN = 1 TO MSG.TEXT.CNT
+ SCR=SCR:'txt = txt & "':MSG.TEXT<MSG.TEXT.LN>:'"':EM
+ IF MSG.TEXT.LN < MSG.TEXT.CNT THEN SCR=SCR:'txt = txt & vbCrLf':EM
+NEXT MSG.TEXT.LN
+*Display the message box (Yes/No with ? icon)
+SCR=SCR:'rc = MsgBox(txt,':MSG.STYLE:',"AccuTerm Host Program Installer")':EM
+*Transmit results to host
+SCR=SCR:'InitSession.Activate':EM
+SCR=SCR:'InitSession.Output CStr(rc) & vbCr':EM
+*Execute script
+PRINT ESC:STX:'P':SCR:CR:
+*Retrieve the result
+PROMPT ''
+ECHO OFF
+INPUT MSG.RSP:
+ECHO ON
+PROMPT '?'
+RETURN
+*
+*
+**************************************************************************
+*
+COPY.DOS.FILE: *
+*
+SCR='On Error Resume Next':EM
+SCR=SCR:'FileCopy "':SOURCE.FILE:'", "':TARGET.FILE:'"':EM
+SCR=SCR:'InitSession.Output vbCr'
+PRINT ESC:STX:'P':SCR:CR:
+PROMPT ''
+ECHO OFF
+INPUT ANS:
+ECHO ON
+PROMPT '?'
+RETURN
+*
+*
+**************************************************************************
+*
+* Show the options dialog
+* 
+SHOW.OPTIONS.DIALOG: * show the options dialog
+*
+* Build script to display dialog box
+*
+* Assign OPTS & TARGETS to script opts & files variables
+* Return new OPTS & TARGETS. If user cancels, OPTS = ''
+*
+SCR = ''
+SCR=SCR:'Begin Dialog UserDialog 0,0,640,364,"AccuTerm Host Program Installation Options",.DlgFunc':EM
+SCR=SCR:'OptionGroup .optItems':EM
+SCR=SCR:'OptionButton 30,18,190,14,"Install selected items",.optSel':EM
+SCR=SCR:'OptionButton 230,18,140,14,"Install all items",.optAll':EM
+SCR=SCR:'OptionButton 430,18,140,14,"Reinstall FTBP",.optFTBP':EM
+SCR=SCR:'GroupBox 30,35,590,287,"",.GroupBox1':EM
+SCR=SCR:'Text 310,52,180,14,"Install into host files:",.Text1':EM
+SCR=SCR:'Text 50,52,210,14,"Install the following items:",.Text2':EM
+SCR=SCR:'CheckBox 50,70,240,14,"File transfer programs",.chkFTBP':EM
+SCR=SCR:'CheckBox 50,91,240,14,"GUI support programs",.chkGUIBP':EM
+SCR=SCR:'CheckBox 50,112,190,14,"GUI sample projects",.chkGUIS':EM
+SCR=SCR:'CheckBox 50,133,240,14,"ObjectBridge support",.chkOBJBP':EM
+SCR=SCR:'CheckBox 50,154,240,14,"ObjectBridge samples",.chkOBJS':EM
+SCR=SCR:'CheckBox 50,175,240,14,"Smart User Interface library",.chkSUIBP':EM
+SCR=SCR:'CheckBox 50,196,240,14,"Sample subroutine library",.chkSAMPLES':EM
+SCR=SCR:'CheckBox 50,217,240,14,"AccuTerm demos",.chkDEMOBP':EM
+SCR=SCR:'CheckBox 50,238,240,14,"GUI tutorial examples",.chkTutor':EM
+SCR=SCR:'CheckBox 50,259,250,14,"""Modernizing the user interface""",.chkUIEX':EM
+SCR=SCR:'CheckBox 50,280,480,14,"Sample data files: CUST.SAMPLE, INV.SAMPLE, PROD.SAMPLE",.chkSampleData':EM
+SCR=SCR:'CheckBox 50,301,360,14,"All items needed for phiReport",.chkPhiReport':EM
+SCR=SCR:'TextBox 310,70,90,21,.txFTBP':EM
+SCR=SCR:'TextBox 310,91,90,21,.txGUIBP':EM
+SCR=SCR:'TextBox 310,112,90,21,.txGUIS':EM
+SCR=SCR:'TextBox 410,112,90,21,.txGUIAPPS':EM
+SCR=SCR:'TextBox 310,133,90,21,.txOBJBP':EM
+SCR=SCR:'TextBox 310,154,90,21,.txOBJS':EM
+SCR=SCR:'TextBox 310,175,90,21,.txSUIBP':EM
+SCR=SCR:'TextBox 310,196,90,21,.txSAMPLES':EM
+SCR=SCR:'TextBox 310,217,90,21,.txDEMOBP':EM
+SCR=SCR:'TextBox 310,238,90,21,.txTutor':EM
+SCR=SCR:'TextBox 410,238,90,21,.txTutorApps':EM
+SCR=SCR:'TextBox 310,259,90,21,.txUIEX':EM
+SCR=SCR:'PushButton 520,70,80,18,"Info...",.cmdFTBP':EM
+SCR=SCR:'PushButton 520,91,80,18,"Info...",.cmdGUIBP':EM
+SCR=SCR:'PushButton 520,112,80,18,"Info...",.cmdGUIS':EM
+SCR=SCR:'PushButton 520,133,80,18,"Info...",.cmdOBJBP':EM
+SCR=SCR:'PushButton 520,154,80,18,"Info...",.cmdOBJS':EM
+SCR=SCR:'PushButton 520,175,80,18,"Info...",.cmdSUIBP':EM
+SCR=SCR:'PushButton 520,196,80,18,"Info...",.cmdSAMPLES':EM
+SCR=SCR:'PushButton 520,217,80,18,"Info...",.cmdDEMOBP':EM
+SCR=SCR:'PushButton 520,238,80,18,"Info...",.cmdTutor':EM
+SCR=SCR:'PushButton 520,259,80,18,"Info...",.cmdUIEX':EM
+SCR=SCR:'PushButton 520,301,80,18,"Info...",.cmdPhiReport':EM
+SCR=SCR:'OKButton 410,336,90,21':EM
+SCR=SCR:'CancelButton 520,336,90,21':EM
+SCR=SCR:'End Dialog':EM
+SCR=SCR:'Dim dlg As UserDialog':EM
+SCR=SCR:'Dim opts As String':EM
+SCR=SCR:'Dim files As String':EM
+SCR=SCR:'Dim i As Integer':EM
+SCR=SCR:'Dim n As Integer':EM
+* Load initial state':EM
+SCR=SCR:'On Error Resume Next':EM
+SCR=SCR:'opts = "':OPTS:'"':EM
+SCR=SCR:'files = "':TARGETS:'"':EM
+SCR=SCR:'If InStr(opts,"F") Then dlg.chkFTBP = 1':EM
+SCR=SCR:'If InStr(opts,"G") Then dlg.chkGUIBP = 1':EM
+SCR=SCR:'If InStr(opts,"X") Then dlg.chkGUIS = 1':EM
+SCR=SCR:'If InStr(opts,"O") Then dlg.chkOBJBP = 1':EM
+SCR=SCR:'If InStr(opts,"Y") Then dlg.chkOBJS = 1':EM
+SCR=SCR:'If InStr(opts,"S") Then dlg.chkSUIBP = 1':EM
+SCR=SCR:'If InStr(opts,"M") Then dlg.chkSAMPLES = 1':EM
+SCR=SCR:'If InStr(opts,"D") Then dlg.chkDEMOBP=1':EM
+SCR=SCR:'If InStr(opts,"T") Then dlg.chkTutor=1':EM
+SCR=SCR:'If InStr(opts,"U") Then dlg.chkUIEX = 1':EM
+SCR=SCR:'If InStr(opts,"Z") Then dlg.chkSampleData = 1':EM
+SCR=SCR:'If InStr(opts,"P") Then dlg.chkPhiReport = 1':EM
+SCR=SCR:'dlg.txFTBP = Item(files,1,1,"|")':EM
+SCR=SCR:'dlg.txGUIBP = Item(files,2,2,"|")':EM
+SCR=SCR:'dlg.txGUIS = Item(files,3,3,"|")':EM
+SCR=SCR:'dlg.txGUIAPPS = Item(files,4,4,"|")':EM
+SCR=SCR:'dlg.txOBJBP = Item(files,5,5,"|")':EM
+SCR=SCR:'dlg.txOBJS = Item(files,6,6,"|")':EM
+SCR=SCR:'dlg.txSUIBP = Item(files,7,7,"|")':EM
+SCR=SCR:'dlg.txSAMPLES = Item(files,8,8,"|")':EM
+SCR=SCR:'dlg.txDEMOBP = Item(files,9,9,"|")':EM
+SCR=SCR:'dlg.txTutor = Item(files,10,10,"|")':EM
+SCR=SCR:'dlg.txTutorApps = Item(files,11,11,"|")':EM
+SCR=SCR:'dlg.txUIEX = Item(files,12,12,"|")':EM
+* Display the Dialog box':EM
+SCR=SCR:'Dialog dlg':EM
+* Transmit results To host':EM
+SCR=SCR:'opts = ""':EM
+SCR=SCR:'files=""':EM
+SCR=SCR:'If Err = 0 Then':EM
+SCR=SCR:'If dlg.optItems = 2 Then':EM
+SCR=SCR:'opts = opts & "R"':EM
+SCR=SCR:'Else':EM
+SCR=SCR:'If dlg.chkFTBP Then opts = opts & "F"':EM
+SCR=SCR:'If dlg.chkGUIBP Then opts = opts & "G"':EM
+SCR=SCR:'If dlg.chkGUIS Then opts = opts & "X"':EM
+SCR=SCR:'If dlg.chkOBJBP Then opts = opts & "O"':EM
+SCR=SCR:'If dlg.chkOBJBP Then opts = opts & "Y"':EM
+SCR=SCR:'If dlg.chkSUIBP Then opts = opts & "S"':EM
+SCR=SCR:'If dlg.chkSAMPLES Then opts = opts & "M"':EM
+SCR=SCR:'If dlg.chkDEMOBP Then opts=opts & "D"':EM
+SCR=SCR:'If dlg.chkTutor Then opts = opts & "T"':EM
+SCR=SCR:'If dlg.chkUIEX Then opts = opts & "U"':EM
+SCR=SCR:'If dlg.chkSampleData Then opts = opts & "Z"':EM
+SCR=SCR:'If dlg.chkPhiReport Then opts = opts & "P"':EM
+SCR=SCR:'End If':EM
+SCR=SCR:'files = files & dlg.txFTBP & "|"':EM
+SCR=SCR:'files = files & dlg.txGUIBP & "|"':EM
+SCR=SCR:'files = files & dlg.txGUIS & "|"':EM
+SCR=SCR:'files = files & dlg.txGUIAPPS & "|"':EM
+SCR=SCR:'files = files & dlg.txOBJBP & "|"':EM
+SCR=SCR:'files = files & dlg.txOBJS & "|"':EM
+SCR=SCR:'files = files & dlg.txSUIBP & "|"':EM
+SCR=SCR:'files = files & dlg.txSAMPLES & "|"':EM
+SCR=SCR:'files = files & dlg.txDEMOBP & "|"':EM
+SCR=SCR:'files = files & dlg.txTutor & "|"':EM
+SCR=SCR:'files = files & dlg.txTutorApps & "|"':EM
+SCR=SCR:'files = files & dlg.txUIEX & "|"':EM
+SCR=SCR:'End If':EM
+SCR=SCR:'InitSession.Activate':EM
+SCR=SCR:'InitSession.Output opts & "*" & files & vbCr':EM
+SCR=SCR:'End Sub':EM
+* The Dialog Function':EM
+SCR=SCR:'Private Function DlgFunc(DlgItem$, Action%, SuppValue&) As Boolean':EM
+SCR=SCR:'Dim bln As Boolean':EM
+SCR=SCR:'Select Case Action%':EM
+SCR=SCR:'Case 1':EM
+SCR=SCR:'bln = (DlgValue("optItems") = 0)':EM
+SCR=SCR:'DlgEnable "chkFTBP",0':EM
+SCR=SCR:'DlgEnable "txFTBP",0':EM
+SCR=SCR:'DlgEnable "txGUIBP",DlgValue("chkGUIBP") And bln':EM
+SCR=SCR:'DlgEnable "chkGUIS",DlgValue("chkGUIBP") And bln':EM
+SCR=SCR:'DlgEnable "txGUIS",DlgValue("chkGUIS") And bln':EM
+SCR=SCR:'DlgEnable "txGUIAPPS",DlgValue("chkGUIS") And bln':EM
+SCR=SCR:'DlgEnable "txOBJBP",DlgValue("chkOBJBP") And bln':EM
+SCR=SCR:'DlgEnable "chkOBJS",DlgValue("chkOBJBP") And bln':EM
+SCR=SCR:'DlgEnable "txOBJS",DlgValue("chkOBJS") And bln':EM
+SCR=SCR:'DlgEnable "txSUIBP",DlgValue("chkSUIBP") And bln':EM
+SCR=SCR:'DlgEnable "txSAMPLES",DlgValue("chkSAMPLES") And bln':EM
+SCR=SCR:'DlgEnable "txDEMOBP",DlgValue("chkDEMOBP") And bln':EM
+SCR=SCR:'DlgEnable "txTutor",DlgValue("chkTutor") And bln':EM
+SCR=SCR:'DlgEnable "txTutorApps",DlgValue("chkTutor") And bln':EM
+SCR=SCR:'DlgEnable "txUIEX",DlgValue("chkUIEX") And bln':EM
+SCR=SCR:'DlgEnable "cmdFTBP",1':EM
+SCR=SCR:'DlgEnable "cmdGUIBP",1':EM
+SCR=SCR:'DlgEnable "cmdGUIS",0':EM
+SCR=SCR:'DlgEnable "cmdOBJBP",1':EM
+SCR=SCR:'DlgEnable "cmdOBJS",0':EM
+SCR=SCR:'DlgEnable "cmdSUIBP",1':EM
+SCR=SCR:'DlgEnable "cmdSAMPLES",1':EM
+SCR=SCR:'DlgEnable "cmdDEMOBP",1':EM
+SCR=SCR:'DlgEnable "cmdTutor",0':EM
+SCR=SCR:'DlgEnable "cmdUIEX",1':EM
+SCR=SCR:'DlgEnable "cmdPhiReport",1':EM
+SCR=SCR:'Case 2':EM
+SCR=SCR:'Select Case DlgItem$':EM
+SCR=SCR:'Case "optItems"':EM
+SCR=SCR:'Select Case SuppValue':EM
+SCR=SCR:'Case 0':EM
+SCR=SCR:'DlgEnable "chkGUIBP",1':EM
+SCR=SCR:'DlgEnable "txGUIBP",DlgValue("chkGUIBP")':EM
+SCR=SCR:'DlgEnable "chkGUIS",DlgValue("chkGUIBP")':EM
+SCR=SCR:'DlgEnable "txGUIS",DlgValue("chkGUIS")':EM
+SCR=SCR:'DlgEnable "txGUIAPPS",DlgValue("chkGUIS")':EM
+SCR=SCR:'DlgEnable "chkOBJBP",1':EM
+SCR=SCR:'DlgEnable "txOBJBP",DlgValue("chkOBJBP")':EM
+SCR=SCR:'DlgEnable "chkOBJS",DlgValue("chkOBJBP")':EM
+SCR=SCR:'DlgEnable "txOBJS",DlgValue("chkOBJS")':EM
+SCR=SCR:'DlgEnable "chkSUIBP",1':EM
+SCR=SCR:'DlgEnable "txSUIBP",DlgValue("chkSUIBP")':EM
+SCR=SCR:'DlgEnable "chkSAMPLES",1':EM
+SCR=SCR:'DlgEnable "txSAMPLES",DlgValue("chkSAMPLES")':EM
+SCR=SCR:'DlgEnable "chkDEMOBP",1':EM
+SCR=SCR:'DlgEnable "txDEMOBP",DlgValue("chkDEMOBP")':EM
+SCR=SCR:'DlgEnable "chkTutor",1':EM
+SCR=SCR:'DlgEnable "txTutor",DlgValue("chkTutor")':EM
+SCR=SCR:'DlgEnable "txTutorApps",DlgValue("chkTutor")':EM
+SCR=SCR:'DlgEnable "chkUIEX",1':EM
+SCR=SCR:'DlgEnable "txUIEX",DlgValue("chkUIEX")':EM
+SCR=SCR:'DlgEnable "chkSampleData",1':EM
+SCR=SCR:'DlgEnable "chkPhiReport",1':EM
+SCR=SCR:'Case 1':EM
+SCR=SCR:'DlgValue "chkFTBP",1':EM
+SCR=SCR:'DlgEnable "chkGUIBP",0':EM
+SCR=SCR:'DlgValue "chkGUIBP",1':EM
+SCR=SCR:'DlgEnable "txGUIBP",0':EM
+SCR=SCR:'DlgEnable "chkGUIS",0':EM
+SCR=SCR:'DlgValue "chkGUIS",1':EM
+SCR=SCR:'DlgEnable "txGUIS",0':EM
+SCR=SCR:'DlgEnable "txGUIAPPS",0':EM
+SCR=SCR:'DlgEnable "chkOBJBP",0':EM
+SCR=SCR:'DlgValue "chkOBJBP",1':EM
+SCR=SCR:'DlgEnable "txOBJBP",0':EM
+SCR=SCR:'DlgEnable "chkOBJS",0':EM
+SCR=SCR:'DlgValue "chkOBJS",1':EM
+SCR=SCR:'DlgEnable "txOBJS",0':EM
+SCR=SCR:'DlgEnable "chkSUIBP",0':EM
+SCR=SCR:'DlgValue "chkSUIBP",1':EM
+SCR=SCR:'DlgEnable "txSUIBP",0':EM
+SCR=SCR:'DlgEnable "chkSAMPLES",0':EM
+SCR=SCR:'DlgValue "chkSAMPLES",1':EM
+SCR=SCR:'DlgEnable "txSAMPLES",0':EM
+SCR=SCR:'DlgEnable "chkDEMOBP",0':EM
+SCR=SCR:'DlgValue "chkDEMOBP",1':EM
+SCR=SCR:'DlgEnable "txDEMOBP",0':EM
+SCR=SCR:'DlgEnable "chkTutor",0':EM
+SCR=SCR:'DlgValue "chkTutor",1':EM
+SCR=SCR:'DlgEnable "txTutor",0':EM
+SCR=SCR:'DlgEnable "txTutorApps",0':EM
+SCR=SCR:'DlgEnable "chkUIEX",0':EM
+SCR=SCR:'DlgValue "chkUIEX",1':EM
+SCR=SCR:'DlgEnable "txUIEX",0':EM
+SCR=SCR:'DlgEnable "chkSampleData",0':EM
+SCR=SCR:'DlgValue "chkSampleData",1':EM
+SCR=SCR:'DlgEnable "chkPhiReport",0':EM
+SCR=SCR:'DlgValue "chkPhiReport",1':EM
+SCR=SCR:'Case 2':EM
+SCR=SCR:'DlgValue "chkFTBP",1':EM
+SCR=SCR:'DlgEnable "chkGUIBP",0':EM
+SCR=SCR:'DlgValue "chkGUIBP",0':EM
+SCR=SCR:'DlgEnable "txGUIBP",0':EM
+SCR=SCR:'DlgEnable "chkGUIS",0':EM
+SCR=SCR:'DlgValue "chkGUIS",0':EM
+SCR=SCR:'DlgEnable "txGUIS",0':EM
+SCR=SCR:'DlgEnable "txGUIAPPS",0':EM
+SCR=SCR:'DlgEnable "chkOBJBP",0':EM
+SCR=SCR:'DlgValue "chkOBJBP",0':EM
+SCR=SCR:'DlgEnable "txOBJBP",0':EM
+SCR=SCR:'DlgEnable "chkOBJS",0':EM
+SCR=SCR:'DlgValue "chkOBJS",0':EM
+SCR=SCR:'DlgEnable "txOBJS",0':EM
+SCR=SCR:'DlgEnable "chkSUIBP",0':EM
+SCR=SCR:'DlgValue "chkSUIBP",0':EM
+SCR=SCR:'DlgEnable "txSUIBP",0':EM
+SCR=SCR:'DlgEnable "chkSAMPLES",0':EM
+SCR=SCR:'DlgValue "chkSAMPLES",0':EM
+SCR=SCR:'DlgEnable "txSAMPLES",0':EM
+SCR=SCR:'DlgEnable "chkDEMOBP",0':EM
+SCR=SCR:'DlgValue "chkDEMOBP",0':EM
+SCR=SCR:'DlgEnable "txDEMOBP",0':EM
+SCR=SCR:'DlgEnable "chkTutor",0':EM
+SCR=SCR:'DlgValue "chkTutor",0':EM
+SCR=SCR:'DlgEnable "txTutor",0':EM
+SCR=SCR:'DlgEnable "txTutorApps",0':EM
+SCR=SCR:'DlgEnable "chkUIEX",0':EM
+SCR=SCR:'DlgValue "chkUIEX",0':EM
+SCR=SCR:'DlgEnable "txUIEX",0':EM
+SCR=SCR:'DlgEnable "chkSampleData",0':EM
+SCR=SCR:'DlgValue "chkSampleData",0':EM
+SCR=SCR:'DlgEnable "chkPhiReport",0':EM
+SCR=SCR:'DlgValue "chkPhiReport",0':EM
+SCR=SCR:'End Select':EM
+SCR=SCR:'Case "chkGUIBP"':EM
+SCR=SCR:'DlgEnable "txGUIBP",SuppValue':EM
+SCR=SCR:'DlgEnable "chkGUIS",SuppValue':EM
+SCR=SCR:'DlgValue "chkGUIS",DlgValue("chkGUIS") And SuppValue':EM
+SCR=SCR:'DlgEnable "txGUIS",DlgValue("chkGUIS")':EM
+SCR=SCR:'DlgEnable "txGUIAPPS",DlgValue("chkGUIS")':EM
+SCR=SCR:'Case "chkGUIS"':EM
+SCR=SCR:'DlgEnable "txGUIS",SuppValue':EM
+SCR=SCR:'DlgEnable "txGUIAPPS",SuppValue':EM
+SCR=SCR:'If SuppValue Then DlgValue "chkSampleData",1':EM
+SCR=SCR:'Case "chkOBJBP"':EM
+SCR=SCR:'DlgEnable "txOBJBP",SuppValue':EM
+SCR=SCR:'DlgEnable "chkOBJS",SuppValue':EM
+SCR=SCR:'DlgValue "chkOBJS",DlgValue("chkOBJS") And SuppValue':EM
+SCR=SCR:'DlgEnable "txOBJS",DlgValue("chkOBJS")':EM
+SCR=SCR:'Case "chkOBJS"':EM
+SCR=SCR:'DlgEnable "txOBJS",SuppValue':EM
+SCR=SCR:'Case "chkSUIBP"':EM
+SCR=SCR:'DlgEnable "txSUIBP",SuppValue':EM
+SCR=SCR:'Case "chkSAMPLES"':EM
+SCR=SCR:'DlgEnable "txSAMPLES",SuppValue':EM
+SCR=SCR:'Case "chkDEMOBP"':EM
+SCR=SCR:'DlgEnable "txDEMOBP",SuppValue':EM
+SCR=SCR:'If SuppValue Then':EM
+SCR=SCR:'DlgValue "chkFTBP",1':EM
+SCR=SCR:'DlgEnable "chkGUIBP",1':EM
+SCR=SCR:'DlgValue "chkGUIBP",1':EM
+SCR=SCR:'DlgEnable "txGUIBP",1':EM
+SCR=SCR:'DlgEnable "chkGUIS",1':EM
+SCR=SCR:'DlgValue "chkGUIS",1':EM
+SCR=SCR:'DlgEnable "txGUIS",1':EM
+SCR=SCR:'DlgEnable "txGUIAPPS",1':EM
+SCR=SCR:'DlgEnable "chkOBJBP",1':EM
+SCR=SCR:'DlgValue "chkOBJBP",1':EM
+SCR=SCR:'DlgEnable "txOBJBP",1':EM
+SCR=SCR:'DlgEnable "chkOBJS",1':EM
+SCR=SCR:'DlgValue "chkOBJS",1':EM
+SCR=SCR:'DlgEnable "txOBJS",1':EM
+SCR=SCR:'DlgEnable "chkSUIBP",1':EM
+SCR=SCR:'DlgValue "chkSUIBP",1':EM
+SCR=SCR:'DlgEnable "txSUIBP",1':EM
+SCR=SCR:'DlgEnable "chkSAMPLES",1':EM
+SCR=SCR:'DlgValue "chkSAMPLES",1':EM
+SCR=SCR:'DlgEnable "txSAMPLES",1':EM
+SCR=SCR:'DlgEnable "chkUIEX",1':EM
+SCR=SCR:'DlgValue "chkUIEX",1':EM
+SCR=SCR:'DlgEnable "txUIEX",1':EM
+SCR=SCR:'DlgValue "chkSampleData",1':EM
+SCR=SCR:'End If':EM
+SCR=SCR:'Case "chkTutor"':EM
+SCR=SCR:'DlgEnable "txTutor",SuppValue':EM
+SCR=SCR:'DlgEnable "txTutorApps",SuppValue':EM
+SCR=SCR:'If SuppValue Then DlgValue "chkSampleData",1':EM
+SCR=SCR:'Case "chkUIEX"':EM
+SCR=SCR:'DlgEnable "txUIEX",SuppValue':EM
+SCR=SCR:'If SuppValue Then':EM
+SCR=SCR:'DlgValue "chkSampleData",1':EM
+SCR=SCR:'DlgValue "chkGUIBP",1':EM
+SCR=SCR:'DlgEnable "txGUIBP",1':EM
+SCR=SCR:'DlgValue "chkSUIBP",1':EM
+SCR=SCR:'DlgEnable "txSUIBP",1':EM
+SCR=SCR:'End If':EM
+SCR=SCR:'If SuppValue Then DlgValue "chkSampleData",1':EM
+SCR=SCR:'Case "chkPhiReport"':EM
+SCR=SCR:'If SuppValue Then':EM
+SCR=SCR:'DlgValue "chkGUIBP",1':EM
+SCR=SCR:'DlgEnable "txGUIBP",1':EM
+SCR=SCR:'DlgValue "chkOBJBP",1':EM
+SCR=SCR:'DlgEnable "txOBJBP",1':EM
+SCR=SCR:'DlgValue "chkSampleData",1':EM
+SCR=SCR:'End If':EM
+SCR=SCR:'Case "cmdFTBP"':EM
+SCR=SCR:'On Error Resume Next':EM
+SCR=SCR:'Shell "notepad.exe pickbp\readme.txt",vbNormalFocus':EM
+SCR=SCR:'DlgFunc = True':EM
+SCR=SCR:'Case "cmdGUIBP"':EM
+SCR=SCR:'On Error Resume Next':EM
+SCR=SCR:'Shell "notepad.exe pickbp\guibp\readme.txt",vbNormalFocus':EM
+SCR=SCR:'DlgFunc = True':EM
+SCR=SCR:'Case "cmdOBJBP"':EM
+SCR=SCR:'On Error Resume Next':EM
+SCR=SCR:'Shell "notepad.exe pickbp\objbp\readme.txt",vbNormalFocus':EM
+SCR=SCR:'DlgFunc = True':EM
+SCR=SCR:'Case "cmdSUIBP"':EM
+SCR=SCR:'On Error Resume Next':EM
+SCR=SCR:'Shell "notepad.exe pickbp\suibp\readme.txt",vbNormalFocus':EM
+SCR=SCR:'DlgFunc = True':EM
+SCR=SCR:'Case "cmdSAMPLES"':EM
+SCR=SCR:'On Error Resume Next':EM
+SCR=SCR:'Shell "notepad.exe samples\pickbp\readme.txt",vbNormalFocus':EM
+SCR=SCR:'DlgFunc = True':EM
+SCR=SCR:'Case "cmdDEMOBP"':EM
+SCR=SCR:'On Error Resume Next':EM
+SCR=SCR:'Shell "notepad.exe samples\demobp\readme.txt",vbNormalFocus':EM
+SCR=SCR:'DlgFunc = True':EM
+SCR=SCR:'Case "cmdUIEX"':EM
+SCR=SCR:'On Error Resume Next':EM
+SCR=SCR:'Shell "notepad.exe samples\uiex\readme.txt",vbNormalFocus':EM
+SCR=SCR:'DlgFunc = True':EM
+SCR=SCR:'Case "cmdPhiReport"':EM
+SCR=SCR:'On Error Resume Next':EM
+SCR=SCR:'Shell "notepad.exe pickbp\phireadme.txt",vbNormalFocus':EM
+SCR=SCR:'DlgFunc = True':EM
+SCR=SCR:'End Select':EM
+SCR=SCR:'End Select':EM
+SCR=SCR:'End Function':EM
+* Dummy Sub for automatic End Sub
+SCR=SCR:'Sub Dummy'
+* Execute script
+PRINT ESC:STX:'P':SCR:CR:
+* Retrieve the result
+PROMPT ''
+ECHO OFF
+INPUT OPTS:
+ECHO ON
+PROMPT '?'
+TARGETS = FIELD(OPTS,'*',2)
+OPTS = FIELD(OPTS,'*',1)
+RETURN
+*
+*
+**************************************************************************
+*
+END

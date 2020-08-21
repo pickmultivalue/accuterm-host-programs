@@ -1,0 +1,1194 @@
+SUBROUTINE FTKERMIT(STAT,SUBNAME,ONESHOT,MAT PARAMS,MAT VARS)
+**************************************************************************
+*Copyright (c) 1993-2020 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTKERMIT
+* AUTHOR: PJS
+* VERSION: 8.0.1
+* CREATED: 01/01/1993
+* UPDATED: 02/11/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.1
+*  PJS 02/11/2020
+*   Cleaned up GOTO 2450 / GOTO 2440 to avoid jumping across block
+*   structures (LOOP / IF) for MVON# compatibility.
+*
+* 7.2.1
+*  PJS 10/14/2013
+*   Initialized EAM variable to prevent U2 warning (variable only used
+*   in ECS mode).
+*
+* 7.1.2
+*  PJS 04/12/2013
+*   Fixed QM ECS bug which incorrectly swapped marks when not doing UTF-8
+*   file receive.
+*
+* 7.1.1
+*  PJS 03/17/2012
+*   Modified to send or receive file attributes. Added ECS support for QM
+*   platform. On ECS-enabled systems, handle UTF-8 encoding & decoding
+*   for text files (bypassing normal terminal UTF-8 encoding).
+*
+* 7.0.2
+*  PJS 05/28/2010
+*   Changed output translation table entry for AM to use SEQ(AM) instead
+*   of assuming AM = CHAR(254). This allows for different delimiter
+*   characters via the EQU AM TO... in the program EQUates.
+*
+* 7.0.1
+*  PJS 04/26/2010
+*   Fixed bug in output translation table for CHAR(127). Bug occurs on
+*   systems that do not increment the FOR/NEXT loop variable to one
+*   more than the loop termination value when exiting the loop.
+*
+* 5.3.2
+*  PJS 04/10/2007
+*   Improved handling of the 'cancel' ack from client, to aid in getting
+*   correct stats in FTRDITMS.
+*
+* 5.3.1
+*  PJS 07/24/2006
+*   Changed size of VARS() array from 25 to 26.
+*
+* 5.0.6
+*  PJS 03/04/2005
+*   Added a one-second sleep after receiving an 'E' packet because other
+*   side flushes the connection after sending an 'E' packet. This allows
+*   proper receipt of the transfer status, etc. after an error occurs.
+*
+* 5.0.5
+*  PJS 02/15/2005
+*   Delay application of MCP bug fix until last packet retry attempt
+*   so that if normal error correction or resonating packet detection
+*   is occurring, the error correction or damping will occur normally.
+*   Applying the MCP fix may cause packet contents to change, and if the
+*   packet is simply due to the "resonating packet" problem after
+*   after a normal error correction attempt, the receiver may already
+*   have acknowledged the packet and altering it before retransmission
+*   will cause undetected data corruption. This was occurring in the
+*   FTPICK process.
+*
+* 5.0.4
+*  PJS 09/29/2004
+*   Changed max string length from 9999999 to 999999999
+*
+* 5.0.3
+*  PJS 10/09/2003
+*   Fixed unassigned variable (MCP.FIX.CNT).
+*
+* 5.0.2
+*  PJS 09/11/2003
+*   Modified PRINT expressions for UniVerse because concatenated
+*   expressions are sent in separate packets in NT version of
+*   UniVerse causing TCP "delayed ack" performance issues.
+*
+* 5.0.1
+*  PJS 08/27/2002
+*
+*   Added support for large packets (up to 2k inbound or outbound). The
+*   inbound packet size is controlled by the "Maximum packet size"
+*   configuration parameter; the outbound size is limited by the smaller
+*   of the remote size or the "Source buffer index" configuration parameter.
+*   Empirical testing of D3 and UniVerse on Linux indicates setting the
+*   "Source buffer index" to 700 and setting "Maximum packet size" to
+*   500 gives optimum results, but much more testing is necessary. The
+*   "Maximum packet size" parameter must be smaller than the system's
+*   input buffer size!
+*
+*   Added automatic fix for MCP conversion bug (probably only a UniVerse
+*   problem) so that when sending a file with MCP enabled, if a transmission
+*   error is detected, the MCP conversion is disabled, the packet is rebuilt
+*   witout using MCP, and the packet is retransmitted.
+*
+* 4.0.2
+*  PJS 01/01/2001
+*   Added PROMPT '' to force null prompt (somehow multiple file receive
+*   in FTMODE changed prompt back to '?' and this causes a significant
+*   performance hit when running over Telnet connection).
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*   ADDED NEW ARGUMENT: ONESHOT - IF NON-ZERO DISABLES BATCH DOWNLOAD
+*   MINOR BUG FIXES IN CANCELLING UPLOAD OR DOWNLOAD IN PROGRESS
+*
+**************************************************************************
+**************************************************************************
+*
+* KERMIT FOR PICK - FILE TRANSFER PROTOCOL
+*
+**************************************************************************
+**************************************************************************
+*
+* FTKERMIT() SUBROUTINE INTERFACE
+*
+* INPUT:  PARAMS  = CURRENT FILE TRANSFER PARAMETER SETTINGS & FLAGS
+*         VARS    = VARIABLES USED BY I/O SUBROUTINES
+*         SUBNAME = NAME OF I/O SUBROUTINE
+*         ONESHOT = NON-ZERO IF KERMIT TRANSACTION SHOULD TERMINATE AFTER SINGLE FILE
+*
+* OUTPUT: STAT    = NULL IF OK, ELSE ERROR MESSAGE
+*         FNS     = LIST OF FILE-NAMES TRANSFERRED
+*         IDS     = LIST OF ITEM-IDS TRANSFERRED
+*         ICNT    = NUMBER OF ITEMS TRANSFERRED
+*         BCNT    = NUMBER OF BYTES TRANSFERRED
+*
+**************************************************************************
+*
+DIM PARAMS(30),VARS(26)
+DIM XLT(256)
+EQU MARK.CH TO CHAR(1)
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+EQU CR TO CHAR(13), LF TO CHAR(10)
+EQU PAD.CD TO 0
+EQU MAX.POS.PARAM TO PARAMS(1)
+EQU MAX.LEN.PARAM TO PARAMS(2)
+EQU RETRY.PARAM TO PARAMS(3)
+EQU TIMEOUT.PARAM TO PARAMS(4)
+EQU PADDING.PARAM TO PARAMS(5)
+EQU EOL.CD.PARAM TO PARAMS(6)
+EQU CTL.CD.PARAM TO PARAMS(7)
+EQU EBP.CD.PARAM TO PARAMS(8)
+EQU RLE.CD.PARAM TO PARAMS(9)
+EQU MCP.FLG.PARAM TO PARAMS(10)
+EQU EBP.FLG.PARAM TO PARAMS(11)
+EQU RLE.FLG.PARAM TO PARAMS(12)
+EQU TXT.FLG.PARAM TO PARAMS(13)
+EQU DIR.FLG.PARAM TO PARAMS(21)
+EQU FN TO VARS(22)
+*
+**************************************************************************
+*
+* INITIALIZE GLOBAL ELEMENTS
+*
+**************************************************************************
+SEQN=0
+*
+ECHO OFF
+PROMPT ''
+FATAL=0
+MAX.BUF.LEN = 5000; * DEFAULT BUFFER SIZE
+MCP.FIX.FLG = 0; * NOT USING MCP YET
+*
+*
+**************************************************************************
+*
+* Check for UTF-8 encoding
+*
+ECSFLG = 0
+SWPFLG = 0
+UTF8FLG = 0
+EAM = AM
+*#QM_ECS#*IF SYSTEM(1044) THEN
+*#QM_ECS#* ECSFLG = 1
+*#QM_ECS#* SWPFLG = NOT(PTERM(6,-1))
+*#QM_ECS#* IF DIR.FLG.PARAM THEN
+*#QM_ECS#*  IF TXT.FLG.PARAM THEN
+* If sending a text file with UTF-8 encoding active,
+* encode the file using UTF-8.
+*#QM_ECS#*   IF PTERM(7,-1) = 1 THEN UTF8FLG = 1
+*#QM_ECS#*  END
+*#QM_ECS#* END ELSE
+*#QM_ECS#*  X = ICONV('','XUTF8'); * clear the UTF8-8 decoder carry condition
+*#QM_ECS#* END
+*#QM_ECS#*END
+*
+**************************************************************************
+*
+IF DIR.FLG.PARAM THEN
+*
+**************************************************************************
+*
+* KERMIT SEND
+*
+**************************************************************************
+*
+ EOF = 0
+ GOSUB 1000
+ GOSUB 3100; IF FATAL THEN GOTO 999
+ LOOP
+  IF (EOF = 0) OR (EOF = 1 AND ONESHOT = 0) THEN
+   CALL @SUBNAME(BUFFER,BUFCNT,0,EOF,0,STAT,MAT PARAMS,MAT VARS)
+  END
+ UNTIL (EOF > 1) OR (EOF > 0 AND ONESHOT NE 0) DO
+  IF NOT(EOF) THEN
+   GOSUB 3200; IF FATAL THEN GOTO 999
+   IF CAN AND NOT(EOF) THEN
+    CALL @SUBNAME(BUFFER,BUFCNT,0,EOF,CAN,STAT,MAT PARAMS,MAT VARS); * CANCEL REST OF ITEM
+   END
+   IF CAN > 1 THEN EOF = CAN
+  END
+ REPEAT
+ GOSUB 3300; IF FATAL THEN GOTO 999
+*
+END ELSE
+*
+**************************************************************************
+*
+* KERMIT RECEIVE
+*
+**************************************************************************
+*
+ GOSUB 1000
+ GOSUB 4100; IF FATAL THEN GOTO 999
+ LOOP
+  GOSUB 4200; IF FATAL THEN GOTO 999
+  CALL @SUBNAME(BUFFER,BUFCNT,0,EOF,CAN,STAT,MAT PARAMS,MAT VARS); * FLUSH OUTPUT
+  IF EOF < 2 AND CAN > 1 THEN GOSUB 4300
+ UNTIL EOF > 1 OR CAN > 1 DO NULL REPEAT
+*
+END
+*
+**************************************************************************
+*
+999 * EXIT
+*
+**************************************************************************
+*
+ECHO ON
+PROMPT '?'
+RETURN
+*
+**************************************************************************
+*
+1000 * INITIALIZE GLOBAL PARAMETERS
+EOL.CH=CHAR(13)
+PADDING=''
+O.DATA=''
+O.SIZE=0
+O.PKT=''
+O.TYP=''
+I.PKT=''
+I.TYP=''
+SEQN=0
+SEQX=0
+RSN=0
+RTC0=0; RTC1=0; RTC2=0; * DUPLICATE PACKET COUNTERS
+BUFFER=''
+BUFCNT=0
+EXT.HDR.FLG=0
+FIL.ATT.FLG=0
+RETURN
+*
+**************************************************************************
+*
+1200 * INITIALIZE RECV PARAMETERS
+*
+**************************************************************************
+*
+EOL.CH=CHAR(EOL.CD)
+CTL.CH=CHAR(CTL.CD)
+EBP.CH=CHAR(EBP.CD)
+* BUILD INPUT TRANSLATION TABLE
+* 0-32 UNUSED, 33-62 QUOTED PREFIX CHARACTERS
+FOR K=0 TO 62
+ XLT(K+1)=CHAR(K)
+NEXT K
+* 63 CONTROL CODE 127
+XLT(63+1)=CHAR(63+64)
+* 64-95 CONTROL CODES 0-31
+FOR K=64 TO 95
+ XLT(K+1)=CHAR(K-64)
+NEXT K
+* 96-126 QUOTED PREFIX CHARACTERS, 127 UNUSED
+FOR K=96 TO 127
+ XLT(K+1)=CHAR(K)
+NEXT K
+* 128-160 UNUSED, 161-190 QUOTED PREFIX CHARACTERS
+FOR K=128 TO 190
+ XLT(K+1)=CHAR(K)
+NEXT K
+* 191 CONTROL CODE 255
+XLT(191+1)=CHAR(191+64)
+* 192-223 CONTROL CODES 128-159
+FOR K=192 TO 223
+ XLT(K+1)=CHAR(K-64)
+NEXT K
+* 224-254 QUOTED PREFIX CHARACTERS, 255 UNUSED
+FOR K=224 TO 255
+ XLT(K+1)=CHAR(K)
+NEXT K
+* LF & CR TRANSLATION FOR TEXT MODE (ONLY WHEN NOT DOING UTF-8 ENCODING)
+IF TXT.FLG.PARAM AND NOT(UTF8FLG) THEN XLT(10+64+1)=AM; XLT(13+64+1)=''
+RETURN
+*
+**************************************************************************
+*
+1400 * INITIALIZE SEND PARAMETERS
+*
+**************************************************************************
+*
+BUF=''
+CNT=0
+MAXRAW=MAXLEN-3
+EOL.CH=CHAR(EOL.CD)
+CTL.CH=CHAR(CTL.CD)
+EBP.CH=CHAR(EBP.CD)
+* BUILD OUTPUT TRANSLATION TABLE
+FOR K=0 TO 31
+ XLT(K+1)=CTL.CH:CHAR(K+64)
+NEXT K
+FOR K=32 TO 126
+ XLT(K+1)=CHAR(K)
+NEXT K
+XLT(127+1)=CTL.CH:CHAR(127-64)
+IF EBP.FLG THEN
+ FOR K=128 TO 159
+  XLT(K+1)=EBP.CH:CTL.CH:CHAR(K-64)
+ NEXT K
+ FOR K=160 TO 254
+  XLT(K+1)=EBP.CH:CHAR(K-128)
+ NEXT K
+ XLT(255+1)=EBP.CH:CTL.CH:CHAR(255-192)
+ XLT(EBP.CD+1)=CTL.CH:EBP.CH
+ XLT(CTL.CD+128+1)=EBP.CH:CTL.CH:CTL.CH
+ XLT(EBP.CD+128+1)=EBP.CH:CTL.CH:EBP.CH
+END ELSE
+ FOR K=128 TO 159
+  XLT(K+1)=CTL.CH:CHAR(K+64)
+ NEXT K
+ FOR K=160 TO 254
+  XLT(K+1)=CHAR(K)
+ NEXT K
+ XLT(255+1)=CTL.CH:CHAR(255-64)
+END
+XLT(CTL.CD+1)=CTL.CH:CTL.CH
+* PRE-TRANSLATE AM TO CR/LF FOR TEXT FILES (ONLY WHEN NOT DOING UTF-8 ENCODING)
+IF TXT.FLG.PARAM AND NOT(UTF8FLG) THEN
+ IF LEN(AM)=1 AND SEQ(AM)<256 THEN
+  XLT(SEQ(AM)+1)=CTL.CH:CHAR(13+64):CTL.CH:CHAR(10+64) ;* THIS CODE WORKS WHEN AM IS NOT CHAR(254)
+ END ELSE
+  XLT(255)=CTL.CH:CHAR(13+64):CTL.CH:CHAR(10+64) ;* CODE ABOVE ONLY WORKS WHEN AM IS A SINGLE CHARACTER
+ END
+END
+RETURN
+*
+**************************************************************************
+*
+2100 * RECEIVE RAW PACKET
+*
+**************************************************************************
+*
+* INPUT:  SEQN  = PACKET SEQUENCE NUMBER OF NEXT EXPECTED PACKET (MOD 64)
+*         SEQX  = PACKET SEQUENCE NUMBER (NOT MOD 64)
+*
+* OUTPUT: I.TYP  = PACKET TYPE RECEIVED (NULL IF TIMEOUT)
+*         I.RAW  = PACKET DATA RECEIVED
+*         I.LEN  = LENGTH OF DATA
+*
+**************************************************************************
+*
+RTC0=0; * DUPLICATE PACKET LOGIC
+FOR TRY=1 TO RETRY.PARAM
+ IF ECSFLG THEN
+*#QM_ECS#*  INPUT I.PKT: NO.ENCODING
+ END ELSE
+  INPUT I.PKT:
+ END
+ K=INDEX(I.PKT,MARK.CH,1)
+ IF K THEN
+  IF K>1 THEN I.PKT=I.PKT[K,999999999]
+  LOOP
+   I.LEN=SEQ(I.PKT[2,1])
+  WHILE I.LEN=1 DO I.PKT=I.PKT[2,999999999] REPEAT; * STRIP DUPLICATE SOH
+  ILN=LEN(I.PKT)
+  IF EXT.HDR.FLG AND I.LEN=32 AND ILN>=8 THEN
+   HCHK=0
+   FOR K=2 TO 6
+    HCHK=HCHK+SEQ(I.PKT[K,1])
+   NEXT K
+   HCHK=REM(HCHK+INT(REM(HCHK,256)/64),64)+32
+   IF HCHK EQ SEQ(I.PKT[7,1]) THEN
+    I.LEN=((SEQ(I.PKT[5,1])-32)*95)+SEQ(I.PKT[6,1])-26
+    XHL=3
+   END ELSE
+    I.LEN=0; * WILL ERROR OUT LATER
+   END
+  END ELSE
+   I.LEN=I.LEN-31
+   XHL=0
+  END
+  RSN=SEQ(I.PKT[3,1])-32
+  I.TYP=I.PKT[4,1]
+  IF ILN > I.LEN THEN
+   IF I.TYP NE O.TYP THEN
+    CHK=0
+    IF ECSFLG = 0 THEN
+     FOR K=2 TO I.LEN
+      CHK=CHK+SEQ(I.PKT[K,1])
+     NEXT K
+    END ELSE
+* AVOID OUT-OF-RANGE ERRORS BY CHECKING ONLY THE LOWER 8 BITS
+     FOR K=2 TO I.LEN
+*#QM_ECS#*      CHK=CHK+BITAND(SEQ(I.PKT[K,1]),255)
+     NEXT K
+    END
+    CHK=REM(CHK+INT(REM(CHK,256)/64),64)+32
+    IF CHK EQ SEQ(I.PKT[I.LEN+1,1]) THEN
+     IF I.TYP NE 'N' THEN
+*                        IF RSN EQ REM(SEQN+1,64) THEN I.TYP='Y'; RSN=SEQN ; I.LEN=0 ; I.RAW=''; RETURN
+*                     END ELSE
+      IF RSN EQ SEQN THEN
+       I.LEN=I.LEN-4-XHL
+       I.RAW=I.PKT[5+XHL,I.LEN]
+       RTC2=RTC1; RTC1=RTC0; * DUPLICATE PACKET LOGIC
+       RETURN; * GOOD DOGGY!
+      END ELSE
+       GOSUB 5100; * ATTEMPT TO FIX MCP BUG
+      END
+     END ELSE
+      GOSUB 5100; * ATTEMPT TO FIX MCP BUG
+     END
+    END
+   END
+  END ELSE
+   I.LEN=LEN(I.PKT)-4; IF I.LEN<0 THEN I.LEN=0
+  END
+  IF I.TYP EQ 'E' THEN I.RAW=I.PKT[5,I.LEN]; RETURN
+ END
+ IF I.PKT EQ 'END' OR I.PKT EQ 'end' THEN I.TYP=''; STAT='Abort!'; GOTO 9100
+* CHECK FOR DUPLICATE PACKET
+ IF ((I.TYP EQ 'Y' OR I.TYP EQ 'D') AND REM(RSN+1,64) EQ SEQN) OR (I.TYP EQ 'N' AND RSN EQ SEQN) THEN
+  RTC0=RTC0+1
+ END ELSE
+  RTC0=0
+ END
+ IF RTC0=0 OR RTC0 NE RTC1 OR RTC1 NE RTC2 THEN
+  IF O.PKT EQ '' THEN
+   O.RAW=''; O.TYP='N'; GOSUB 2300
+  END ELSE
+   IF ECSFLG THEN
+*#QM_ECS#*    PRINT NO.ENCODING '':(O.PKT:EOL.CH:PADDING):
+   END ELSE
+    PRINT '':(O.PKT:EOL.CH:PADDING):
+   END
+  END
+ END
+NEXT TRY
+I.TYP='Q'
+I.RAW=''
+I.LEN=0
+RETURN
+*
+**************************************************************************
+*
+2200 * RECEIVE DECODED PACKET
+*
+**************************************************************************
+*
+* INPUT:  SEQN  = PACKET SEQUENCE NUMBER OF NEXT EXPECTED PACKET
+*         SEQX  = PACKET SEQUENCE NUMBER (NOT MOD 64)
+*
+* OUTPUT: I.DATA = DECODED DATA
+*
+**************************************************************************
+*
+GOSUB 2100
+2210 *
+I.DATA=''
+IF EBP.FLG THEN
+ LOOP WHILE 1 DO
+  K1=INDEX(I.RAW,EBP.CH,1)
+  K2=INDEX(I.RAW,CTL.CH,1)
+  BEGIN CASE
+   CASE NOT(K1+K2); I.DATA=I.DATA:I.RAW; RETURN
+   CASE K2 AND NOT(K1); I.DATA=I.DATA:I.RAW[1,K2-1]:XLT(1+SEQ(I.RAW[K2+1,1])); K=K2+2
+   CASE K1 AND NOT(K2); I.DATA=I.DATA:I.RAW[1,K1-1]:CHAR(128+SEQ(I.RAW[K1+1,1])); K=K1+2
+   CASE K2<K1; I.DATA=I.DATA:I.RAW[1,K2-1]:XLT(1+SEQ(I.RAW[K2+1,1])); K=K2+2
+   CASE K1+1=K2; I.DATA=I.DATA:I.RAW[1,K1-1]:XLT(129+REM(SEQ(I.RAW[K2+1,1]),128)); K=K2+2
+   CASE 1; I.DATA=I.DATA:I.RAW[1,K1-1]:CHAR(128+SEQ(I.RAW[K1+1,1])); K=K1+2
+  END CASE
+  I.RAW=I.RAW[K,999999999]
+ REPEAT
+END ELSE
+ LOOP
+  K=INDEX(I.RAW,CTL.CH,1)
+ WHILE K DO
+  I.DATA=I.DATA:I.RAW[1,K-1]:XLT(1+SEQ(I.RAW[K+1,1]))
+  I.RAW=I.RAW[K+2,999999999]
+ REPEAT
+ I.DATA=I.DATA:I.RAW
+* UN-SWAP DELIMITERS IF THEY WERE SWAPPED DURING INPUT
+* QM: EVEN IF NO.ENCODING USED WITH INPUT, WHEN NOT BINARY MODE, MARKS ARE SWAPPED
+* QM: DURING INPUT. SO THE FOLLOWING STATEMENT DOES RESTORES FB-FF BACK TO THE
+* QM: ORIGINAL VALUES SENT BY THE REMOTE SIDE.
+*#QM_ECS#* IF SWPFLG THEN I.DATA = SWAPMARKS(I.DATA)
+END
+RETURN
+*
+**************************************************************************
+*
+2300 * SEND RAW DATA PACKET
+*
+**************************************************************************
+*
+* INPUT:  O.TYP  = PACKET TYPE TO BUILD
+*         SEQN   = PACKET SEQUENCE NUMBER
+*         O.RAW  = PACKET DATA
+*
+* OUTPUT: O.PKT  = PACKET (SENT TO CLIENT)
+*
+**************************************************************************
+*
+O.LEN=LEN(O.RAW)
+GOSUB 2310
+RETURN
+2310 *
+IF O.LEN>91 THEN
+ LENX1=INT((O.LEN+1)/95)
+ LENX2=REM((O.LEN+1),95)
+ HCHK=SEQN+SEQ(O.TYP)+LENX1+LENX2+128; * SAME AS: HCHK=32+SEQN+32+SEQ(O.TYP)+LENX+32+LENX2+32
+ HCHK=REM(HCHK+INT(REM(HCHK,256)/64),64)
+ CHK=SEQN+SEQ(O.TYP)+LENX1+LENX2+HCHK+160; * SAME AS: CHK=32+SEQN+32+SEQ(O.TYP)+LENX1+32+LENX2+32+HCHK+32
+ FOR K=1 TO O.LEN
+  CHK=CHK+SEQ(O.RAW[K,1])
+ NEXT K
+ O.PKT=MARK.CH:' ':CHAR(SEQN+32):O.TYP:CHAR(LENX1+32):CHAR(LENX2+32):CHAR(HCHK+32):O.RAW:CHAR(REM(CHK+INT(REM(CHK,256)/64),64)+32)
+END ELSE
+ CHK=O.LEN+SEQN+SEQ(O.TYP)+67; * SAME AS: CHK=O.LEN+3+32+SEQN+32+SEQ(O.TYP)
+ FOR K=1 TO O.LEN
+  CHK=CHK+SEQ(O.RAW[K,1])
+ NEXT K
+ O.PKT=MARK.CH:CHAR(O.LEN+35):CHAR(SEQN+32):O.TYP:O.RAW:CHAR(REM(CHK+INT(REM(CHK,256)/64),64)+32)
+END
+IF ECSFLG THEN
+*#QM_ECS#* PRINT NO.ENCODING '':(O.PKT:EOL.CH:PADDING):
+END ELSE
+ PRINT '':(O.PKT:EOL.CH:PADDING):
+END
+RETURN
+*
+**************************************************************************
+*
+2400 * SEND ENCODED DATA PACKET
+*
+**************************************************************************
+*
+* INPUT:  O.TYP  = PACKET TYPE TO BUILD
+*         SEQN   = PACKET SEQUENCE NUMBER (MOD 64)
+*         O.DATA = PACKET DATA
+*         O.SIZE = LENGTH OF DATA
+*         O.POSN = NEXT POSITION IN DATA
+*         BUF    = ENCODED DATA REMAINING FROM LAST CALL
+*         CNT    = LEN(BUF)
+*
+* OUTPUT: O.PKT  = PACKET (SENT TO CLIENT)
+*         O.POSN = NEXT POSITION IN DATA
+*         BUF    = ENCODED DATA TO BE SENT IN NEXT PACKET
+*         CNT    = LEN(BUF)
+*
+**************************************************************************
+*
+MCP.FIX.FLG = MCP.FLG.PARAM; MCP.FIX.CNT=CNT; MCP.FIX.O.POSN=O.POSN; * SAVE IN CASE WE NEED TO RE-ENCODE PACKET TO FIX MCP BUG
+O.RAW=BUF
+O.LEN=CNT
+IF MCP.FLG.PARAM THEN
+ LOOP
+  CNT=MAXRAW-O.LEN
+  IF O.SIZE-O.POSN >= CNT THEN
+   PART=O.DATA[O.POSN,CNT]
+   K=INDEX(PART,AM,1)
+   IF K THEN CNT=K-1; PART=PART[1,CNT]; FLG=1 ELSE FLG=0
+   IF PART NE OCONV(PART,'MCP') THEN
+    GOSUB 2450
+    RETURN
+   END
+   K=INDEX(PART,CTL.CH,1); IF K THEN CNT=K-1; FLG=1
+   IF EBP.FLG THEN K=INDEX(PART,EBP.CH,1); IF K AND K<=CNT THEN CNT=K-1; FLG=1
+   O.RAW=O.RAW:PART[1,CNT]
+   O.LEN=O.LEN+CNT
+   O.POSN=O.POSN+CNT
+   IF FLG THEN 
+    BUF=XLT(1+SEQ(O.DATA[O.POSN,1]))
+    CNT=LEN(BUF)
+    O.POSN=O.POSN+1
+   END ELSE
+    BUF=''
+    CNT=0
+    GOSUB 2310
+    RETURN
+   END
+  END ELSE
+   IF O.POSN > O.SIZE THEN
+    BUF=''
+    CNT=0
+    GOSUB 2310
+    RETURN
+   END
+   BUF=XLT(1+SEQ(O.DATA[O.POSN,1]))
+   CNT=LEN(BUF)
+   O.POSN=O.POSN+1
+  END
+ WHILE O.LEN+CNT < MAXRAW DO
+  O.RAW=O.RAW:BUF
+  O.LEN=O.LEN+CNT
+ REPEAT
+ GOSUB 2310
+END ELSE
+ GOSUB 2450
+END
+RETURN
+2450 * NON-PRINTABLE CHARACTER ROUTINE (LOOKS UP EACH CHARACTER IN TABLE)
+LOOP
+ IF O.SIZE-O.POSN >= 7 THEN
+  PART=O.DATA[O.POSN,8]
+  BUF=XLT(1+SEQ(PART[1,1])):XLT(1+SEQ(PART[2,1])):XLT(1+SEQ(PART[3,1])):XLT(1+SEQ(PART[4,1])):XLT(1+SEQ(PART[5,1])):XLT(1+SEQ(PART[6,1])):XLT(1+SEQ(PART[7,1])):XLT(1+SEQ(PART[8,1]))
+  CNT=LEN(BUF)
+  O.POSN=O.POSN+8
+ END ELSE
+  IF O.POSN > O.SIZE THEN
+   BUF=''
+   CNT=0
+   GOSUB 2310
+   RETURN
+  END
+  BUF=XLT(1+SEQ(O.DATA[O.POSN,1]))
+  CNT=LEN(BUF)
+  O.POSN=O.POSN+1
+ END
+WHILE O.LEN+CNT < MAXRAW DO
+ O.RAW=O.RAW:BUF
+ O.LEN=O.LEN+CNT
+REPEAT
+GOSUB 2310
+RETURN
+*
+**************************************************************************
+*
+3100 * INITIATE SEND TRANSACTION
+*
+**************************************************************************
+*
+* INPUT:  CURRENT PARAMETERS (ALL .PARAM VARIABLES)
+*
+* OUTPUT: XLT ARRAY INITIALIZED
+*         NEGOTIATED PARAMETER SETTINGS
+*         MAXLEN (MAXIMUM OUTBOUND PACKET LENGTH)
+*
+**************************************************************************
+*
+SEQX=0
+SEQN=0
+IF EBP.FLG.PARAM THEN EBP.CD=EBP.CD.PARAM ELSE EBP.CD=32
+IF MAX.LEN.PARAM > 0 AND MAX.LEN.PARAM <= 9024 THEN
+ MAXL1=INT(MAX.LEN.PARAM/95)
+ MAXL2=REM(MAX.LEN.PARAM,95)
+ IF MAX.LEN.PARAM > 94 THEN MAXL0=94 ELSE MAXL0=MAX.LEN.PARAM
+ P10 = 10 ; * CAPAS BITS 3 & 5 (LONG PACKET & FILE ATTRIBUTES)
+ O.RAW=CHAR(MAXL0+32):CHAR(TIMEOUT.PARAM+32):CHAR(PADDING.PARAM+32):CHAR(PAD.CD+64):CHAR(EOL.CD.PARAM+32):CHAR(CTL.CD.PARAM):CHAR(EBP.CD):'1 ':CHAR(P10+32):' ':CHAR(MAXL1+32):CHAR(MAXL2+32)
+END ELSE
+ O.RAW=CHAR(MAX.LEN.PARAM+32):CHAR(TIMEOUT.PARAM+32):CHAR(PADDING.PARAM+32):CHAR(PAD.CD+64):CHAR(EOL.CD.PARAM+32):CHAR(CTL.CD.PARAM):CHAR(EBP.CD)
+END
+O.TYP='S'
+GOSUB 2300; * SEND "SEND INITIATION" (S PACKET)
+GOSUB 2100; * GET ACK WITH RECEIVE INITIATION
+IF I.TYP NE 'Y' THEN GOTO 9100; * UNEXPECTED PACKET ERROR
+PP=I.RAW'L#10'
+P1=SEQ(PP[1,1])-32; * MAXL
+P2=SEQ(PP[2,1])-32; * TIME
+P3=SEQ(PP[3,1])-32; * NPAD
+P4=SEQ(PP[4,1])-64; * PADC
+P5=SEQ(PP[5,1])-32; * EOL
+P6=SEQ(PP[6,1]); * QCTL
+P7=SEQ(PP[7,1]); * QBIN
+P10=SEQ(PP[10,1])-32; * CAPAS
+IF P1 >= 35 AND P1 <= 94 THEN MAXLEN=P1 ELSE MAXLEN=94
+IF P2 >= 1 AND P2 <= 60 THEN Timeout=P2 ELSE Timeout=10
+IF P3 > 0 AND P4 >= 0 THEN PADDING=STR(CHAR(P4),P3) ELSE PADDING=''
+IF P5 THEN EOL.CD=P5 ELSE EOL.CD=13
+IF (P6>=33 AND P6<=62) OR (P6>=96 AND P6<=126) THEN CTL.CD=P6 ELSE CTL.CD=35
+IF P7=89 THEN P7=EBP.CD.PARAM
+IF EBP.FLG.PARAM AND ((P7>=33 AND P7<=62) OR (P7>=96 AND P7<=126)) THEN EBP.CD=P7; EBP.FLG=1 ELSE EBP.CD=32; EBP.FLG=0
+IF LEN(I.RAW) >= 13 THEN
+* DECODE CAPAS
+ IF P10 THEN
+  P10=INT(P10/2); * SHIFT RIGHT 1 BIT TO ISOLATE CAPAS BIT #5 (LONG PACKETS)
+  IF REM(P10,2) THEN; * CHECK IF LONG PACKETS AND SET MAXLEN IF REQUESTED
+   PX=10; LOOP WHILE PX<=LEN(I.RAW) AND REM(SEQ(I.RAW[PX,1]),2) DO PX=PX+1 REPEAT ;* SKIP REST OF CAPAS BYTES
+   IF (LEN(I.RAW)-PX) >= 3 THEN
+    MAXL1=SEQ(I.RAW[PX+2,1])-32; * CAPAS+2
+    MAXL2=SEQ(I.RAW[PX+3,1])-32; * CAPAS+3
+    IF MAXL1 >= 0 AND MAXL1 <= 94 AND MAXL2 >= 0 AND MAXL2 <= 94 THEN
+     MAXL0=(MAXL1*95)+MAXL2
+     IF MAXL0 > MAXLEN THEN MAXLEN = MAXL0-3
+     IF MAXLEN > MAX.POS.PARAM AND MAX.POS.PARAM > 94 THEN MAXLEN = MAX.POS.PARAM
+     EXT.HDR.FLG=1
+    END
+   END
+  END
+  P10=INT(P10/4); * SHIFT RIGHT 2 BITS TO ISOLATE CAPAS BIT #3 (FILE ATTRIBUTES)
+  IF REM(P10,2) THEN
+   FIL.ATT.FLG=1
+  END
+ END
+END
+GOSUB 1400; * INIT SEND PARAMETERS
+RETURN
+*
+**************************************************************************
+*
+3200 * SEND FILE
+*
+**************************************************************************
+*
+* INPUT:  FN     = FILE NAME TO SEND
+*         BUFFER = FILE DATA TO SEND
+*         SEQX   = CURRENT PACKET SEQUENCE NUMBER (NOT MOD 64)
+*
+* OUTPUT: CAN   = 1 IF RECEIVER ABORTED THIS FILE, ELSE
+*                 2 IF RECEIVER ABORTED TRANSACTION, ELSE 0
+*
+**************************************************************************
+*
+O.DATA=FN
+O.SIZE=LEN(O.DATA)
+O.POSN=1
+O.TYP='F'
+SEQX=SEQX+1; SEQN=REM(SEQX,64)
+GOSUB 2400; * SEND FILENAME (F PACKET)
+GOSUB 2100; * GET ACK
+IF I.TYP NE 'Y' THEN GOTO 9100; * ERROR
+O.DATA=''
+O.SIZE=0
+O.TYP='D'
+O.POSN=1
+CAN=0
+EOF=0
+FIRSTDATA=0
+LOOP
+ IF O.POSN > MAX.POS.PARAM OR O.POSN > O.SIZE THEN
+  O.DATA=O.DATA[O.POSN,999999999]
+  O.SIZE=O.SIZE-O.POSN+1
+  O.POSN=1
+ END
+ IF CAN OR ((EOF=0) AND (O.SIZE-O.POSN<MAXLEN)) THEN
+  IF ECSFLG THEN
+   GOSUB 5300
+  END ELSE
+   CALL @SUBNAME(O.DATA,O.SIZE,MAX.BUF.LEN,EOF,CAN,STAT,MAT PARAMS,MAT VARS)
+  END
+ END
+UNTIL CAN OR (EOF AND O.POSN > O.SIZE AND CNT = 0) DO
+ IF NOT(FIRSTDATA) AND FIL.ATT.FLG THEN
+* SEND FILE ATTRIBUTE PACKET BEFORE FIRST DATA PACKET (FILE TYPE & ENCODING)
+* IF WE KNEW THE SIZE, WE COULD SEND THAT TOO
+  O.RAW=CHAR(34):CHAR(1+32):('BA'[(TXT.FLG.PARAM<>0)+1,1]); * FILE TYPE ATTRIBUTE
+  IF TXT.FLG.PARAM AND UTF8FLG THEN
+   FA.ENCODING='CI190'; * UTF-8 DESIGNATOR
+  END ELSE
+   FA.ENCODING=''; * NO ENCODING
+  END
+  O.RAW=O.RAW:CHAR(42):CHAR(LEN(FA.ENCODING)+32):FA.ENCODING; * FILE ENCODING ATTRIBUTE
+  O.TYP='A'
+  SEQX=SEQX+1; SEQN=REM(SEQX,64)
+  GOSUB 2300; * SEND UNENCODED 'A' PACKET
+  GOSUB 2100; * GET ACK
+  IF I.TYP NE 'Y' THEN GOTO 9100; * ERROR
+  O.TYP='D'
+  FIRSTDATA=1
+ END
+ SEQX=SEQX+1; SEQN=REM(SEQX,64)
+ GOSUB 2400; * SEND DATA (D PACKET)
+ GOSUB 2100; * GET ACK
+ IF I.TYP NE 'Y' THEN GOTO 9100; * ERROR
+ BEGIN CASE
+  CASE I.RAW[1,1] EQ 'X'; CAN=1; * ABORT THIS FILE
+  CASE I.RAW[1,1] EQ 'Z'; CAN=2; * ABORT TRANSACTION
+ END CASE
+REPEAT
+IF CAN THEN O.RAW='D' ELSE O.RAW=''
+O.TYP='Z'
+SEQX=SEQX+1; SEQN=REM(SEQX,64)
+GOSUB 2300; * SEND EOF (Z PACKET)
+GOSUB 2100; * GET ACK
+IF I.TYP NE 'Y' THEN GOTO 9100; * ERROR
+RETURN
+*
+**************************************************************************
+*
+3300 * TERMINATE SEND TRANSACTION
+*
+**************************************************************************
+*
+* INPUT:  SEQX  = CURRENT PACKET SEQUENCE NUMBER (NOT MOD 64)
+*
+**************************************************************************
+*
+O.RAW=''
+O.TYP='B'
+SEQX=SEQX+1; SEQN=REM(SEQX,64)
+GOSUB 2300; * SEND EOT (B PACKET)
+GOSUB 2100; * GET ACK
+IF I.TYP NE 'Y' THEN GOTO 9100; * ERROR
+RETURN
+*
+**************************************************************************
+*
+4100 * INITIATE RECEIVE TRANSACTION
+*
+**************************************************************************
+*
+* INPUT:  CURRENT PARAMETERS (ALL .PARAM VARIABLES)
+*
+* OUTPUT: XLT ARRAY INITIALIZED
+*         NEGOTIATED PARAMETER SETTINGS
+*         MAXLEN (MAX OUTBOUND PACKET LENGTH)
+*
+**************************************************************************
+*
+SEQX=0
+SEQN=0
+GOSUB 2100; * GET SEND INITIATION (S PACKET)
+IF I.TYP NE 'S' THEN GOTO 9100; * ERROR
+PP=I.RAW'L#10'
+P1=SEQ(PP[1,1])-32; * MAXL
+P2=SEQ(PP[2,1])-32; * TIME
+P3=SEQ(PP[3,1])-32; * NPAD
+P4=SEQ(PP[4,1])-64; * PADC
+P5=SEQ(PP[5,1])-32; * EOL
+P6=SEQ(PP[6,1]); * QCTL
+P7=SEQ(PP[7,1]); * QBIN
+P10=SEQ(PP[10,1])-32; * CAPAS
+IF P1 >= 35 AND P1 <= 94 THEN MAXLEN=P1 ELSE MAXLEN=94
+IF P2 >= 1 AND P2 <= 60 THEN Timeout=P2 ELSE Timeout=10
+IF P3 > 0 AND P4 >= 0 THEN PADDING=STR(CHAR(P4),P3) ELSE PADDING=''
+IF P5 THEN EOL.CD=P5 ELSE EOL.CD=13
+IF (P6>=33 AND P6<=62) OR (P6>=96 AND P6<=126) THEN CTL.CD=P6 ELSE CTL.CD=35
+IF P7=89 THEN P7=EBP.CD.PARAM
+IF EBP.FLG.PARAM AND ((P7>=33 AND P7<=62) OR (P7>=96 AND P7<=126)) THEN EBP.CD=P7; EBP.FLG=1 ELSE EBP.CD=32; EBP.FLG=0
+IF LEN(I.RAW) >= 13 THEN
+* DECODE CAPAS
+ IF P10 THEN
+  P10=INT(P10/2); * SHIFT RIGHT 1 BIT TO ISOLATE CAPAS BIT #5 (LONG PACKETS)
+  IF REM(P10,2) THEN; * CHECK IF LONG PACKETS AND SET MAXLEN IF REQUESTED
+   PX=10; LOOP WHILE PX<=LEN(I.RAW) AND REM(SEQ(I.RAW[PX,1]),2) DO PX=PX+1 REPEAT
+   IF (LEN(I.RAW)-PX) >= 3 THEN
+    MAXL1=SEQ(I.RAW[PX+2,1])-32; * CAPAS+2
+    MAXL2=SEQ(I.RAW[PX+3,1])-32; * CAPAS+3
+    IF MAXL1 >= 0 AND MAXL1 <= 94 AND MAXL2 >= 0 AND MAXL2 <= 94 THEN
+     MAXL0=(MAXL1*95)+MAXL2
+     IF MAXL0 > MAXLEN THEN MAXLEN=MAXL0-3
+     EXT.HDR.FLG=1; * SENDER SUPPORTS EXTENDED HEADERS
+    END
+   END
+  END
+  P10=INT(P10/4); * SHIFT RIGHT 2 BITS TO ISOLATE CAPAS BIT #3 (FILE ATTRIBUTES)
+  IF REM(P10,2) THEN
+   FIL.ATT.FLG=1
+  END
+ END
+END
+GOSUB 1200; * INIT RECEIVE PARAMETERS
+IF EXT.HDR.FLG AND (MAX.LEN.PARAM > 0 AND MAX.LEN.PARAM <= 9024) THEN
+ MAXL1=INT(MAX.LEN.PARAM/95)
+ MAXL2=REM(MAX.LEN.PARAM,95)
+ IF MAX.LEN.PARAM > 94 THEN MAXL0=94 ELSE MAXL0=MAX.LEN.PARAM
+ IF FIL.ATT.FLG THEN P10=10 ELSE P10=2 ;* CAPAS BITS 3 & 5
+ O.RAW=CHAR(MAXL0+32):CHAR(TIMEOUT.PARAM+32):CHAR(PADDING.PARAM+32):CHAR(PAD.CD+64):CHAR(EOL.CD.PARAM+32):CHAR(CTL.CD.PARAM):CHAR(EBP.CD):'1 ':CHAR(P10+32):' ':CHAR(MAXL1+32):CHAR(MAXL2+32)
+END ELSE
+ O.RAW=CHAR(MAX.LEN.PARAM+32):CHAR(TIMEOUT.PARAM+32):CHAR(PADDING.PARAM+32):CHAR(PAD.CD+64):CHAR(EOL.CD.PARAM+32):CHAR(CTL.CD.PARAM):CHAR(EBP.CD)
+END
+O.TYP='Y'
+GOSUB 2300; * SEND ACK WITH INITIALIZE (Y PACKET)
+RETURN
+*
+**************************************************************************
+*
+4200 * RECEIVE FILE
+*
+**************************************************************************
+*
+* INPUT:  SEQX  = CURRENT PACKET SEQUENCE NUMBER (NOT MOD 64)
+*
+* OUTPUT: CAN   = 1 IF RECEIVER ABORTED THIS FILE, ELSE
+*                 2 IF RECEIVER ABORTED TRANSACTION, ELSE 0
+*
+**************************************************************************
+*
+CAN=0
+EOF=0
+BUFFER=''
+BUFCNT=0
+SEQX=SEQX+1; SEQN=REM(SEQX,64)
+GOSUB 2200; * GET FILE HEADER (F PACKET)
+IF I.TYP EQ 'B' THEN
+ O.TYP='Y'
+ O.RAW=''
+ GOSUB 2300; * SEND ACK (Y PACKET)
+ EOF=2
+ RETURN
+END
+IF I.TYP NE 'F' THEN GOTO 9100; * ERROR
+O.TYP='Y'
+O.RAW=''
+FA.SIZE=0
+FA.TYPE=TXT.FLG.PARAM
+FA.ENCODING=''
+UTF8FLG=0; * THIS WILL BE SET IF ECS MODE AND IF ENCODING ATTRIBUTE IS I190 (UTF-8)
+GOSUB 2300; * SEND ACK
+FN=I.DATA
+CALL @SUBNAME(BUFFER,BUFCNT,MAX.BUF.LEN,0,CAN,STAT,MAT PARAMS,MAT VARS)
+BEGIN CASE
+ CASE CAN EQ 1; O.RAW='X'
+ CASE CAN EQ 2; O.RAW='Z'
+END CASE
+FIRSTDATA=0
+FILEATTS=''
+FILEDONE=0
+LOOP
+ SEQX=SEQX+1; SEQN=REM(SEQX,64)
+ GOSUB 2100; * GET DATA ('D' PACKET) OR EOF ('Z' PACKET) OR ATTRIBUTE ('A' PACKET)
+ BEGIN CASE
+  CASE I.TYP EQ 'D'
+   FIRSTDATA=1; * NO MORE 'A' PACKETS ARE VALID
+   GOSUB 2210; * DECODE THE 'D' PACKET
+  CASE I.TYP EQ 'A'
+   IF NOT(FIRSTDATA) THEN
+    GOSUB 5200; * DECODE THE 'A' PACKET
+   END ELSE
+* NOT VALID TO RECEIVE 'A' PACKET AFTER FIRST 'D' PACKET (WE ARE
+* IGNORING, BUT COULD ABORT THE FILE WITH AN ERROR HERE)
+   END
+   I.DATA=''
+  CASE 1; * QUIT ON 'Z' OR 'E' PACKET
+   GOSUB 2210 ; * DECODE THE 'Z' OR 'E' PACKET
+   FILEDONE=1
+ END CASE
+UNTIL FILEDONE DO
+ GOSUB 2300; * SEND ACK (Y PACKET)
+ IF ECSFLG THEN GOSUB 5400; * DECODE UTF-8 DATA
+ I.SIZE=LEN(I.DATA)
+ IF I.SIZE+BUFCNT > MAX.BUF.LEN THEN
+  CALL @SUBNAME(BUFFER,BUFCNT,MAX.BUF.LEN,0,CAN,STAT,MAT PARAMS,MAT VARS)
+  BEGIN CASE
+   CASE CAN EQ 1; O.RAW='X'
+   CASE CAN EQ 2; O.RAW='Z'
+  END CASE
+ END
+ BUFCNT=BUFCNT+I.SIZE
+ BUFFER=BUFFER:I.DATA
+REPEAT
+IF I.TYP NE 'Z' THEN GOTO 9100; * ERROR
+O.RAW=''
+GOSUB 2300; * SEND ACK (Y PACKET)
+IF I.RAW[1,1] EQ 'D' AND CAN < 1 THEN CAN=1
+EOF=1
+RETURN
+*
+**************************************************************************
+*
+4300 * TERMINATE RECEIVE TRANSACTION (PREMATURE)
+*
+**************************************************************************
+*
+O.TYP='Y'
+O.RAW='Z'
+LOOP
+ SEQX=SEQX+1; SEQN=REM(SEQX,64)
+ GOSUB 2200; * GET EOT (B PACKET)
+UNTIL I.TYP EQ 'B' DO
+ GOSUB 2300; * SEND ACK + TERMINATE TRANSACTION (YZ PACKET)
+REPEAT
+O.RAW=''
+GOSUB 2300; * SEND ACK (Y PACKET)
+RETURN
+*
+**************************************************************************
+*
+5100 * FIX MCP BUG
+*
+* THIS ROUTINE ATTEMPTS TO FIX THE MCP BUG (BUG THAT SOMETIMES IDENTIFIES
+* TWO UNEQUAL STRINGS AS EQUAL - PROBABLY ONLY OCCURS IN UNIVERSE). FIX
+* BY CLEARING THE MCP FLAG, RESETTING OUTPUT POSITION & BUF, AND
+* RE-ENCODING THE PACKET BEFORE RE-TRANSMISSION.
+*
+* NOTE: ONLY APPLY MCP FIX ON LAST RETRY BECAUSE WE MAY RETRANSMIT A PACKET
+* THAT WAS ALREADY RECEIVED CORRECTLY, AND REENCODING THE PACKET WITHOUT
+* MCP MAY ALTER THE PACKET CONTENTS. THIS COULD OCCUR DURING ERROR RECOVERY
+* IF PACKETS BEGIN "RESONATING". IF THERE IS TRULY A PROBLEM WITH THE MCP
+* LOGIC, THE ERROR WILL PERSIST, AND WE CAN FIX IT BEFORE IN THE LAST TRY.
+* IF AN ACTUAL TRANSMISSION ERROR OCCURRED INSTEAD, RESEND THE ORIGINAL
+* PACKET. THIS WAS CAUSING UNDETECTED DATA CORRUPTION USING FTPICK.
+*
+**************************************************************************
+*
+IF MCP.FIX.FLG=0 OR DIR.FLG.PARAM=0 OR (LEN(O.PKT) = 0) OR (TRY<RETRY.PARAM-1) THEN RETURN
+MCP.FLG.PARAM=0; * STOP USING MCP
+CNT=MCP.FIX.CNT; * RESTORE PREVIOUS BUF LENGTH
+BUF=O.RAW[1,CNT]; * RESTORE PREVIOUS BUF CONTENTS
+O.POSN=MCP.FIX.O.POSN; * RESTORE PREVIOUS POSITION
+GOSUB 2400; * RE-ENCODE WITHOUT MCP
+RETURN
+*
+**************************************************************************
+*
+5200 * DECODE A FILE ATTRIBUTE PACKET FROM RAW PACKET RECEIVED
+*
+**************************************************************************
+*
+* INPUT:  I.RAW = 'A' PACKET DATA (NOT ENCODED)
+*         I.LEN = LENGTH OF 'A' PACKET DATA
+*
+* OUTPUT: DEPENDS ON ATTRIBUTE RECEIVED
+*           FA.SIZE = FILE SIZE (KB)
+*           FA.TYPE = FILE TYPE (1 = TEXT, 0 = BINARY)
+*           FA.ENCODING = FILE ENCODING
+*
+*           TXT.FLG.PARAM & XLT() UPDATED IF FA.TYPE <> TXT.FLG.PARAM
+*
+**************************************************************************
+*
+K=1
+LOOP WHILE K < I.LEN DO
+ FA.CD=SEQ(I.RAW[K,1])
+ FA.LN=SEQ(I.RAW[K+1,1])-32
+ BEGIN CASE
+  CASE FA.CD EQ 33 ;* FILE LENGTH IN KB
+   FA.SIZE=OCONV(I.RAW[K+2,FA.LN],'MCN')
+  CASE FA.CD EQ 34 ;* FILE TYPE
+   BEGIN CASE
+    CASE I.RAW[K+2,1] EQ 'A'
+     FA.TYPE=1 ;* TEXT FILE (IGNORE THE LINE DELIMITER - ASSUME CRLF)
+    CASE I.RAW[K+2,1] EQ 'B'
+     FA.TYPE=0 ;* BINARY FILE (IGNORE THE NUMBER OF BITS - ASSUME 8)
+   END CASE
+  CASE FA.CD EQ 42 ;* FILE ENCODING
+   FA.ENCODING=I.RAW[K+2,FA.LN]; * UTF-8 = 'CI190'
+ END CASE
+ K=K+FA.LN+2
+REPEAT
+* ADJUST TEXT MODE & UTF-8 MODE DEPENDING ON FILE ATTRIBUTES RECEIVED
+IF (FA.TYPE <> TXT.FLG.PARAM) OR ((FA.ENCODING = 'CI190') <> UTF8FLG) THEN
+ IF FA.TYPE THEN
+* TEXT MODE
+  TXT.FLG.PARAM = 1
+  IF ECSFLG AND (FA.ENCODING = 'CI190') THEN
+   UTF8FLG = 1
+   XLT(10+64+1)=LF; XLT(13+64+1)=CR
+  END ELSE
+   UTF8FLG = 0
+   XLT(10+64+1)=AM; XLT(13+64+1)=''
+  END
+ END ELSE
+* BINARY MODE
+  TXT.FLG.PARAM = 0
+  UTF8FLG = 0
+  XLT(10+64+1)=LF; XLT(13+64+1)=CR
+ END
+END
+RETURN
+*
+**************************************************************************
+*
+5300 * READ MORE ECS DATA AND ENCODE AS UTF-8 OR BINARY
+*
+**************************************************************************
+*
+E.DATA = ''
+E.SIZE = 0
+CALL @SUBNAME(E.DATA,E.SIZE,MAX.BUF.LEN,EOF,CAN,STAT,MAT PARAMS,MAT VARS)
+*#QM_ECS#*IF TXT.FLG.PARAM THEN E.DATA = SWAPMARKS(E.DATA)
+IF UTF8FLG THEN
+ E.MARK = 0
+ E.POS1 = 1
+*#QM_ECS#* EAM = SWAPMARKS(AM)
+ AML = LEN(EAM)
+ LOOP
+  E.MARK = E.MARK + 1
+  E.POS2 = INDEX(E.DATA,EAM,E.MARK)
+  IF E.POS2 = 0 THEN E.POS2 = E.SIZE + 1
+*#QM_ECS#*  E.TEMP = OCONV(E.DATA[E.POS1,E.POS2-E.POS1], 'XUTF8')
+  O.DATA = O.DATA : E.TEMP
+  O.SIZE = O.SIZE + LEN(E.TEMP)
+ UNTIL E.POS2 > E.SIZE DO
+  O.DATA = O.DATA : CR : LF; * REPLACE AM WITH CRLF (ASSUMES TXT.FLG.PARAM IS TRUE)
+  O.SIZE = O.SIZE + 2
+  E.POS1 = E.POS2 + AML
+ REPEAT
+END ELSE
+* THIS IS THE CASE WHERE WE ARE ON AN ECS-ENABLED SYSTEM BUT ARE WE
+* EITHER SENDING A BINARY FILE OR ARE NOT USING UTF-8 ENCODING FOR
+* A TEXT FILE. IN ORDER TO PREVENT ARRAY SUBSCRIPT AND OTHER ERRORS,
+* WE TRUNCATE CHARACTERS MODULO 256.
+ E.TEMP = ''
+ FOR E.POS1 = 1 TO E.SIZE
+  E.TEMP = E.TEMP : CHAR(REM(SEQ(E.DATA[E.POS1,1]),256)) ;* TRUNCATE MODULO 256
+ NEXT E.POS1
+ O.DATA = O.DATA : E.TEMP
+ O.SIZE = O.SIZE + LEN(E.TEMP) ;* NOTE: WE CANNOT ASSUME LEN(E.TEMP) = E.SIZE BECAUSE ON SOME SYSTEMS, CHAR(255) RETURNS A NULL STRING!
+END
+RETURN
+*
+**************************************************************************
+*
+5400 * DECODE RECEIVED UTF-8 OR BINARY DATA IN ECS MODE
+*
+**************************************************************************
+*
+IF UTF8FLG THEN
+*#QM_ECS#* E.DATA = ICONV(I.DATA,'XUTF8.C')
+ E.SIZE = LEN(E.DATA)
+ E.MARK = 0
+ E.POS1 = 1
+ I.DATA = ''
+ IF E.SIZE > 0 THEN
+  IF TXT.FLG.PARAM THEN
+* CONVERT CR/LF TO ECS VERSION OF AM
+*#QM_ECS#*   EAM = SWAPMARKS(AM)
+   LOOP
+    E.MARK = E.MARK + 1
+    E.POS2 = INDEX(E.DATA,LF,E.MARK)
+    IF E.POS2 = 0 THEN E.POS2 = E.SIZE + 1
+    IF E.POS2 > 1 THEN
+     IF E.DATA[E.POS2-1,1] = CR THEN E.POS3 = E.POS2 - 1 ELSE E.POS3 = E.POS2; * DELETE CR
+    END ELSE
+     E.POS3 = E.POS2
+    END
+    I.DATA = I.DATA : E.DATA[E.POS1,E.POS3-E.POS1]
+   UNTIL E.POS2 > E.SIZE DO
+    I.DATA = I.DATA : EAM; * REPLACE LF WITH ECS AM
+    E.POS1 = E.POS2 + 1
+   REPEAT
+*#QM_ECS#*   I.DATA = SWAPMARKS(I.DATA)
+  END ELSE
+   I.DATA = E.DATA; * RETURN BINARY ECS DATA CONVERTED FROM UTF-8
+  END
+ END
+END
+RETURN
+*
+**************************************************************************
+*
+9100 * INCORRECT PACKET ERROR
+*
+**************************************************************************
+*
+BEGIN CASE
+ CASE I.TYP EQ 'E'
+  SLEEP 1
+  STAT=I.RAW
+ CASE I.TYP EQ 'Q'
+  STAT='Exceeded retry threshold!'
+ CASE I.TYP EQ 'A'
+  STAT='Transaction aborted by user!'
+ CASE I.TYP NE ''
+  STAT='Unexpected packet type: ':I.TYP
+END CASE
+IF I.TYP NE 'E' THEN
+ O.TYP='E'
+ O.RAW=STAT
+ GOSUB 2300
+END
+ECHO ON
+FATAL=1
+RETURN
+END

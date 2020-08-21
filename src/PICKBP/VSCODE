@@ -1,0 +1,435 @@
+*
+**************************************************************************
+*Copyright (c) 2020 Zumasys,Inc. as an unpublished work. All rights      *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: VSCODE
+* AUTHOR: PJS
+* VERSION: 8.0.3
+* CREATED: 02/06/2020
+* UPDATED: 04/02/2020
+*
+* MAINTENANCE RECORD:
+*
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM Visual Studio Code Interface
+*
+**************************************************************************
+**************************************************************************
+*
+EQU REL TO '1.0'
+EQU AM TO CHAR(254), CR TO CHAR(13), LF TO CHAR(10)
+EQU ESC TO CHAR(27), STX TO CHAR(2), EM TO CHAR(25)
+*
+SOCKSVR = 'atsocksvr.exe'
+*
+EQU MAXITMS TO 20 ;* MAXIMUM NUMBER OF DOCUMENTS TO EDIT
+*
+DIM FTCONF(30)
+EQU MAX.POS.PARAM TO FTCONF(1)
+EQU MCP.FLG.PARAM TO FTCONF(10)
+EQU SVRNAME TO FTCONF(26)
+EQU READ.OK TO FTCONF(27)
+EQU WRITE.OK TO FTCONF(28)
+EQU CONV.OK TO FTCONF(29)
+EQU EXEC.OK TO FTCONF(30)
+*
+DIM CLIENV(10)
+EQU CLI.PLATFORM TO CLIENV(1)
+EQU CLI.PRODUCT TO CLIENV(2)
+EQU CLI.RELEASE TO CLIENV(3)
+EQU CLI.CAPAS TO CLIENV(4)
+EQU CLI.SVCS TO CLIENV(5)
+EQU CLI.SERIAL TO CLIENV(6)
+EQU CLI.LICENSE TO CLIENV(7)
+EQU CLI.USER TO CLIENV(8)
+EQU CLI.VERSION TO CLIENV(9)
+EQU CLI.CONFIG TO CLIENV(10)
+*
+NO.PAGE=@(0,0) ;* DISABLE PAGINATION (QM, ON)
+*
+EQU DEBUGGING TO 0
+*
+**************************************************************************
+*
+* CHECK IF FTCHK HAS BEEN RUN SINCE THIS PROGRAM WAS INSTALLED
+*
+PRINT 'You should RUN FTBP FTCHK and select your host platform';*#GENERIC#*
+PRINT 'before you run this program!';*#GENERIC#*
+SLEEP 3;*#GENERIC#*
+*
+**************************************************************************
+*
+CALL FTINITEX('',MAT FTCONF,MAT CLIENV,FV,STAT)
+IF STAT NE '' THEN
+ PRINT STAT
+ STOP
+END
+OPEN 'MD' TO MD ELSE
+ OPEN 'VOC' TO MD ELSE STOP 201,'MD'
+END
+*
+IF CLI.PLATFORM <> 3 OR CLI.RELEASE < 7.1 THEN
+ PRINT 'VSCODE requires AccuTerm 7.1 or later to run!'
+ STOP
+END
+IF INDEX(CLI.CAPAS,'Z',1) THEN
+ PRINT 'Upper case / lower case inversion must be disabled to run VSCODE.'
+ PRINT 'Try typing "PTERM CASE NOINVERT" before running VSCODE.'
+ STOP
+END
+IF INDEX(CLI.CAPAS,'H',1)=0 THEN
+ PRINT 'This version of AccuTerm does not support server mode!'
+ STOP
+END
+IF INDEX(CLI.CAPAS,'E',1)=0 THEN
+ PRINT 'This version of AccuTerm does not support VSCODE!'
+ STOP
+END
+CALL FTPGMDIR(PATH) ;* NEED PATH TO LAUNCH SOCKET SERVER PROGRAM
+*IF INDEX(CLI.CAPAS,'M',1) THEN
+* * QUERY PROGRAM NAME FROM ATWIN.INI
+* PRINT ESC:STX:'&MVSERVICES,VSCODE':CR:
+* ECHO OFF; PROMPT ''
+* INPUT ANS:
+* ECHO ON; PROMPT '?'
+* ANS=FIELD(ANS,',',3)
+* IF ANS<>'' THEN CODEPGM=ANS
+*END
+*
+* Get vscode workspace template
+*
+READ TEMPLATE FROM FV,'VSCODE-WORKSPACE-TEMPLATE' ELSE
+ CALL FTRECV('K,T,I,Z', 'ACCUTERMCTRL', 'VSCODE-WORKSPACE-TEMPLATE', PATH:'\PICKBP', 'VSCODE-WORKSPACE-TEMPLATE.TXT', 0, 0, ST)
+ IF ST <> '' THEN
+  PRINT 'Unable to upload the VSCode workspace template!'
+  STOP
+ END
+ READ TEMPLATE FROM FV,'VSCODE-WORKSPACE-TEMPLATE' ELSE
+  PRINT 'VSCode workspace template not found in ACCUTERMCTRL file!'
+  STOP
+ END
+END
+*
+* Get vscode command line
+*
+SCR=''
+SCR=SCR:'On Error Resume Next':EM
+SCR=SCR:'Dim wss As Object':EM
+SCR=SCR:'Dim codecmd As String':EM
+SCR=SCR:'Set wss = CreateObject("WScript.Shell")':EM
+SCR=SCR:'codecmd=wss.RegRead("HKEY_CLASSES_ROOT\Applications\Code.exe\shell\open\command\")':EM
+SCR=SCR:'InitSession.Output codecmd & vbCr'
+PRINT ESC:STX:'P':SCR:CR:
+ECHO OFF; PROMPT ''
+INPUT CODECMD:
+ECHO ON; PROMPT '?'
+IF CODECMD = '' THEN CODECMD = 'code "%1"' ;* PUNT!
+*
+* Verify socket server is installed
+*
+PRINT ESC:STX:'PInitSession.Output CStr(Abs(FileExists("':PATH:SOCKSVR:'"))) & Chr$(13)':CR:
+ECHO OFF; PROMPT ''
+INPUT ANS:
+ECHO ON; PROMPT '?'
+IF ANS=0 THEN
+ PRINT 'A required component (':SOCKSVR:') has not been installed.'
+ STOP
+END
+*
+* GET TEMP DIRECTORY FOR WORKSPACE FILE
+*
+PRINT ESC:STX:'PInitSession.Output Environ("TEMP") & vbCr'
+ECHO OFF; PROMPT ''
+INPUT TMPDIR:
+ECHO ON; PROMPT '?'
+IF TMPDIR = '' THEN
+ PRINT 'Could not find your TEMP directory. Please configure this in Windows and try again.'
+ STOP
+END
+*
+* CREATE THE SESSION ID
+*
+SESSIONID = '@':TIME() ;* UNIQUE ID FOR SERVER (NOT AUTOCLOSE DUE TO NON-PERSISTENT CONNECTION FOR REST API)
+*
+* GET COMMAND LINE
+*
+PRINT 'Enter file name & item list to edit':; INPUT CMDLINE; CMDLINE='WED ':CMDLINE;*#GENERIC#*
+*#ADDS#*CMDLINE = SENTENCE()
+*#AP#*TCLREAD CMDLINE
+*#CACHE#*CMDLINE = @SENTENCE
+*#ENH#*CMDLINE = SENTENCE()
+*#JB#*CMDLINE = @SENTENCE
+*#MD#*PRINT 'Enter file name & item list to edit':; INPUT CMDLINE; CMDLINE='WED ':CMDLINE
+*#MVBASE#*CMDLINE = SENTENCE()
+*#MVON#*CMDLINE = @SENTENCE
+*#NR#*CMDLINE = SENTENCE()
+*#OAS#*CMDLINE = @SENTENCE
+*#OI#*CMDLINE = @SENTENCE
+*#ON#*CMDLINE = @SENTENCE
+*#PICK#*TCLREAD CMDLINE
+*#QM#*CMDLINE = @SENTENCE
+*#R83#*PRINT 'Enter file name & item list to edit':; INPUT CMDLINE; CMDLINE='WED ':CMDLINE
+*#SEQ#*CMDLINE = SENTENCE()
+*#UD#*CMDLINE = @SENTENCE
+*#ULT#*CMDLINE = @SENTENCE; CONVERT AM TO ' ' IN CMDLINE
+*#ULTX#*CMDLINE = @SENTENCE; CONVERT AM TO ' ' IN CMDLINE
+*#UV#*CMDLINE = @SENTENCE
+*#VIS#*CMDLINE = SENTENCE()
+*
+* PARSE COMMAND LINE
+*
+CALL FTCMDLN(MAXITMS,CMDLINE,VERB,FILENAME,ITMLST,OPTIONS,STAT)
+IF STAT <> '' THEN
+ IF OCONV(STAT,'MCU') = 'TOO MANY ITEMS' THEN
+  PRINT 'Cannot open more than ':MAXITMS:' documents; extra discarded!'
+  PRINT 'Press <Enter> to continue...':
+  PROMPT ''
+  INPUT ANS
+  PROMPT '?'
+ END
+END
+IF FILENAME <> '' THEN
+ OPEN FILENAME TO FFV ELSE STOP 201,FILENAME
+END
+*
+* GET PLATFORM DETAILS
+*
+DIALECT = 'Generic'
+INSENSITIVE = 0
+MDNAME = 'MD';*#GENERIC#*
+WHO = OCONV('','U50BB');*#GENERIC#*
+ACCT = FIELD(WHO,' ',3);*#GENERIC#*
+IF ACCT = '' THEN ACCT = FIELD(WHO,' ',2);*#GENERIC#*
+*#ADDS#*MDNAME = 'MD'
+*#ADDS#*ACCT = FIELD(OCONV('','U50BB'),' ',2)
+*#AP#*MDNAME = 'MD'
+*#AP#*WHO = OCONV('','U50BB')
+*#AP#*ACCT = FIELD(WHO,' ',3)
+*#AP#*IF ACCT = '' THEN ACCT = FIELD(WHO,' ',2)
+*#CACHE#*MDNAME = 'VOC'
+*#CACHE#*ACCT = @WHO
+*#ENH#*MDNAME = 'MD'
+*#ENH#*ACCT = FIELD(OCONV('','U50BB'),' ',2)
+*#JB#*MDNAME = 'MD'
+*#JB#*ACCT = @WHO
+*#JB#*DIALECT = 'jBASE'
+*#JB#*READ X FROM MD,'list' THEN INSENSITIVE = 1 ;* crappy test for case-insensitive files
+*#MD#*MDNAME = 'MD'
+*#MD#*ACCT = FIELD(OCONV('','U50BB'),' ',2)
+*#MVBASE#*MDNAME = 'MD'
+*#MVBASE#*ACCT = FIELD(OCONV('','U50BB'),' ',2)
+*#MVBASE#*DIALECT = 'mvBase'
+*#MVON#*MDNAME = 'VOC'
+*#MVON#*ACCT = @WHO
+*#MVON#*DIALECT = 'MVON'
+*#NR#*MDNAME = 'MD'
+*#NR#*ACCT = @ACCOUNT
+*#OAS#*MDNAME = 'VOC'
+*#OAS#*ACCT = @WHO
+*#OI#*MDNAME='MD'
+*#OI#*ACCT = @APPID<1>
+*#ON#*MDNAME = 'VOC'
+*#ON#*ACCT = @WHO
+*#PICK#*MDNAME = 'MD'
+*#PICK#*ACCT = @ACCOUNT
+*#PICK#*DIALECT = 'D3'
+*#PICK#*INSENSITIVE = NOT(SYSTEM(27))
+*#QM#*MDNAME = 'VOC'
+*#QM#*ACCT = @WHO
+*#QM#*DIALECT = 'QM'
+*#R83#*MDNAME = 'MD'
+*#R83#*ACCT = FIELD(OCONV('','U50BB'),' ',2)
+*#SEQ#*MDNAME = 'MD'
+*#SEQ#*WHO = OCONV('','U50BB')
+*#SEQ#*ACCT = FIELD(WHO,' ',3)
+*#SEQ#*IF ACCT = '' THEN ACCT = FIELD(WHO,' ',2)
+*#UD#*MDNAME = 'VOC'
+*#UD#*ACCT = @WHO
+*#UD#*DIALECT = 'Unidata'
+*#ULT#*MDNAME = 'MD'
+*#ULT#*ACCT = FIELD(OCONV('','U50BB'),' ',2)
+*#ULTX#*MDNAME = 'MD'
+*#ULTX#*ACCT = FIELD(OCONV('','U50BB'),' ',2)
+*#UV#*MDNAME = 'VOC'
+*#UV#*ACCT = @WHO
+*#UV#*DIALECT = 'UniVerse'
+*#VIS#*MDNAME = 'MD'
+*#VIS#*ACCT = FIELD(OCONV('','U50BB'),' ',2)
+*
+* Convert filename to path
+*
+IF FILENAME = '' THEN
+ DIRECTRY = ''
+END ELSE
+ FNX = FIELD(FILENAME,' ',1)
+ IF OCONV(FNX,'MCU') = 'DICT' THEN
+  FNX = FIELD(FIELD(FILENAME,' ',2),',',1)
+  IF OCONV(FNX,'MCU') = 'MD' OR OCONV(FNX,'MCU') = 'VOC' THEN
+   DIRECTRY = ''
+  END ELSE
+   DIRECTRY = '/':FNX
+  END
+ END ELSE
+  IF OCONV(FILENAME,'MCU') = 'MD' OR OCONV(FILENAME,'MCU') = 'VOC' THEN
+   DIRECTRY = ''
+  END ELSE
+   IF INDEX(FILENAME,',',1) THEN
+    DIRECTRY = '/':FIELD(FILENAME,',',1):'/':FIELD(FILENAME,',',2)
+   END ELSE
+    DIRECTRY = '/':FILENAME:'/':FILENAME
+   END
+  END
+ END
+END
+*
+* Verify all items exist (vscode does not prompt to create missing files,
+* only displays message that file doesn't exist)
+*
+NEWIDS = ''
+ITMCNT = DCOUNT(ITMLST,AM)
+FOR I = 1 TO ITMCNT
+ ID = ITMLST<I>
+ READ DUMMY FROM FFV,ID ELSE NEWIDS<-1> = ID
+NEXT I
+DUMMY = ''
+*
+* Confirm creation of new items
+*
+IF NEWIDS <> '' THEN
+ NEWCNT = DCOUNT(NEWIDS,AM)
+ IF NEWCNT = 1 THEN
+  MSG = "Item '":NEWIDS:"' does not exist. Create new item?"
+ END ELSE
+  MSG = "Items "
+  FOR I = 1 TO NEWCNT
+   MSG = MSG:"'":NEWIDS<I>:"'"
+   IF I < 5 AND I < NEWCNT THEN MSG = MSG:", "
+   IF I = 5 THEN I = NEWCNT
+  NEXT I
+  IF NEWCNT > 5 THEN
+   MSG = MSG:" and ":(NEWCNT-5):" others"
+  END
+  MSG = MSG:" do not exist. Create new items?"
+ END
+ SCR=''
+ SCR='On Error Resume Next':EM
+ SCR=SCR:'Dim rc As Integer':EM
+ SCR=SCR:'rc = MsgBox("':MSG:'",35,"VSCode")':EM
+ SCR=SCR:'InitSession.Activate':EM
+ SCR=SCR:'InitSession.Output CStr(rc) & vbCr'
+ PRINT ESC:STX:'P':SCR:CR:
+ PROMPT ''
+ ECHO OFF
+ INPUT RESPONSE:
+ ECHO ON
+ PROMPT '?'
+ IF RESPONSE <> 6 AND RESPONSE <> 7 THEN STOP
+ IF RESPONSE = 6 THEN
+  * Create empty items
+  FOR I = 1 TO NEWCNT
+   WRITE '' ON FFV,NEWIDS<I>
+  NEXT I
+ END ELSE
+  * Remove missing items from list
+  FOR I = 1 TO NEWCNT
+   LOCATE(NEWIDS<I>,ITMLST;K) THEN
+    ITMLST = DELETE(ITMLST,K)
+   END
+  NEXT I
+ END
+END
+*
+* Create a code-workspace for this VSCode session using template
+*
+WS = TEMPLATE
+LOOP
+ K = INDEX(WS,'<ACCOUNT>',1)
+WHILE K DO
+ WS = WS[1,K-1]:ACCT:WS[K+9,9999999]
+REPEAT
+LOOP
+ K = INDEX(WS,'<SESSIONID>',1)
+WHILE K DO
+ WS = WS[1,K-1]:SESSIONID:WS[K+11,9999999]
+REPEAT
+LOOP
+ K = INDEX(WS,'<DIALECT>',1)
+WHILE K DO
+ WS = WS[1,K-1]:DIALECT:WS[K+9,9999999]
+REPEAT
+IF INSENSITIVE THEN BLN='false' ELSE BLN='true'
+LOOP
+ K = INDEX(WS,'<CASE>',1)
+WHILE K DO
+ WS = WS[1,K-1]:BLN:WS[K+6,9999999]
+REPEAT
+*
+* Add item list to workspace
+*
+ITMS = ''
+ITMCNT = DCOUNT(ITMLST,AM)
+FOR I = 1 TO ITMCNT
+ ITM = '"':DIRECTRY:'/':ITMLST<I>:'"'
+ IF I < ITMCNT THEN ITM = ITM:','
+ ITMS<-1> = ITM
+NEXT I
+K = INDEX(WS,'<ITEMS>',1)
+IF K THEN
+ WS = WS[1,K-1]:ITMS:WS[K+7,9999999]
+END
+*
+* Save workspace in Windows TEMP directory
+*
+WSPATH = TMPDIR:'\at':SESSIONID:'.code-workspace'
+PRINT ESC:STX:'COP;':WSPATH:CR:
+PRINT ESC:STX:'p2':CR:
+N = DCOUNT(WS,AM)
+FOR I = 1 TO N
+ PRINT WS<I>
+NEXT I
+PRINT ESC:STX:'p0':CR:
+PRINT ESC:STX:'CX':
+*
+* Start the MVRest socket server
+*
+CMD = '"':PATH:SOCKSVR:'" -a' ;* auto-close when client logs out
+IF CLI.RELEASE >= 8 THEN
+ CMD = CMD : ' -n80' ;* AccuTerm 8.0
+END ELSE
+ CMD = CMD : ' -n71' ;* AccuTerm 7.1
+END
+IF INSENSITIVE THEN
+ CMD = CMD : ' -c'
+END
+IF DEBUGGING THEN 
+ CMD = CMD : ' -d':DEBUGGING ;* debug mode
+END ELSE
+ CMD = CMD : ' -m' ;* minimized
+END
+PRINT ESC:STX:'<':CMD:CR:
+*
+* Launch VSCode using our workspace
+*
+K = INDEX(CODECMD,'%1',1)
+IF K THEN CODECMD = CODECMD[1,K-1]:WSPATH:CODECMD[K+2,9999] ELSE CODECMD = CODECMD:' "':WSPATH:'"'
+PRINT ESC:STX:'<':CODECMD:CR:
+CALL FTSVRSUB(SESSIONID,MAT FTCONF,MAT CLIENV,FV) ;* enter server mode so socket server can read/write data
+*
+* Done - clean up workspace file
+*
+PRINT ESC:STX:'POn Error Resume Next : Kill "':WSPATH:'"':CR:
+*
+PROMPT '?'
+STOP
+*
+END

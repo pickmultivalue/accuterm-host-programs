@@ -1,0 +1,580 @@
+*
+**************************************************************************
+*Copyright (c) 1993-2013 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTD
+* AUTHOR: PJS
+* VERSION: 7.2.1
+* CREATED: 01/01/1993
+* UPDATED: 10/09/2013
+*
+* MAINTENANCE RECORD:
+*
+* 7.2.1
+*  PJS 10/08/2013
+*   Modified all INPUT statements to accept an optional exit string
+*   specified in KMTCFG<62>.
+*
+* 7.0.1
+*  PJS 03/25/2010
+*   Added new "C" option to the "Use heading row" prompt to use column
+*   headings from the file dictionary instead of attribute name in the
+*   heading row.
+*
+* 5.3.4
+*  PJS 11/08/2006
+*   Fixed bug where select statement entered at IDLIST prompt was parsed
+*   as if a list of IDs was entered instead of saving the statement.
+*   Added NO.PAGE=@(0,0) to disable pagination for QM, ON, etc.
+*
+* 5.3.3
+*  PJS 08/29/2006
+*   Changed DICT file open syntax to accomodate funky D3 & Ehnanced
+*   R83 path syntax.
+*
+* 5.3.2
+*  PJS 07/24/2006
+*   Changed size of VARS() array from 25 to 26, defining VARS(26)
+*   as MD. Define previously unused VARS(24) as DFILE, the file
+*   variable for the dictionary, so we can use the ITYPE() or
+*   CALCULATE() functions efficiently. These files are now opened
+*   up front in this routine.
+*
+* 5.3.1
+*  PJS 05/08/2006
+*   Updated for 5.3a release. Combined old calls to FTINIT and
+*   FTCLIENV to call new FTINITEX subroutine.
+*
+* 5.0.5
+*  PJS 11/29/2002
+*   Added new ID list processing to accept a select statement if
+*   IDLIST starts with ">".
+*
+* 5.0.4
+*  PJS 10/29/2002
+*   Fixed problem with UV platform CHKSTKINP caused by previous
+*   patch.
+*
+* 5.0.3
+*  PJS 10/08/2002
+*   Added new ULTX (ancient Ultimate) platform type which does
+*   not support test for stacked input (YUK!)
+*
+* 5.0.2
+*  PJS 09/10/2002
+*   Added column name list (CLST) to VARS() array as VARS(15).
+*
+* 5.0.1
+*  PJS 02/17/2002
+*  Added new element to CLIENV() array for FTBP library version number.
+*
+* 4.0.2
+*  PJS 11/03/2000
+*   Added platform specific support code for Ultimate, ADDS & Enhanced R83
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*   CHECK ACCUTERM CAPABILITIES AT BEGINNING OF PROGRAM
+*   ADDED SUPPORT FOR AUTOMATIC CHARACTER SET CONVERSION
+*   FILE CONVERSION CODE MOVED FROM HERE TO FTMODE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM DATA TRANSFER - FRONT END
+*
+**************************************************************************
+**************************************************************************
+*
+DIM PARAMS(30),VARS(26),CLIENV(10)
+*
+EQU TXT.FLG.PARAM TO PARAMS(13)
+EQU OVR.FLG.PARAM TO PARAMS(15)
+EQU OVR.FTD.PARAM TO PARAMS(16)
+EQU DCH.FLG.PARAM TO PARAMS(18)
+EQU DIR.FLG.PARAM TO PARAMS(21)
+EQU FIL.CNV.PARAM TO PARAMS(23)
+EQU OEM.CHR.PARAM TO PARAMS(24)
+EQU PRO.FLG.PARAM TO PARAMS(25)
+*
+EQU ICNT TO VARS(1)
+EQU BCNT TO VARS(2)
+EQU IDMODE TO VARS(3)
+EQU ALST TO VARS(4)
+EQU HDR TO VARS(5)
+EQU EXP TO VARS(6)
+EQU GEN TO VARS(7)
+EQU PFX TO VARS(8)
+EQU SID TO VARS(9)
+EQU SKP TO VARS(10)
+EQU FILE TO VARS(11)
+EQU FNAME TO VARS(12)
+EQU ID TO VARS(13)
+EQU IDLST TO VARS(14)
+EQU CLST TO VARS(15)
+EQU IDS TO VARS(16)
+EQU ISIZ TO VARS(17)
+EQU ISEQ TO VARS(18)
+EQU ITEM TO VARS(19)
+EQU XSIZ TO VARS(20)
+EQU PATH TO VARS(21)
+EQU FN TO VARS(22)
+EQU FNLST TO VARS(23)
+EQU DFILE TO VARS(24)
+EQU FNS TO VARS(25)
+EQU MD TO VARS(26)
+*
+EQU CLI.PLATFORM TO CLIENV(1)
+EQU CLI.PRODUCT TO CLIENV(2)
+EQU CLI.RELEASE TO CLIENV(3)
+EQU CLI.CAPAS TO CLIENV(4)
+EQU CLI.SVCS TO CLIENV(5)
+EQU CLI.SERIAL TO CLIENV(6)
+EQU CLI.LICENSE TO CLIENV(7)
+EQU CLI.USER TO CLIENV(8)
+EQU CLI.VERSION TO CLIENV(9)
+EQU CLI.CONFIG TO CLIENV(10)
+*
+EQU VM TO CHAR(253)
+*
+NO.PAGE=@(0,0);* DISABLE PAGINATION (QM, ON, ETC.)
+*
+**************************************************************************
+*
+* CHECK IF FTCHK HAS BEEN RUN SINCE THIS PROGRAM WAS INSTALLED
+*
+PRINT 'You should RUN FTBP FTCHK and select your host platform';*#GENERIC#*
+PRINT 'before you run this program!';*#GENERIC#*
+SLEEP 3;*#GENERIC#*
+*
+**************************************************************************
+*
+* VALIDATE CONFIGURATION & INITIALIZE PARAMETERS
+*
+MAT VARS=''
+CALL FTINITEX('',MAT PARAMS,MAT CLIENV,FV,STAT)
+IF STAT NE '' THEN
+ PRINT STAT
+ STOP
+END
+OPEN 'MD' TO MD ELSE
+ OPEN 'VOC' TO MD ELSE STOP 201,'MD'
+END
+*
+**************************************************************************
+*
+* FOR UNIVERSE ONLY, CHECK IF THE @@SELECT VERB IS DEFINED
+*
+*#UV#*READV X FROM MD,'@@SELECT',1 ELSE X=''
+*#UV#*IF OCONV(X[1,1],'MCU')<>'V' THEN
+*#UV#* PRINT 'In order to process certain processing codes (A & F correlatives'
+*#UV#* PRINT 'and I-Descriptors), a special form of the SELECT verb is required.'
+*#UV#* PRINT 'Please RUN FTBP FTCHK. Press <Enter> at the file name prompt, and'
+*#UV#* PRINT 'select UV as the platform. You do not need to recompile the programs.'
+*#UV#* SLEEP 3
+*#UV#*END
+*
+**************************************************************************
+*
+* PROMPT FOR DESIRED ACTION
+*
+**************************************************************************
+*
+PRINT
+PRINT 'AccuTerm Data Transfer Utility'
+PRINT
+*
+* TEST ACCUTERM CLIENT CAPABILITIES
+IF CLI.PLATFORM=0 THEN
+ PRINT 'FTD requires AccuTerm to run!'
+ STOP
+END
+IF INDEX(CLI.CAPAS,'Z',1) THEN
+ PRINT 'Upper case / lower case inversion must be disabled to run FTD.'
+ PRINT 'Try typing "PTERM CASE NOINVERT" before running FTD.'
+ STOP
+END
+*
+IF (INDEX(CLI.CAPAS,'D',1) + INDEX(CLI.CAPAS,'U',1)) = 0 THEN
+ PRINT 'This version of AccuTerm does not support file transfers.'
+ STOP
+END
+*
+PROMPT ''
+*
+LOOP
+ GOSUB 2222; IF NOT(CHKSTKINP) THEN
+  PRINT
+  PRINT '(S)end, (R)eceive, (C)onfigure, (O)ptions, (H)elp or (E)xit ? ':
+ END
+ INPUT ANS; GOSUB 2233; MODE=ANS
+ MODE=OCONV(MODE[1,1],'MCU')
+UNTIL MODE EQ 'S' OR MODE EQ 'R' DO
+ BEGIN CASE
+  CASE MODE EQ '' OR MODE EQ 'X' OR MODE EQ 'E'; STOP
+  CASE MODE EQ 'C'; CALL FTCONFIG('14,16,17,18,24',MAT PARAMS,FV)
+  CASE MODE EQ 'O'; CALL FTOPTION('14,16,18',0,MAT PARAMS,FV)
+  CASE MODE EQ 'H'; CALL FTHELP(1,FV)
+ END CASE
+REPEAT
+OVR.FLG.PARAM = OVR.FTD.PARAM; * USE COMMON OVERWRITE VARIABLE
+*
+IF MODE EQ 'S' THEN
+ IF INDEX(CLI.CAPAS,'D',1) = 0 THEN
+  PRINT 'This version of AccuTerm does not support file downloads.'
+  STOP
+ END
+END ELSE
+ IF INDEX(CLI.CAPAS,'U',1) = 0 THEN
+  PRINT 'This version of AccuTerm does not support file uploads.'
+  STOP
+ END
+ IF (DCH.FLG.PARAM EQ 2 AND LEN(DCH.FLG.PARAM) EQ 1) OR INDEX(OCONV(DCH.FLG.PARAM,'MCU'),'0D0A',1) OR INDEX(OCONV(DCH.FLG.PARAM,'MCU'),'FE',1) THEN
+  PRINT 'For uploads, field delimiter cannot contain CR/LF or attribute mark!'
+  STOP
+ END
+END
+*
+**************************************************************************
+*
+* SELECT PROTOCOL
+*
+**************************************************************************
+*
+LOOP
+ GOSUB 2222; IF NOT(CHKSTKINP) THEN
+  PRINT
+  PRINT 'File transfer protocol: (A)SCII or (K)ERMIT ? ':
+ END
+ INPUT ANS; GOSUB 2233; PROTOCOL=ANS
+ PROTOCOL=OCONV(PROTOCOL[1,1],'MCU')
+UNTIL PROTOCOL EQ 'A' OR PROTOCOL EQ 'K' DO
+ BEGIN CASE
+  CASE PROTOCOL EQ '' OR PROTOCOL EQ 'X' OR PROTOCOL EQ 'E'; STOP
+  CASE PROTOCOL EQ 'H' OR PROTOCOL EQ '?'; CALL FTHELP(7,FV)
+ END CASE
+REPEAT
+IF PROTOCOL EQ 'A' THEN PRO.FLG.PARAM=0 ELSE PRO.FLG.PARAM=1
+*
+**************************************************************************
+*
+* SEND ITEMS
+*
+**************************************************************************
+*
+IF MODE EQ 'S' THEN
+ DIR.FLG.PARAM=1
+ SUBNAME='FTRDDATA'
+ LOOP
+  GOSUB 2222; IF NOT(CHKSTKINP) THEN
+   PRINT
+   PRINT 'Enter source (PICK) file name: ':
+  END
+  INPUT ANS; GOSUB 2233; FNAME=ANS
+ WHILE FNAME EQ '?' DO
+  CALL FTHELP(41,FV)
+ REPEAT
+ IF FNAME[1,5] EQ 'DICT ' THEN
+  OPEN FNAME TO FILE ELSE STOP 201,FNAME
+  DFILE = MD
+  FNAME=FNAME[6,9999]
+ END ELSE
+  OPEN FNAME TO FILE ELSE STOP 201,FNAME
+  OPEN 'DICT',FNAME TO DFILE ELSE STOP 201,'DICT ':FNAME
+ END
+ LOOP
+  GOSUB 2222; IF NOT(CHKSTKINP) THEN
+   PRINT
+   PRINT 'Enter source (PICK) item list: ':
+  END
+  INPUT ANS; GOSUB 2233; IDLIST=ANS
+ WHILE IDLIST EQ '?' DO
+  CALL FTHELP(42,FV)
+ REPEAT
+ IF IDLIST[1,1] = '>' THEN
+  IDLST=IDLIST
+ END ELSE
+  IDLST=''
+  LOOP
+   LOOP C=IDLIST[1,1] WHILE C EQ ' ' DO IDLIST=IDLIST[2,9999] REPEAT
+  UNTIL C EQ '' DO
+   IF C EQ '"' OR C EQ "'" OR C EQ '\' THEN IDLIST=IDLIST[2,9999]; SMD=0 ELSE C=' '
+   K=INDEX(IDLIST,C,1)
+   IF NOT(K) THEN K=LEN(IDLIST)+1
+   IDLST<-1>=IDLIST[1,K-1]
+   IDLIST=IDLIST[K+1,9999]
+  REPEAT
+ END
+ LOOP
+  GOSUB 2222; IF NOT(CHKSTKINP) THEN
+   PRINT
+   PRINT 'Enter target (DOS) file name (d:\directory\file.ext): ':
+  END
+  INPUT ANS; GOSUB 2233; PATH=ANS
+  K=COUNT(PATH,'\')
+  IF K THEN K=INDEX(PATH,'\',K); FNLST=PATH[K+1,9999]; PATH=PATH[1,K] ELSE
+   K=COUNT(PATH,':')
+   IF K THEN K=INDEX(PATH,':',K); FNLST=PATH[K+1,9999]; PATH=PATH[1,K] ELSE
+    FNLST=PATH; PATH=''
+   END
+  END
+ WHILE FNLST EQ '?' OR FNLST EQ '' DO
+  IF FNLST EQ '?' THEN CALL FTHELP(49,FV)
+ REPEAT
+ LOOP
+  GOSUB 2222; IF NOT(CHKSTKINP) THEN
+   PRINT
+   PRINT 'Attributes to transfer: ':
+  END
+  INPUT ANS; GOSUB 2233; ALIST=ANS
+ WHILE ALIST EQ '?' DO
+  CALL FTHELP(50,FV)
+ REPEAT
+ ALST=''
+ LOOP
+  LOOP C=ALIST[1,1] WHILE C EQ ' ' DO ALIST=ALIST[2,9999] REPEAT
+ UNTIL C EQ '' DO
+  K=INDEX(ALIST,' ',1)
+  IF NOT(K) THEN K=LEN(ALIST)+1
+  ALST<1,-1>=ALIST[1,K-1]
+  ALIST=ALIST[K+1,9999]
+ REPEAT
+ LOOP
+  LOOP
+   GOSUB 2222; IF NOT(CHKSTKINP) THEN
+    PRINT
+    PRINT 'Generate Header Record (<Y>/N/C): ':
+   END
+   INPUT ANS; GOSUB 2233
+  WHILE ANS EQ '?' DO
+   CALL FTHELP(51,FV)
+  REPEAT
+  IF ANS='' THEN ANS='Y'
+  ANS=OCONV(ANS[1,1],'MCU')
+ UNTIL ANS='Y' OR ANS='N' OR ANS='C' DO
+  PRINT 'Please enter "Y", "N" or "C" only'
+ REPEAT
+ HDR = INDEX('YC',ANS,1)
+ IF ALST<1> NE '*' AND ALST<1> NE '+' THEN
+  LOOP
+   LOOP
+    GOSUB 2222; IF NOT(CHKSTKINP) THEN
+     PRINT
+     PRINT 'Explode MultiValue Fields (Y/<N>): ':
+    END
+    INPUT ANS; GOSUB 2233
+   WHILE ANS EQ '?' DO
+    CALL FTHELP(52,FV)
+   REPEAT
+   IF ANS='' THEN ANS='N'
+   ANS=OCONV(ANS[1,1],'MCU')
+  UNTIL ANS='Y' OR ANS='N' DO
+   PRINT 'Please enter "Y" or "N" only'
+  REPEAT
+  EXP = (ANS EQ 'Y')
+ END
+ PRINT
+END ELSE
+*
+**************************************************************************
+*
+* RECEIVE ITEMS
+*
+**************************************************************************
+*
+ DIR.FLG.PARAM=0
+ SUBNAME='FTWTDATA'
+ LOOP
+  GOSUB 2222; IF NOT(CHKSTKINP) THEN
+   PRINT
+   PRINT 'Enter source (DOS) file name (d:\directory\file.ext): ':
+  END
+  INPUT ANS; GOSUB 2233; PATH = ANS
+  K=COUNT(PATH,'\')
+  IF K THEN K=INDEX(PATH,'\',K); FNLST=PATH[K+1,9999]; PATH=PATH[1,K] ELSE
+   K=COUNT(PATH,':')
+   IF K THEN K=INDEX(PATH,':',K); FNLST=PATH[K+1,9999]; PATH=PATH[1,K] ELSE
+    FNLST=PATH; PATH=''
+   END
+  END
+ WHILE FNLST EQ '?' OR FNLST EQ '' DO
+  IF FNLST EQ '?' THEN CALL FTHELP(53,FV)
+ REPEAT
+ LOOP
+  LOOP
+   GOSUB 2222; IF NOT(CHKSTKINP) THEN
+    PRINT
+    PRINT 'Use Header Record (<Y>/N): ':
+   END
+   INPUT ANS; GOSUB 2233
+  WHILE ANS EQ '?' DO
+   CALL FTHELP(54,FV)
+  REPEAT
+  IF ANS='' THEN ANS='Y'
+  ANS=OCONV(ANS[1,1],'MCU')
+ UNTIL ANS='Y' OR ANS='N' DO
+  PRINT 'Please enter "Y" or "N" only'
+ REPEAT
+ HDR = (ANS EQ 'Y')
+ IF NOT(HDR) THEN
+  LOOP
+   GOSUB 2222; IF NOT(CHKSTKINP) THEN
+    PRINT
+    PRINT 'Attributes to transfer: ':
+   END
+   INPUT ANS; GOSUB 2233; ALIST=ANS
+  WHILE ALIST EQ '?' DO
+   CALL FTHELP(55,FV)
+  REPEAT
+  ALST=''
+  LOOP
+   LOOP C=ALIST[1,1] WHILE C EQ ' ' DO ALIST=ALIST[2,9999] REPEAT
+  UNTIL C EQ '' DO
+   K=INDEX(ALIST,' ',1)
+   IF NOT(K) THEN K=LEN(ALIST)+1
+   ALST<1,-1>=ALIST[1,K-1]
+   ALIST=ALIST[K+1,9999]
+  REPEAT
+  LOOP
+   GOSUB 2222; IF NOT(CHKSTKINP) THEN
+    PRINT
+    PRINT 'Number of header records to skip: ':
+   END
+   INPUT ANS; GOSUB 2233; SKP=ANS
+  WHILE SKP EQ '?' DO
+   CALL FTHELP(56,FV)
+  REPEAT
+  IF NOT(SKP MATCHES '1N0N') THEN SKP=0
+  LOOP
+   LOOP
+    GOSUB 2222; IF NOT(CHKSTKINP) THEN
+     PRINT
+     PRINT 'Automatically generate target (PICK) IDs (Y/<N>): ':
+    END
+    INPUT ANS; GOSUB 2233
+   WHILE ANS EQ '?' DO
+    CALL FTHELP(57,FV)
+   REPEAT
+   IF ANS='' THEN ANS='N'
+   ANS=OCONV(ANS[1,1],'MCU')
+  UNTIL ANS='Y' OR ANS='N' DO
+   PRINT 'Please enter "Y" or "N" only!'
+  REPEAT
+  GEN = (ANS EQ 'Y')
+  IF GEN THEN
+   LOOP
+    GOSUB 2222; IF NOT(CHKSTKINP) THEN
+     PRINT
+     PRINT 'Auto ID Prefix: ':
+    END
+    INPUT ANS; GOSUB 2233; PFX=ANS
+   WHILE PFX EQ '?' DO
+    CALL FTHELP(58,FV)
+   REPEAT
+   LOOP
+    GOSUB 2222; IF NOT(CHKSTKINP) THEN
+     PRINT
+     PRINT 'Auto ID Starting Number: ':
+    END
+    INPUT ANS; GOSUB 2233; SID=ANS
+   WHILE SID EQ '?' DO
+    CALL FTHELP(59,FV)
+   REPEAT
+   IF NOT(SID MATCHES '1N0N') THEN SID=0
+  END
+ END
+ LOOP
+  GOSUB 2222; IF NOT(CHKSTKINP) THEN
+   PRINT
+   PRINT 'Enter target (PICK) file name: ':
+  END
+  INPUT ANS; GOSUB 2233; FNAME=ANS
+ WHILE FNAME EQ '?' DO
+  CALL FTHELP(47,FV)
+ REPEAT
+ IF FNAME[1,5] EQ 'DICT ' THEN
+  OPEN FNAME TO FILE ELSE STOP 201,FNAME
+  DFILE = MD
+  FNAME=FNAME[6,9999]
+ END ELSE
+  OPEN FNAME TO FILE ELSE STOP 201,FNAME
+  OPEN 'DICT',FNAME TO DFILE ELSE STOP 201,'DICT ':FNAME
+ END
+ PRINT
+END
+*
+**************************************************************************
+*
+* PERFORM TRANSFER
+*
+**************************************************************************
+*
+* CHECK ATTRIBUTE LIST, ETC.
+*
+STAT=''
+CALL FTPARSE(FNAME,ALST,STAT,DFILE,MD)
+IF STAT NE '' THEN
+ PRINT STAT
+ STOP
+END
+IF DIR.FLG.PARAM EQ 0 AND (ALST<3> NE '' OR ALST<7> NE '') THEN
+ NATT=DCOUNT(ALST<1>,VM); FOR EACH.ATT=1 TO NATT
+  IF ALST<3,EACH.ATT> NE '' OR ALST<7,EACH.ATT> NE '' THEN
+   STAT='The field ':ALST<1,EACH.ATT>:' cannot be updated!'
+   PRINT STAT
+   STOP
+  END
+ NEXT EACH.ATT
+END
+*
+* PERFORM TRANSFER
+*
+TXT.FLG.PARAM=1; * ALWAYS TEXT FORMAT
+FIL.CNV.PARAM=1; * ALLOW AUTOMATIC FILE FORMAT CONVERSIONS
+CALL FTMODE(STAT,SUBNAME,MAT PARAMS,MAT VARS,MAT CLIENV)
+IF STAT EQ '' THEN STAT='Successful transfer.'
+PRINT
+PRINT 'Transfer status: ':STAT
+IF ICNT THEN PRINT 'Transferred ':ICNT:' items, ':BCNT:' bytes.'
+STOP
+*
+**************************************************************************
+*
+* SUBROUTINE TO CHECK FOR STACKED INPUT
+*
+**************************************************************************
+*
+2222 *
+CHKSTKINP=0;*#GENERIC#*
+*#DEFAULT#*CHKSTKINP=SYSTEM(10)
+*#ULT#*CHKSTKINP=SYSTEM(29)
+*#ULTX#*CHKSTKINP=0
+*#UV#*CHKSTKINP=SYSTEM(10)
+RETURN
+*
+**************************************************************************
+*
+* SUBROUTINE TO CHECK FOR EXIT STRING (CHECKS VARIABLE 'ANS')
+*
+**************************************************************************
+*
+2233 *
+XITSTRS=CLI.CONFIG<1,62>
+NBRXITSTRS=DCOUNT(XITSTRS,' ')
+FOR XITSTRIDX=1 TO NBRXITSTRS
+ XITSTR=TRIM(FIELD(XITSTRS,' ',XITSTRIDX))
+ IF XITSTR<>'' THEN
+  IF ANS=XITSTR THEN STOP
+ END
+NEXT XITSTRIDX
+RETURN
+*
+END

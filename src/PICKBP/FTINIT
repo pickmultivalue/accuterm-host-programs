@@ -1,0 +1,81 @@
+SUBROUTINE FTINIT(MAT CONFIG,FV)
+**************************************************************************
+*Copyright (c) 1993-2007 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTINIT
+* AUTHOR: PJS
+* VERSION: 5.4.1
+* CREATED: 01/01/1993
+* UPDATED: 04/18/2007
+*
+* MAINTENANCE RECORD:
+*
+* 5.4.1
+*  PJS 04/18/2007
+*   Added support for custom settings in hex.
+*   
+* 5.3.1
+*  PJS 05/08/2006
+*   Updated for 5.3a release. This routine has been superceded by
+*   the new FTINITEX subroutine.
+*
+* 4.1.1
+*  PJS 06/02/2001
+*   Change file where configuration settings are stored from
+*   FTBP to ACCUTERMCTRL
+*
+* 4.0.2
+*  PJS 11/03/2000
+*   Allow more than 30 attributes in KMTCFG and FTPARAMS items
+*   (the CONFIG() array is still dimensioned at 30 elements)
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* READ FILE TRANSFER CONFIGURATION
+*
+**************************************************************************
+**************************************************************************
+*
+* FTINIT() SUBROUTINE INTERFACE
+*
+* INPUT:  NONE
+*         SUBNAME = NAME OF I/O SUBROUTINE
+*
+* OUTPUT: CONFIG  = CURRENT FILE TRANSFER PARAMS READ FROM CONFIG FILE
+*         FV      = FILE VARIABLE (ACCUTERMCTRL)
+*
+********************************************************************
+*
+DIM CONFIG(30)
+*
+OPEN 'ACCUTERMCTRL' TO FV ELSE
+ OPEN 'FTBP' TO FV ELSE STOP 201,'ACCUTERMCTRL'
+END
+READ DEFAULTS FROM FV,'FTPARAMS' ELSE STOP 202,'FTPARAMS'
+READ CFG FROM FV,'KMTCFG' ELSE CFG = ''
+FOR I=1 TO 30
+ CONFIG(I)=CFG<I>
+ DEF=FIELD(DEFAULTS<I>,',',2)
+ CD=FIELD(DEFAULTS<I>,',',9)
+ IF DEF MATCHES '1N0N' AND CD EQ '' THEN
+  IF CONFIG(I) MATCHES '1N0N' AND CONFIG(I) >= FIELD(DEFAULTS<I>,',',3) AND CONFIG(I) <= FIELD(DEFAULTS<I>,',',4) THEN
+   CONFIG(I)=CONFIG(I)+0
+  END ELSE
+   CONFIG(I)=DEF+0
+  END
+ END
+NEXT I
+RETURN
+END

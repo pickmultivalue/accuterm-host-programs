@@ -1,0 +1,488 @@
+*
+**************************************************************************
+*Copyright (c) 1997-2020 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTCHK
+* AUTHOR: PJS
+* VERSION: 8.0.2
+* CREATED: 01/01/1997
+* UPDATED: 04/21/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.2
+*  PJS 04/21/2020
+*   If no platform tags and no DEFAULT tag, use GENERIC as the default.
+*   Add (O) option for jBASE CATALOG to skip overwirte confirmation.
+*
+* 8.0.1
+*  PJS 02/11/2020
+*   Added support for MVON# platform (MVON).
+*
+* 7.1.5
+*  PJS 09/05/2019
+*   When checking for valid program signature, allow 'PROGRAM' on line 1.
+*
+* 7.1.4
+*  PJS 06/08/2016
+*   Fix Unidata catalog options. Only catalog shared programs globally.
+*   Demo and setup programs are catalogged locally.
+*
+* 7.1.3
+*  PJS 03/19/2014
+*   Added OASYS platform type.
+*
+* 7.1.2
+*  PJS 11/08/2012
+*   Added support for primary & secondary subtypes so that combinations
+*   like UV_AIX_ECS are supported.
+*
+* 7.1.1
+*  PJS 03/17/2012
+*   Added QM_ECS platform type to support ECS mode on QM.
+*
+* 7.0.1
+*  PJS 06/23/2011
+*   Added NR_AIX to platform list.
+*
+* 5.5.1
+*  PJS 10/08/2009
+*   Updated for AccuTerm 7 release. Changed max string length constant
+*   from 999 to 99999, as some EQU statements in ATGUIEQUATES are now
+*   longer than 999 characters.
+*
+* 5.3.5
+*  PJS 12/20/2007
+*   Added CACHE platform to list of platform types.
+*
+* 5.3.4
+*  PJS 04/10/2007
+*   Added "LOCAL COMPLETE" option to UniVerse CATALOG command so
+*   VOC entry will use absolute path to object file, instead of
+*   relative path (Pick, Reality, IN2 flavors). In Ideal flavor,
+*   LOCAL COMPLETE will work properly, but is different from the
+*   default (NORMAL) catalog mode used in previous versions of
+*   FTCHK. The new catalog mode should allow FTSETUP to copy the
+*   VOC entries from the ACCUTERM account to the target account.
+*
+* 5.3.3
+*  PJS 11/08/2006
+*   Added NO.PAGE=@(0,0) to disable pagination for QM, ON, etc.
+*   Added ON (ONWare MVON) platform to list of platform types.
+*
+* 5.3.2
+*  PJS 07/24/2006
+*   Exclude items with *INCLUDE on line 1 from list of programs
+*   to be compiled after updating platform specific code. Added
+*   OI (OpenInsight CTO) platform.
+*
+* 5.3.1
+*  PJS 03/04/2006
+*  Only add $BASIC.OPTIONS for QM if file name is FTBP (there are
+*  now several sample & demo files that this program compiles, and
+*  we don't necessarily need this option for every file. Besides, we
+*  can update the VOC $BASIC.OPTIONS when LOAD-ACCUTERM-PROGS runs.)
+*  For UniData, catalog WED and GED globally, but keep LOAD-... local.
+*
+* 5.0.6
+*  PJS 03/08/2004
+*   Added NR (Northgate Reality) platform to list of platform types.
+*
+* 5.0.5
+*  PJS 02/03/2004
+*   Added test for both UV and UV_AIX platform when adding @@SELECT
+*   verb to VOC.
+*
+* 5.0.4
+*  PJS 01/12/2004
+*   Added "LOCAL" option for QM catalog command per Martin Phillips.
+*
+* 5.0.3
+*  PJS 10/24/2003
+*   Integrated QM platform specific code per mods from Martin
+*   Phillips.
+*
+* 5.0.2
+*  PJS 10/07/2002
+*   Added new platform type ULTX and ULTX_AIX for ancient Ultimate, and
+*   missing platform types SEQ_AIX and ULT_AIX.
+*
+* 5.0.1
+*  PJS 09/15/2002
+*   Cleanup for 2k2 release. Added "GENERIC" platform type so this program
+*   can prepare generic version of host programs.
+*
+* 4.1.4
+*  PJS 04/05/2002
+*   Added new platform types: ULT_SCO for Ultimate Plus on SCO
+*   and ENH_AIX for Power95.
+*
+* 4.1.3
+*  PJS 09/26/2001
+*   Added support for platform sub-type in custom code section
+*
+* 4.1.2
+*  PJS 09/14/2001
+*   Update config file migration logic. Now leave items in old FTBP
+*   file, in case account has private ACCUTERMCTRL file, then when
+*   FTCHK runs, it copies updated versions of KMTHLP and FTPARAMS
+*   from FTBP to ACCUTERMCTRL, and current configuration KMTCFG only
+*   when its absent from ACCUTERMCTRL (never overwrites this!). Also
+*   allow user to change FTBP file name if necessary.
+*
+* 4.1.1
+*  PJS 06/04/2001
+*   Changed configuration file from FTBP to ACCUTERMCTRL with automatic
+*   migration from FTBP to ACCUTERMCTRL handled by this program. Also,
+*   added check for ViaDuct FT program and option to rename this so it
+*   does not prevent catalogging of AccuTerm FT program.
+*
+* 4.0.6
+*  PJS 05/11/2001
+*   Added new platform typeS: SEQ (Sequoia, mvEnterprise) & VIS (UniVision)
+*
+* 4.0.5
+*  PJS 12/14/2000
+*   Add new platform type MVBASE (nees INPUT ... TIMEOUT in FTVSINF)
+*
+* 4.0.4
+*  PJS 11/24/2000
+*   Add new platform type AP (Advanced Pick) since AP does not
+*   support INPUTCLEAR statement.
+*
+* 4.0.3
+*  PJS 11/03/2000
+*   Use select to search for all customizable programs instead of
+*   explicit internal program list. Add 'DEFAULT' as valid platform
+*   type - if program does not contain specific platform comment,
+*   then use DEFAULT instead. Save platform type in KMTCFG. Prompt
+*   for program file name. Compile and catalog all programs in
+*   specified file if compile option is selected.
+*
+* 4.0.2
+*  PJS 10/18/2000
+*   Added FTVSINF to list of programs that need to be customized
+*   during installation
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+************************************************************************** 
+*
+* CONFIGURE ACCUTERM FILE TRANSFER PROGRAMS FOR DIFFERENT HOST PLATFORMS
+*
+**************************************************************************
+************************************************************************** 
+*
+NO.PAGE=@(0,0);* DISABLE PAGINATION
+EQU AM TO CHAR(254)
+EQU TYPS TO 'ADDS AP CACHE ENH JB MD MVBASE MVON NR OAS OI ON PICK QM R83 SEQ UD ULT ULTX UV VIS AP_AIX AP_PRO CACHE_AIX ENH_AIX JB_AIX NR_AIX ON_AIX PICK_AIX SEQ_AIX UD_AIX ULT_AIX ULT_SCO ULTX_AIX UV_AIX QM_ECS GENERIC '
+*
+OPEN 'MD' TO MD ELSE
+ OPEN 'VOC' TO MD ELSE
+  PRINT 'Unable to open MD or VOC file!'; STOP
+ END
+END
+*
+* OPEN CONFIGURATION FILE AND MIGRATE SETTINGS FROM FTBP TO ACCUTERMCTRL
+OPEN 'ACCUTERMCTRL' TO FV THEN
+ FTBPNAME='FTBP'
+ DONE=0
+ LOOP
+  OPEN FTBPNAME TO OLDFV THEN
+   DONE=1
+  END ELSE
+   PRINT 'Unable to open ':FTBPNAME:' file':
+   IF FTBPNAME='FTBP' THEN PRINT ', where AccuTerm programs normally exist.' ELSE PRINT '.'
+   PRINT 'Please enter the correct file name:':
+   INPUT ANS
+   IF ANS = '' THEN PRINT 'AccuTerm platform configuration is not complete! Re-run FTCHK!'; STOP
+   FTBPNAME=ANS
+  END
+ UNTIL DONE DO NULL REPEAT
+ * COPY CONFIG FROM OLD FILE (FTBP) TO NEW FILE (ACCUTERMCTRL) WITHOUT OVERWRITING
+ READ X FROM FV,'KMTCFG' ELSE
+  READ X FROM OLDFV,'KMTCFG' THEN
+   WRITE X ON FV,'KMTCFG'
+  END
+ END
+ * COPY PROMPT PARAMETERS (ALWAYS OVERWRITE)
+ READ X FROM OLDFV,'FTPARAMS' THEN
+  WRITE X ON FV,'FTPARAMS'
+ END
+ * COPY HELP TEXT (ALWAYS OVERWRITE)
+ READ X FROM OLDFV,'KMTHLP' THEN
+  WRITE X ON FV,'KMTHLP'
+ END
+*
+END ELSE
+ FTBPNAME='FTBP'
+ DONE=0
+ LOOP
+  OPEN FTBPNAME TO FV THEN
+   DONE=1
+  END ELSE
+   PRINT 'Unable to open ':FTBPNAME:' file':
+   IF FTBPNAME='FTBP' THEN PRINT ', where AccuTerm programs normally exist.' ELSE PRINT '.'
+   PRINT 'Please enter the correct file name:':
+   INPUT ANS
+   IF ANS = '' THEN PRINT 'AccuTerm platform configuration is not complete! Re-run FTCHK!'; STOP
+   FTBPNAME=ANS
+  END
+ UNTIL DONE DO NULL REPEAT
+END
+*
+PROMPT ''
+*
+* GET FILE NAME
+FN=FTBPNAME
+DONE=0
+LOOP
+ PRINT 'Program file to be customized for host platform (':FN:') : ':
+ INPUT ANS
+ ANS=TRIM(ANS)
+ ANSU=OCONV(ANS,'MCU')
+ IF ANSU='X' OR ANSU='END' OR ANSU='EXIT' THEN STOP
+ IF ANS='' THEN ANS=FN
+ OPEN ANS TO FTBP THEN
+  DONE=1
+  FN=ANS
+  PRINT FN
+ END ELSE
+  PRINT 'Unable to open ':ANS
+  PRINT
+ END
+UNTIL DONE DO NULL REPEAT
+*
+* GET SYSTEM TYPE
+READV STYP FROM FV,'KMTCFG',51 ELSE STYP=''
+DONE=0
+LOOP
+ PRINT 'Host platform ':
+ IF STYP <> '' THEN PRINT '(':STYP:') : ': ELSE PRINT ' : ':
+ INPUT ANS
+ ANS=TRIM(OCONV(ANS,'MCU'))
+ IF ANS='X' OR ANS='END' OR ANS='EXIT' THEN STOP
+ IF ANS='' THEN ANS=STYP
+ IF ANS='' OR INDEX(TYPS,ANS:' ',1)=0 THEN
+  PRINT 'Invalid platform. Only ':TYPS:' are valid!'
+  PRINT
+ END ELSE
+  DONE=1
+  STYP=ANS
+  PRINT STYP
+ END
+UNTIL DONE DO NULL REPEAT
+WRITEV STYP ON FV,'KMTCFG',51
+PTYP=FIELD(STYP,'_',1);* remove subtype and save main platform type
+STYP1=FIELD(STYP,'_',2);* extract primary subtype
+STYP2=FIELD(STYP,'_',3);* extract secondary subtype
+*
+* GET COMPILE/CATALOG OPTION
+LOOP
+ PRINT
+ PRINT 'Compile and catalog programs: ':
+ INPUT ANS
+ IF ANS='' THEN ANS='No'
+ PRINT ANS
+ ANS=OCONV(ANS[1,1],'MCU')
+ UNTIL ANS EQ 'Y' OR ANS EQ 'N' DO
+ NULL
+REPEAT
+COPT=(ANS='Y')
+*
+* SEE IF SYSTEM REMOVES TRAILING ATTRIBUTE MARK
+WRITE AM:AM ON FV,'CHKX'
+READ CHK FROM FV,'CHKX' ELSE STOP
+DELETE FV,'CHKX'
+IF CHK NE AM:AM THEN MODE=1 ELSE MODE=0
+WRITEV MODE ON FV,'KMTCFG',20
+*
+* SEE IF 'MCP' CONVERSION DETECTS ALL CONTROL CHARACTERS
+MODE=1
+FOR I=0 TO 31
+ IF OCONV(CHAR(I),'MCP')=CHAR(I) THEN MODE=0
+NEXT I
+FOR I=127 TO 254
+ IF OCONV(CHAR(I),'MCP')=CHAR(I) THEN MODE=0
+NEXT I
+WRITEV MODE ON FV,'KMTCFG',10
+*
+* WRITE SPECIAL @@SELECT VERB TO VOC FOR UV PLATFORM (FOR A/F/B/C CORR)
+IF PTYP EQ 'UV' THEN
+ WRITE 'Verb':AM:'SELECT':AM:'Q':AM:'KSXAP' ON MD,'@@SELECT'
+END
+*
+* CHECK FOR EXISTING VIADUCT FT PROC
+READ CHK FROM MD,'FT' THEN
+ IF CHK<1> = 'PQ' AND CHK<2>[1,8] = '(PCPROGS' THEN
+  PRINT
+  PRINT "A ViaDuct proc named 'FT', which conflicts with AccuTerm's"
+  PRINT "file transfer utility, exists in your MD (or VOC). This"
+  PRINT "proc is not normally required by ViaDuct and can be renamed"
+  PRINT "as 'FT.VIADUCT'."
+  LOOP
+   PRINT
+   PRINT "Do you want to rename 'FT' as 'FT.VIADUCT' ":
+   INPUT ANS
+   ANS=OCONV(ANS[1,1],'MCU')
+   UNTIL ANS='Y' OR ANS='N' DO
+   NULL
+  REPEAT
+  IF ANS='Y' THEN
+   WRITE CHK ON MD,'FT.VIADUCT'
+   DELETE MD,'FT'
+  END ELSE
+   PRINT "The AccuTerm 'FT' utility will not function! If you change"
+   PRINT "change your mind at a later time, just RUN FTBP FTCHK and"
+   PRINT "answer 'Y' to this prompt."
+   PRINT
+  END
+ END
+END
+*
+* CUSTOMIZE SYSTEM DEPENDENT CODE
+PRINT 'Updating platform dependent code...'
+HD='*':'#'
+TL='#':'*'
+LST='';CNT=0
+DONE=0
+SELECT FTBP
+LOOP
+ READNEXT ID ELSE DONE=1
+ UNTIL DONE DO
+ IF ALPHA(ID[1,1]) AND ID[1,8] NE 'TERMDEF.' THEN
+  READ Z FROM FTBP,ID THEN
+   IF TRIM(Z<1>)[1,1] EQ '*' OR TRIM(Z<1>)[1,3] EQ 'SUB' OR TRIM(Z<1>)[1,7] EQ 'PROGRAM' OR TRIM(Z<1>)[1,1] EQ '$' THEN
+    X = TRIM(Z<1>[2,10])
+    IF X <> 'INCLUDE' AND X <> 'EQUATES' THEN
+     * ADD TO LIST OF COMPILABLE ITEMS
+     CNT=CNT+1
+     LST<CNT>=ID
+    END
+    IF INDEX(Z,HD,1) THEN
+     UPD=0
+     BEGIN CASE
+      CASE INDEX(Z,HD:STYP:TL,1)>0
+       XTYP=HD:STYP:TL;* FOUND PLATFORM_SUBTYPE OR PLATFORM_PRIMARYSUBTYPE_SECONDARYSUBTYPE
+      CASE STYP1<>'' AND STYP2='' AND INDEX(Z,HD:PTYP:'_':STYP1,1)>0
+       XTYP=HD:PTYP:'_':STYP1;* FOUND PLATFORM_PRIMARYSUBTYPE
+      CASE STYP1='' AND STYP2<>'' AND INDEX(Z,HD:PTYP:'_':STYP2,1)>0
+       XTYP=HD:PTYP:'_':STYP2;* FOUND PLATFORM_SECONDARYSUBTYPE
+      CASE INDEX(Z,HD:PTYP:TL,1)>0
+       XTYP=HD:PTYP:TL;* FOUND PLATFORM ONLY
+      CASE INDEX(Z,HD:'DEFAULT':TL,1)=0 AND INDEX(Z,HD:'GENERIC':TL,1)>0
+       XTYP=HD:'GENERIC':TL;* PLATFORM NOT FOUND, DEFAULT NOT FOUND, USE GENERIC
+      CASE 1
+       XTYP=HD:'DEFAULT':TL;* PLATFORM NOT FOUND, USE DEFAULT
+     END CASE
+     M=DCOUNT(Z,AM)
+     FOR J=1 TO M
+      FLG=0
+      X=Z<J>
+      K=INDEX(X,';':HD,1)
+      IF K THEN X=X[K+1,99999]:X[1,K-1]; FLG=1
+      K=INDEX(X,XTYP,1)
+      IF K THEN X=X[1,K-1]:X[K+LEN(XTYP),99999]:';':XTYP; FLG=1
+      IF FLG THEN Z<J>=X; UPD=1
+     NEXT J
+     IF UPD THEN WRITE Z ON FTBP,ID
+    END
+   END
+  END
+ END
+REPEAT
+*
+* COMPILE & CATALOG PROGRAMS
+IF COPT THEN
+ BEGIN CASE
+  CASE FN EQ 'FTBP'
+   PREFIX=''
+  CASE FN EQ 'GUIBP'
+   PREFIX='ATGUI;GED;GUISHUTDOWN'
+  CASE FN EQ 'OBJBP'
+   PREFIX='AT'
+  CASE FN EQ 'SUIBP'
+   PREFIX='SUI.'
+  CASE 1
+   PREFIX='?'
+ END CASE
+ BEGIN CASE
+  CASE PTYP EQ 'JB'
+   GCOPTS=' (O)'
+   LCOPTS=' (O)'
+  CASE PTYP EQ 'MVON'
+   GCOPTS=' COMPLETE'
+   LCOPTS=' COMPLETE'
+  CASE PTYP EQ 'OAS'
+   GCOPTS=' FORCE DIRECT'
+   LCOPTS=' FORCE DIRECT'
+   EXECUTE 'BASICTYPE "P"'
+  CASE PTYP EQ 'QM'
+   GCOPTS=' LOCAL NO.QUERY'
+   LCOPTS=' LOCAL NO.QUERY'
+   IF FN = 'FTBP' THEN
+    READ OPT.REC FROM FTBP,'$BASIC.OPTIONS' ELSE
+     OPT.REC='X'
+     OPT.REC<2>='MODE PICK.ERRMSG'
+     WRITE OPT.REC ON FTBP,'$BASIC.OPTIONS'
+    END
+   END
+  CASE PTYP EQ 'UD'
+   GCOPTS=' FORCE'
+   LCOPTS=' FORCE LOCAL'
+   EXECUTE 'BASICTYPE "P"'
+  CASE PTYP EQ 'UV'
+   GCOPTS=' LOCAL COMPLETE'
+   LCOPTS=' LOCAL COMPLETE'
+  CASE 1
+   GCOPTS=''
+   LCOPTS=''
+ END CASE
+ FOR I=1 TO CNT
+  ID=LST<I>
+  IF ID<>'FTCHK' THEN
+   EXECUTE 'BASIC ':FN:' ':ID
+   GOSUB 500
+   IF PTYP EQ 'UD' AND ID = 'FTSETUP' THEN IS.SHARED=0
+   IF IS.SHARED THEN
+    EXECUTE 'CATALOG ':FN:' ':ID:GCOPTS
+   END ELSE
+    EXECUTE 'CATALOG ':FN:' ':ID:LCOPTS
+   END
+  END
+ NEXT I
+END
+*
+STOP
+*
+500 * TEST IF PROGRAM IS SHARED OR NOT
+IS.SHARED=0
+IF PREFIX = '?' THEN RETURN
+XX=OCONV(ID,'MC/N')
+IF PREFIX[LEN(PREFIX),1] = '.' THEN
+ LOOP II=INDEX(XX,'.',1) WHILE II > 0 DO XX=XX[1,II-1]:XX[II+1,9999] REPEAT
+END
+* sanity check to ensure demos dont get catalogged globally
+IF ALPHA(XX) THEN
+ IF PREFIX = '' THEN
+  IS.SHARED=1
+ END ELSE
+  FOR II=1 TO DCOUNT(PREFIX,';')
+   XX=FIELD(PREFIX,';',II)
+   IF ID[1,LEN(XX)] = XX THEN IS.SHARED=1
+  NEXT II
+ END
+END
+RETURN
+*
+END

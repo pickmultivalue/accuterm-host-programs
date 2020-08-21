@@ -1,0 +1,318 @@
+*
+**************************************************************************
+*Copyright (c) 2000-2019 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: LOAD-ACCUTERM-GUIBP
+* AUTHOR: PJS
+* VERSION: 8.0.1
+* CREATED: 09/25/2000
+* UPDATED: 09/10/2019
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.1
+*  PJS 09/10/2019
+*  Updated text
+*
+* 5.3.1
+*  PJS 11/08/2006
+*   Added NO.PAGE=@(0,0) to disable pagination for QM, ON, etc.
+*
+* 5.3.0
+*  PJS 03/01/2006
+*   Changed instruction to reload to "RUN FTBP LOAD-ACCUTERM-GUIBP"
+*   so we don't need to catalog this program.
+*
+* 4.0.4
+*  PJS 03/05/2004
+*   Added new NR (Northgate Reality 9+) platform type, same as
+*   old MD platform.
+*
+* 4.0.3
+*  PJS 10/08/2002
+*   Update message text for AccuTerm 2K2
+*
+* 4.0.2
+*  PJS 11/03/2000
+*   Update installation instructions. Automatically compile & catalog.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* LOAD ACCUTERM GUI PROGRAM & SAMPLE FILES (GUIBP, GUIAPPS)
+*
+**************************************************************************
+**************************************************************************
+*
+* CHECK IF FTCHK HAS BEEN RUN SINCE THIS PROGRAM WAS INSTALLED
+*
+PRINT 'You must RUN FTBP FTCHK and select your host platform';*#GENERIC#*
+PRINT 'before you run this program!';*#GENERIC#*
+STOP;*#GENERIC#*
+*
+NO.PAGE=@(0,0);* DISABLE PAGINATION (QM, ON)
+*
+**************************************************************************
+*
+PRINT
+PRINT 'AccuTerm GUI Host Program Installation'
+PRINT
+PRINT 'AccuTerm 2K2 and above includes a unique GUI development'
+PRINT 'environment for the MultiValue developer. To take advantage'
+PRINT 'of this feature, a library of programs must be installed on'
+PRINT 'your host computer.'
+PRINT
+PRINT 'Zumasys suggests that you use GUIBP as the file name,'
+PRINT 'for the GUI host programs. Create the file with a modulo'
+PRINT 'of 3 (some platforms require that this be a type 1 or'
+PRINT 'DIR file).'
+PRINT
+PRINT 'We also suggest that you create a file called GUIAPPS for'
+PRINT 'the sample GUI applications.'
+PRINT
+PRINT 'The sample applications require three sample data files:'
+PRINT 'CUST.SAMPLE, PROD.SAMPLE and INV.SAMPLE. You should create the'
+PRINT 'sample data files; modulo 1 for both dict and data is adequate.'
+PRINT
+PRINT
+PRINT 'Do you want to load (re-load) the AccuTerm GUI programs and samples':
+INPUT ANS
+ANS=OCONV(ANS[1,1],'MCU')
+IF ANS NE 'Y' THEN GOTO 999
+*
+PRINT
+PGM.FILE='GUIBP'
+PRINT 'Enter host file to load AccuTerm GUI programs into (':PGM.FILE:') ':
+INPUT ANS
+IF ANS NE '' THEN PGM.FILE=ANS
+OPEN PGM.FILE TO PFL ELSE
+ PRINT 'Unable to open ':PGM.FILE:'.'
+ PRINT
+ PRINT 'If you want to install AccuTerm GUI, please create the program'
+ PRINT 'file, then type "RUN FTBP LOAD-ACCUTERM-GUIBP" from TCL.'
+ PRINT
+ GOTO 999
+END
+*
+CALL FTVSINF(PLATFORM,'','',CAPABILITIES,SERVICES,'','','')
+IF PLATFORM < 3 THEN
+ PRINT 'You need AccuTerm 2K2 or above to load these programs.'
+ STOP
+END
+IF INDEX(CAPABILITIES,'U',1) EQ 0 THEN
+ PRINT 'Your workstation does not support file uploading.'
+ STOP
+END
+IF INDEX(SERVICES,'g',1) EQ 0 THEN
+ PRINT 'Your workstation does not support AccuTerm GUI.'
+ STOP
+END
+*
+CALL FTPGMDIR(PATH)
+PRINT
+GUIBP.PATH=PATH:'PickBP\GuiBP'
+PRINT 'Enter directory where the AccuTerm GUI program files are to'
+PRINT 'be loaded from (':GUIBP.PATH:') ':
+INPUT ANS
+IF ANS NE '' THEN GUIBP.PATH=ANS
+*
+PRINT
+PRINT 'Do you want to load the sample programs':
+INPUT ANS
+ANS=OCONV(ANS[1,1],'MCU')
+IF ANS EQ 'Y' THEN
+ LOAD.SAMPLES=1
+*
+ PRINT
+ SAMPLE.FILE='GUIBP'
+ PRINT 'Enter host file to load sample programs into (':SAMPLE.FILE:') ':
+ INPUT ANS
+ IF ANS NE '' THEN SAMPLE.FILE=ANS
+ OPEN SAMPLE.FILE TO SMP ELSE
+  PRINT 'Unable to open ':SAMPLE.FILE
+  GOTO 999
+ END
+*
+ PRINT
+ SAMPLE.PATH=PATH:'Samples\GuiBP'
+ PRINT 'Enter directory where the sample programs are to be'
+ PRINT 'loaded from (':SAMPLE.PATH:') ':
+ INPUT ANS
+ IF ANS NE '' THEN SAMPLE.PATH=ANS
+ *
+ PRINT
+ SAMPAP.FILE='GUIAPPS'
+ PRINT 'Enter host file to load sample GUI application templates into (':SAMPAP.FILE:') ':
+ INPUT ANS
+ IF ANS NE '' THEN SAMPAP.FILE=ANS
+ OPEN SAMPAP.FILE TO SMP ELSE
+  PRINT 'Unable to open ':SAMPAP.FILE
+  GOTO 999
+ END
+ *
+ PRINT
+ SAMPAP.PATH=PATH:'Samples\GuiApps'
+ PRINT 'Enter directory where the sample GUI application templates are to be'
+ PRINT 'loaded from (':SAMPAP.PATH:') ':
+ INPUT ANS
+ IF ANS NE '' THEN SAMPAP.PATH=ANS
+ *
+ PRINT
+ PRINT 'Do you want to load the sample data into CUST.SAMPLE, PROD.SAMPLE'
+ PRINT 'and INV.SAMPLE':
+ INPUT ANS
+ ANS=OCONV(ANS[1,1],'MCU')
+ IF ANS EQ 'Y' THEN
+  LOAD.DATA=1
+  PRINT
+  SAMPDT.PATH=PATH:'Samples\GuiData'
+  PRINT 'Enter directory where the sample GUI data is to be'
+  PRINT 'loaded from (':SAMPDT.PATH:') ':
+  INPUT ANS
+  IF ANS NE '' THEN SAMPDT.PATH=ANS
+ *
+ END ELSE
+  LOAD.DATA=0
+ END
+ *
+END ELSE
+ LOAD.SAMPLES=0
+END
+PRINT
+*
+* LOAD GUIBP USING FT...
+DATA 'O'
+DATA '1=T'
+DATA '3=Y'
+DATA ''
+DATA 'R'
+DATA 'K'
+DATA GUIBP.PATH
+DATA '*.'
+DATA PGM.FILE
+DATA ''
+*#DEFAULT#*EXECUTE 'FT'
+*#MD#*PERFORM 'FT'
+*
+IF LOAD.SAMPLES THEN
+* LOAD GUIBP SAMPLES USING FT...
+ DATA 'O'
+ DATA '1=T'
+ DATA '3=Y'
+ DATA ''
+ DATA 'R'
+ DATA 'K'
+ DATA SAMPLE.PATH
+ DATA '*'
+ DATA SAMPLE.FILE
+ DATA ''
+*#DEFAULT#* EXECUTE 'FT'
+*#MD#* PERFORM 'FT'
+* LOAD GUIAPPS USING FT...
+ DATA 'O'
+ DATA '1=T'
+ DATA '3=Y'
+ DATA ''
+ DATA 'R'
+ DATA 'K'
+ DATA SAMPAP.PATH
+ DATA '*'
+ DATA SAMPAP.FILE
+ DATA ''
+*#DEFAULT#* EXECUTE 'FT'
+*#MD#* PERFORM 'FT'
+ IF LOAD.DATA THEN
+* LOAD DICT CUST.SAMPLE USING FTPICK...
+  DATA 'O'
+  DATA '1=Y'
+  DATA ''
+  DATA 'R'
+  DATA 'I'
+  DATA SAMPDT.PATH:'\DICT_CUSTSAMPLE'
+  DATA 'DICT CUST.SAMPLE'
+*#DEFAULT#*  EXECUTE 'FTPICK'
+*#MD#*  PERFORM 'FTPICK'
+* LOAD CUST.SAMPLE USING FTPICK...
+  DATA 'O'
+  DATA '1=Y'
+  DATA ''
+  DATA 'R'
+  DATA 'I'
+  DATA SAMPDT.PATH:'\CUSTSAMPLE'
+  DATA 'CUST.SAMPLE'
+*#DEFAULT#*  EXECUTE 'FTPICK'
+*#MD#*  PERFORM 'FTPICK'
+* LOAD DICT PROD.SAMPLE USING FTPICK...
+  DATA 'O'
+  DATA '1=Y'
+  DATA ''
+  DATA 'R'
+  DATA 'I'
+  DATA SAMPDT.PATH:'\DICT_PRODSAMPLE'
+  DATA 'DICT PROD.SAMPLE'
+*#DEFAULT#*  EXECUTE 'FTPICK'
+*#MD#*  PERFORM 'FTPICK'
+* LOAD PROD.SAMPLE USING FTPICK...
+  DATA 'O'
+  DATA '1=Y'
+  DATA ''
+  DATA 'R'
+  DATA 'I'
+  DATA SAMPDT.PATH:'\PRODSAMPLE'
+  DATA 'PROD.SAMPLE'
+*#DEFAULT#*  EXECUTE 'FTPICK'
+*#MD#*  PERFORM 'FTPICK'
+* LOAD DICT INV.SAMPLE USING FTPICK...
+  DATA 'O'
+  DATA '1=Y'
+  DATA ''
+  DATA 'R'
+  DATA 'I'
+  DATA SAMPDT.PATH:'\DICT_INVSAMPLE'
+  DATA 'DICT INV.SAMPLE'
+*#DEFAULT#*  EXECUTE 'FTPICK'
+*#MD#*  PERFORM 'FTPICK'
+* LOAD INV.SAMPLE USING FTPICK...
+  DATA 'O'
+  DATA '1=Y'
+  DATA ''
+  DATA 'R'
+  DATA 'I'
+  DATA SAMPDT.PATH:'\INVSAMPLE'
+  DATA 'INV.SAMPLE'
+*#DEFAULT#*  EXECUTE 'FTPICK'
+*#MD#*  PERFORM 'FTPICK'
+ END
+END
+* CUSTOMIZE PROGRAMS FOR PLATFORM, COMPILE & CATALOG
+DATA PGM.FILE
+DATA ''
+DATA 'Y'
+*#DEFAULT#*EXECUTE 'RUN FTBP FTCHK'
+*#MD#*PERFORM 'RUN FTBP FTCHK'
+* DONE
+PRINT 'AccuTerm GUI host programs loaded'
+PRINT
+STOP
+999 *
+PRINT
+PRINT 'You can load (reload) the AccuTerm GUI programs and samples'
+PRINT 'by typing "RUN FTBP LOAD-ACCUTERM-GUIBP" from TCL.'
+PRINT
+PROMPT ''
+PRINT 'Press <Enter> to continue':
+INPUT ANS
+STOP
+*
+END

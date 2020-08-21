@@ -1,0 +1,546 @@
+SUBROUTINE SUI.INPUT.TEXT(Left, Top, Width, Height, Opts, MaxLen, Value, BegPos, CurPos, RtnCom, MAT TermDef)
+**************************************************************************
+*Copyright (c) 2004 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: SUI.INPUT.TEXT
+* AUTHOR: PJS
+* VERSION: 1.0.0
+* CREATED: 06/01/2004
+* UPDATED: 
+*
+* MAINTENANCE RECORD:
+*
+*************************************************************************
+*************************************************************************
+*
+* SMART USER INTERFACE: Text Input
+*
+*************************************************************************
+*************************************************************************
+*
+*   Input Interface:
+*
+*    Left, Top: upper-left corner of text field (relative to current window)
+*
+*    Width, Height: size of text field
+*
+*    Opts:    options
+*              R = read-only
+*              S = select the field initially (overrides the SUICFG.SELECT.TEXT
+*                  configuration setting.
+*              N = do not select the field initially (overrides the
+*                  SUICFG.SELECT.TEXT configuration setting.
+*              P = password entry - echo asterisks.
+*
+*    MaxLen:  if non-zero, this is the maximum number of characters that
+*             can be entered for the field. If Width = 1, it implies that
+*             MaxLen = 1.
+*
+*    Value:   current value of text field (multiline may include line breaks)
+*
+*    BegPos:  character position displayed in upper-left corner of field.
+*             Set to 0 or 1 to display beginning of text, or -1 to display
+*             end of text. Otherwise text may be scrolled so that the
+*             specified character position is displayed in the upper-left
+*             corner. This argument is updated when this routine returns.
+*
+*    CurPos:  character position where the cursor should be positioned.
+*             This argument is updated when this routine returns.
+*
+*    TermDef: terminal definitions as set up by SUI.GET.TERM
+*
+*
+*   Output Interface:
+*
+*    Value:   new value of text field
+*
+*    BegPos:  character position currently displayed in upper-left corner
+*             of field.
+*
+*    CurPos:  character position of cursor.
+*
+*    RtnCom:  command code that caused this routine to return. This
+*             is normally TERM.ENTER$, TERM.TAB$, TERM.STAB$,
+*             TERM.UP$, TERM.DOWN$, TERM.PGUP$, TERM.PGDN,
+*             TERM.F1$ ... TERM.SF12$. TERM.SENTER$ is internally
+*             translated and returned as TERM.ENTER$.
+*
+*************************************************************************
+*
+$INCLUDE SUI.TERMDEF
+$INCLUDE SUI.WINDEF
+$INCLUDE SUI.CONFIG
+*
+EQU BEL TO CHAR(7), ESC TO CHAR(27), STX TO CHAR(2), CR TO CHAR(13)
+*
+IF Width < 1 OR Height < 1 THEN
+ RtnCom = SUI.ERROR.INVSIZE$
+ RETURN
+END
+*
+* Check for multi-line text input
+IF Height > 1 THEN
+ CALL SUI.INPUT.MLTEXT(Left, Top, Width, Height, Opts, MaxLen, Value, BegPos, CurPos, RtnCom, MAT TermDef)
+ RETURN
+END
+*
+* Adjust screen positions based on current window
+TextWd = Width
+TextHt = Height
+BegCol = Left ;* Screen beginning column
+CurRow = Top ;* Screen row
+WinInf = TERM.WINDOW<1,2>
+IF WinInf EQ '' THEN
+ WinWd = TERM.WIDTH
+ WinHt = TERM.HEIGHT
+END ELSE
+ BegCol = BegCol + WinInf<1,1,SUI.WINLEFT$> + WinInf<1,1,SUI.CLILEFT$>
+ CurRow = CurRow + WinInf<1,1,SUI.WINTOP$> + WinInf<1,1,SUI.CLITOP$>
+ WinWd = WinInf<1,1,SUI.CLIWIDTH$>
+ WinHt = WinInf<1,1,SUI.CLIHEIGHT$>
+END
+IF Left < 0 THEN
+ RtnCom = SUI.ERROR.INVPOS$
+ RETURN
+END
+IF Left + TextWd > WinWd THEN
+ TextWd = WinWd - Left
+ IF TextWd <= 0 OR (TextWd < 1 AND Width > 1) THEN
+  RtnCom = SUI.ERROR.INVSIZE$
+  RETURN
+ END 
+END
+IF Top < 0 THEN
+ RtnCom = SUI.ERROR.INVPOS$
+ RETURN
+END
+IF Top + TextHt > WinHt THEN
+ TextHt = WinHt - Top
+ IF TextHt <= 0 THEN
+  RtnCom = SUI.ERROR.INVSIZE$
+  RETURN
+ END
+END
+EndCol = BegCol + TextWd - 1  ;* Ending screen column
+*
+* Decode options
+CurLen = LEN(Value)
+OptSelect = (INDEX(Opts,'S',1) OR (SUICFG.SELECT.TEXT AND (INDEX(Opts,'N',1) = 0))) AND (BegPos <= 0) AND (CurLen > 0)
+OptPasswd = INDEX(Opts,'P',1)
+OptReadOnly = INDEX(Opts,'R',1)
+Insert = SUICFG.INSERT.TEXT ;* 0 = overtype, 1 = insert
+Active = 1 + (OptSelect * 2) ;* 0 = inactive, 1 = active, 2 = disabled, 3 = selected
+IF MaxLen <= 0 THEN MaxText = 999999 ELSE MaxText = MaxLen
+IF TextWd = 1 THEN MaxText = 1; Insert = 0 ;* Special case when field width is 1
+*
+* Proceed with single-line text
+*
+* Set up echo, prompt & cursor
+PROMPT ''
+IF TERM.ECHO THEN ECHO OFF; TERM.ECHO = 0
+IF NOT(TERM.CURSOR) THEN PRINT TERM.CSRON:; TERM.CURSOR = 1
+IF Insert THEN
+ IF SUICFG.OVER.BLOCK THEN PRINT TERM.CSRLINE: ELSE PRINT TERM.CSRBLK:
+END ELSE
+ IF SUICFG.OVER.BLOCK THEN PRINT TERM.CSRBLK: ELSE PRINT TERM.CSRLINE:
+END
+IF TERM.SPECIAL NE '' THEN
+ PRINT ESC:STX:'1': ;* AccuTerm mouse on
+END
+*
+* If a mouse address was passed into this routine, and it falls in the
+* area of the text field, position the cursor to that spot
+IF Active < 2 AND BegPos > 0 THEN
+ IF TERM.MOUSEADDR NE '' THEN
+  IF FIELD(TERM.MOUSEADDR,'.',2) = CurRow THEN
+   MouseCol = FIELD(TERM.MOUSEADDR,'.',1)
+   IF MouseCol >= BegCol AND MouseCol <= EndCol THEN
+    CurPos = MouseCol - BegCol + BegPos
+   END
+  END
+ END
+END
+*
+* Sort out initial display position
+*  BegPos is the character position in Value of the first displayed character (at BegCol)
+*  CurPos is the current (cursor) character position in Value: range is 1 to LEN(Value) + 1
+*  CurCol is the current cursor screen column: range is BegCol to EndCol
+MaxBegPos = CurLen - TextWd + 2 ;* Leave one extra space at end of entry area so we can append
+IF MaxBegPos < 1 THEN MaxBegPos = 1
+BEGIN CASE
+ CASE TextWd = 1
+  * Special case - single character input
+  Value = Value[1,1]
+  CurLen = LEN(Value)
+  MaxBegPos = 1
+  BegPos = 1
+  CurPos = 1
+ CASE BegPos = 0
+  * Display first character of value with cursor at the beginning
+  BegPos = 1
+  IF TextWd > CurLen + 1 THEN X = CurLen + 1 ELSE X = TextWd
+  IF CurPos < 1 OR CurPos > X THEN CurPos = 1
+ CASE BegPos < 0
+  * Display last character of value with cursor at the end
+  BegPos = MaxBegPos
+  IF CurPos < MaxBegPos OR CurPos > CurLen + 1 THEN CurPos = CurLen + 1
+ CASE 1
+  * Display specified position in value with specified cursor location
+  IF BegPos > MaxBegPos THEN BegPos = MaxBegPos
+  IF CurPos < BegPos THEN
+   CurPos = BegPos
+  END ELSE
+   IF CurPos > CurLen + 1 THEN
+    CurPos = CurLen + 1
+   END
+  END  
+END CASE
+*
+* Display current value
+AttrLast = -1 ;* Initialize attribute for first call to DSPVALUE
+DspPos = BegPos
+GOSUB DSPVALUE
+*
+* Input Loop
+RtnCom = 0
+LOOP
+ LOOP
+  CALL SUI.INPUT.CHAR(Chr, RtnCom, MAT TermDef)
+ UNTIL RtnCom DO
+  * Printable character entered
+  IF NOT(OptReadOnly) THEN
+   IF Active = 3 THEN
+    * Replace selection (the whole value)
+    GOSUB CLRVALUE
+    Value = Chr
+    CurLen = 1
+    IF OptPasswd THEN
+     PRINT '*':
+    END ELSE
+     PRINT Chr:
+    END
+    IF TextWd = 1 THEN
+     PRINT @(CurCol,CurRow):
+    END ELSE
+     CurPos = CurPos + 1
+     CurCol = CurCol + 1
+    END
+   END ELSE
+    IF Insert THEN
+     * Insert character before CurPos
+     IF CurLen >= MaxText THEN PRINT BEL: ELSE
+      Value = Value[1,CurPos-1]:Chr:Value[CurPos,999999]
+      CurLen = CurLen + 1
+      IF CurPos = CurLen THEN      
+       * Insert after last character
+       IF OptPasswd THEN
+        PRINT '*':
+       END ELSE
+        PRINT Chr:
+       END
+       GOSUB RIGHTARROW ;* Advance cursor
+      END ELSE
+       * Insert before first character or in middle of value
+       IF OptPasswd THEN
+        PRINT STR('*',CurLen)[CurPos,EndCol-CurCol+1]:
+       END ELSE
+        PRINT Value[CurPos,EndCol-CurCol+1]:
+       END
+       GOSUB RIGHTARROW ;* Advance cursor
+      END
+     END
+    END ELSE
+     * Replace current character (CurPos)
+     IF CurPos > CurLen AND CurLen >= MaxText THEN PRINT BEL: ELSE
+      Value = Value[1,CurPos-1]:Chr:Value[CurPos+1,999999]
+      IF CurPos > CurLen THEN CurLen = CurLen + 1
+      PRINT Chr:
+      GOSUB RIGHTARROW ;* Advance cursor
+     END
+    END
+   END
+  END
+ REPEAT
+ BEGIN CASE
+  CASE RtnCom >= TERM.LEFTBUTTON$ AND RtnCom <= TERM.MIDBUTTON$; GOSUB GETADDR
+  CASE RtnCom >= TERM.DBLLEFTBUTTON$ AND RtnCom <= TERM.DBLMIDBUTTON$; GOSUB DBLCLICK
+  CASE RtnCom = TERM.LEFT$; GOSUB LEFTARROW
+  CASE RtnCom = TERM.RIGHT$; GOSUB RIGHTARROW
+  CASE RtnCom = TERM.BKSP$; GOSUB BACKSPACE
+  CASE RtnCom = TERM.INS$; GOSUB INSKEY
+  CASE RtnCom = TERM.DEL$; GOSUB DELKEY
+  CASE RtnCom = TERM.HOME$; GOSUB HOMEKEY
+  CASE RtnCom = TERM.END$; GOSUB ENDKEY
+  CASE RtnCom = TERM.SENTER$; RtnCom = TERM.ENTER$ ;* Shift+Enter -> Enter
+ END CASE
+UNTIL RtnCom DO
+REPEAT
+Active = 0
+DspPos = BegPos
+GOSUB DSPVALUE
+IF TERM.ATTRTYPE NE 1 THEN PRINT TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL):
+IF TERM.SPECIAL NE '' THEN
+ PRINT ESC:STX:'0': ;* AccuTerm mouse off
+END
+PRINT TERM.CSROFF:; TERM.CURSOR = 0
+ECHO ON; TERM.ECHO = 1
+RETURN
+!
+BACKSPACE: * Move left & delete character
+*
+IF OptReadOnly THEN
+ GOSUB LEFTARROW
+END ELSE
+ IF Active = 3 OR TextWd = 1 THEN
+  GOSUB CLRVALUE ;* Backspace selection = CLEAR
+ END ELSE
+  IF CurPos > 1 THEN
+   CurPos = CurPos - 1
+   Value = Value[1,CurPos-1]:Value[CurPos+1,999999]
+   CurLen = CurLen - 1
+   IF CurPos <= BegPos THEN
+    * If we just backspaced the last displayed character, and more characters are scrolled out of view, scroll to the end
+    BegPos = CurPos - 1
+    IF BegPos < 1 THEN BegPos = 1
+    DspPos = BegPos
+    GOSUB DSPVALUE
+   END ELSE
+    DspPos = CurPos
+    GOSUB DSPVALUE
+   END
+  END
+ END
+END
+RtnCom = 0
+RETURN
+!
+LEFTARROW: *
+*
+Force = (Active = 3)
+IF CurPos > 1 THEN
+ CurPos = CurPos - 1
+ CurCol = CurPos - BegPos + BegCol
+ IF CurCol < BegCol THEN
+  BegPos = BegPos - 1
+  CurCol = BegCol
+  Force = 1
+ END ELSE
+  PRINT @(CurCol,CurRow):
+ END
+END
+IF Force THEN
+ Active = 1
+ DspPos = BegPos
+ GOSUB DSPVALUE
+END
+RtnCom = 0
+RETURN
+!
+RIGHTARROW: *
+*
+Force = (Active = 3)
+IF CurPos <= CurLen THEN
+ IF TextWd > 1 THEN
+  CurPos = CurPos + 1
+  CurCol = CurPos - BegPos + BegCol
+  IF CurCol > EndCol THEN
+   BegPos = BegPos + 1
+   CurCol = EndCol
+   Force = 1
+  END ELSE PRINT @(CurCol,CurRow):
+ END ELSE PRINT @(CurCol,CurRow):
+END
+IF Force THEN
+ Active = 1
+ DspPos = BegPos
+ GOSUB DSPVALUE
+END
+RtnCom = 0
+RETURN
+!
+DELKEY: *
+*
+IF NOT(OptReadOnly) THEN
+ IF Active = 3 THEN
+  GOSUB CLRVALUE ;* Delete selection = CLEAR
+ END ELSE
+  IF CurPos <= CurLen THEN
+   Value = Value[1,CurPos-1]:Value[CurPos+1,999999]
+   CurLen = CurLen - 1
+   IF CurPos <= BegPos THEN
+    * If we just deleted the last displayed character, and more characters are scrolled out of view, scroll to the end
+    BegPos = CurPos - 1
+    IF BegPos < 1 THEN BegPos = 1
+    DspPos = BegPos
+    GOSUB DSPVALUE
+   END ELSE
+    DspPos = CurPos
+    GOSUB DSPVALUE
+   END
+  END
+ END
+END
+RtnCom = 0
+RETURN
+!
+INSKEY: * TOGGLE INSERT / OVERTYPE MODE
+*
+IF TextWd > 1 THEN
+ Insert = NOT(Insert)
+ IF Insert THEN
+  IF SUICFG.OVER.BLOCK THEN PRINT TERM.CSRLINE: ELSE PRINT TERM.CSRBLK:
+ END ELSE
+  IF SUICFG.OVER.BLOCK THEN PRINT TERM.CSRBLK: ELSE PRINT TERM.CSRLINE:
+ END
+END
+RtnCom = 0
+RETURN
+!
+HOMEKEY: *
+*
+Force = (Active = 3)
+IF BegPos > 1 THEN
+ BegPos = 1
+ Force = 1
+END
+IF CurPos > 1 THEN
+ CurPos = 1
+ Force = 1
+END
+CurCol = BegCol
+IF Force THEN
+ Active = 1
+ DspPos = BegPos
+ GOSUB DSPVALUE
+END
+RtnCom = 0
+RETURN
+!
+ENDKEY: *
+*
+Force = (Active = 3)
+MaxBegPos = CurLen - TextWd + 2 ;* EXTRA SPACE AT END OF ENTRY AREA IN CASE APPENDING
+IF MaxBegPos < 1 THEN MaxBegPos = 1
+IF BegPos <> MaxBegPos THEN
+ BegPos = MaxBegPos
+ Force = 1
+END
+IF CurPos <> CurLen + 1 THEN
+ CurPos = CurLen + 1
+ Force = 1
+END
+IF Force THEN
+ Active = 1
+ CurCol = CurPos - BegPos + BegCol
+ DspPos = BegPos
+ GOSUB DSPVALUE
+END
+RtnCom = 0
+RETURN
+!
+GETADDR: * CHECK MOUSE ADDRESS
+*
+MouseCol = FIELD(TERM.MOUSEADDR,'.',1)
+MouseRow = FIELD(TERM.MOUSEADDR,'.',2)
+IF MouseRow = CurRow THEN
+ IF MouseCol >= BegCol AND MouseCol <= EndCol THEN
+  CurCol = MouseCol
+  CurPos = CurCol - BegCol + BegPos
+  IF CurPos > CurLen + 1 THEN
+   CurPos = CurLen + 1
+   CurCol = CurPos - BegPos + BegCol
+  END
+  IF Active = 3 THEN
+   Active = 1
+   DspPos = BegPos
+   GOSUB DSPVALUE
+  END ELSE
+   PRINT @(CurCol,CurRow):
+  END
+  TERM.MOUSEADDR = ''
+  RtnCom = 0
+ END
+END
+RETURN
+!
+DBLCLICK: * SELECT THE VALUE
+*
+IF Active = 1 AND CurLen > 0 THEN
+ Active = 3
+ DspPos = BegPos
+ GOSUB DSPVALUE
+END
+RtnCom = 0
+RETURN
+!
+CLRVALUE: * CLEAR CURRENT VALUE
+*
+IF NOT(OptReadOnly) THEN
+ IF Active = 3 OR CurLen > 0 THEN
+  Active = 1
+  Value = ''
+  CurLen = 0
+  BegPos = 1
+  CurPos = 1
+  DspPos = 1
+  GOSUB DSPVALUE
+ END
+END
+RETURN
+!
+DSPVALUE: * Display current value in proper visual attribute
+*
+* First character to display = DspPos
+* Position cursor at CurPos before return
+*
+IF Active = 0 THEN Attr = SUICFG.TEXT.INACTIVE ELSE
+ IF Active = 3 THEN Attr = SUICFG.TEXT.SELECTED ELSE Attr = SUICFG.TEXT.ACTIVE
+END
+Dsp = ''
+IF AttrLast < 0 AND SUICFG.TEXT.BORDER AND INDEX(TERM.SPECIAL,'B',1) THEN
+ * Draw text border using AccuTerm Visual Styles
+ Dsp = Dsp:ESC:STX:'r':BegCol:',':CurRow:',':EndCol:',':CurRow:',N,':'NIRB'[SUICFG.TEXT.BORDER+1,1]:CR
+END
+IF Attr = AttrLast THEN
+ DspCol = DspPos - BegPos + BegCol
+ Dsp = Dsp:@(DspCol,CurRow)
+END ELSE
+ DspPos = BegPos
+ DspCol = BegCol
+ IF TERM.ATTRTYPE = 1 THEN
+  IF EndCol >= TERM.WIDTH - 1 THEN
+   IF CurRow < TERM.HEIGHT - 1 THEN Dsp = Dsp:@(0,CurRow+1):TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+  END ELSE
+   Dsp = Dsp:@(EndCol+1,CurRow):TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+  END
+  IF BegCol = 0 THEN
+   IF CurRow > 0 THEN Dsp = Dsp:@(TERM.WIDTH-1,CurRow-1):TermDef(TERM.ATT$+Attr)
+  END ELSE
+   Dsp = Dsp:@(BegCol-1,CurRow):TermDef(TERM.ATT$+Attr)
+  END
+  Dsp = Dsp:@(BegCol,CurRow)
+ END ELSE
+  Dsp = Dsp:@(BegCol,CurRow):TermDef(TERM.ATT$+Attr)
+ END
+END
+dlen = TextWd - DspPos + BegPos ;* Total display width from DspPos to end of display area
+vlen = CurLen - DspPos + 1
+IF vlen > dlen THEN vlen = dlen ;* Length of Value to display
+slen = dlen - vlen ;* Length of padding to display
+IF OptPasswd THEN
+ Dsp = Dsp:STR('*',vlen)
+END ELSE
+ Dsp = Dsp:Value[DspPos,vlen]
+END
+Dsp = Dsp:SPACE(slen)
+CurCol = CurPos - BegPos + BegCol
+Dsp = Dsp:@(CurCol,CurRow)
+PRINT Dsp:
+AttrLast = Attr
+RETURN
+END

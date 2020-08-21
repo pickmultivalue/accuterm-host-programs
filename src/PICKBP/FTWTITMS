@@ -1,0 +1,301 @@
+SUBROUTINE FTWTITMS(BUF,CNT,MAX,EOF,CAN,ERR,MAT PARAMS,MAT VARS)
+**************************************************************************
+*Copyright (c) 1993-2020 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTWTITMS
+* AUTHOR: PJS
+* VERSION: 8.0.1
+* CREATED: 01/01/1993
+* UPDATED: 02/11/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.1
+*  PJS 02/11/2020
+*   Added support for MVON# platform (MVON).
+*
+* 7.1.2
+*  PJS 03/19/2014
+*   Added support for OASYS platform.
+*
+* 7.1.1
+*  PJS 11/08/2012
+*   Added ON ERROR clause to WRITE statement for platforms which support it.
+*   NOTE: the only indication that an error ocurred is that the item count
+*   will be less than the number expected!
+*
+* 7.0.1
+*  PJS 04/26/2010
+*   Added 'MARK.MAPPING OFF' for QM platform when using binary mode
+*   to disable LF <-> AM mapping for DIRECTORY type files.
+*
+* 5.3.2
+*  PJS 04/10/2007
+*   Updated code for removing file extension, so that only last dot-
+*   delimited field is removed, in case base file name includes dots.
+*
+* 5.3.1
+*  PJS 07/24/2006
+*   Changed size of VARS() array from 25 to 26, defining VARS(26)
+*   as MD. Define previously unused VARS(24) as DFILE, the file
+*   variable for the dictionary.
+*
+* 5.0.2
+*  PJS 09/29/2004
+*   Changed max string length from 9999999 to 999999999
+*
+* 5.0.1
+*  PJS 09/10/2002
+*   Added column name list (CLST) to VARS() array as VARS(15).
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*   IMPROVED EARLY TERMINATION (CANCEL) LOGIC & ERROR MESSAGES
+*
+**************************************************************************
+**************************************************************************
+*
+* WRITE ITEMS
+*
+**************************************************************************
+**************************************************************************
+*
+* FTWTITMS() SUBROUTINE INTERFACE
+*
+* INPUT:
+*         BUF   = DATA TO WRITE
+*         CNT   = LEN(BUF)
+*         MAX   = UNUSED
+*         EOF   = 1 IF END OF FILE, 2 IF END OF TRANSACTION
+*         CAN   = 1 IF DISCARD CURRENT ITEM, ELSE 0
+*
+* OUTPUT:
+*         BUF   = UPDATED (WRITTEN DATA REMOVED)
+*         CNT   = LEN(BUF)
+*         CAN   = 1 IF CANNOT UPDATE ITEM, 2 TO CANCEL REST OF TRANSACTION
+*         ERR   = ERROR STATUS (STRING)
+*
+* ACTION:
+*
+* THIS ROUTINE IS CALLED BY THE FILE TRANSFER PROTOCOL TO UPDATE
+* ITEMS WITH RECEIVED DATA.  ON FIRST ENTRY, IDMODE MUST BE SET TO
+* ZERO, IDLST MUST CONTAIN LIST OF IDS TO USE, FILE MUST BE
+* OPENED TO THE DESIRED FILE, AND ISEQ MUST BE ZERO.
+*
+* THIS ROUTINE REMOVES DATA FROM BUF AND APPENDS IT TO ITEM
+* BEING RECEIVED.  IF THIS ROUTINE IS CALLED WITH EOF SET,
+* THERE IS NO MORE DATA TO RECEIVE FOR THE CURRENT ITEM,
+* AND THE ITEM IS WRITTEN TO THE FILE.
+*
+* UPON ENTRY AND EXIT, CNT REFLECTS THE LENGTH OF BUF
+*
+* IF OVR.FLG.PARAM IS NOT SET, THEN IF AN ITEM CURRENTLY EXISTS
+* FOR THE DESIRED ID, THEN CAN WILL BE SET TO ONE, AND NO ITEM
+* WILL BE WRITTEN.
+*
+* IF UNL.FLG.PARAM IS SET TO ONE, SEQUENTIALLY NUMBERED ITEMS OF
+* ABOUT 30000 BYTES ARE WRITTEN TO THE FILE.  THESE ITEMS MAY BE
+* RECONSTRUCTED INTO A SINGLE FILE WHEN TRANSMITTING.
+*
+* IF TXT.FLG.PARAM IS SET, THEN IF THE RECEIVED ITEM ENDS WITH AN
+* AM, THE TRAILING AM IS REMOVED BEFORE THE ITEM IS WRITTEN.
+*
+**************************************************************************
+*
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30),VARS(26)
+EQU TXT.FLG.PARAM TO PARAMS(13)
+EQU EXT.FLG.PARAM TO PARAMS(14)
+EQU OVR.FLG.PARAM TO PARAMS(15)
+EQU UNL.FLG.PARAM TO PARAMS(17)
+EQU EXTRA.AM.PARAM TO PARAMS(20)
+EQU ICNT TO VARS(1)
+EQU BCNT TO VARS(2)
+EQU IDMODE TO VARS(3)
+EQU ALST TO VARS(4)
+EQU HDR TO VARS(5)
+EQU EXP TO VARS(6)
+EQU GEN TO VARS(7)
+EQU PFX TO VARS(8)
+EQU SID TO VARS(9)
+EQU SKP TO VARS(10)
+EQU FILE TO VARS(11)
+EQU FNAME TO VARS(12)
+EQU ID TO VARS(13)
+EQU IDLST TO VARS(14)
+EQU CLST TO VARS(15)
+EQU IDS TO VARS(16)
+EQU ISIZ TO VARS(17)
+EQU ISEQ TO VARS(18)
+EQU ITEM TO VARS(19)
+EQU XSIZ TO VARS(20)
+EQU PATH TO VARS(21)
+EQU FN TO VARS(22)
+EQU FNLST TO VARS(23)
+EQU DFILE TO VARS(24)
+EQU FNS TO VARS(25)
+EQU MD TO VARS(26)
+*
+**************************************************************************
+*
+* CHECK FOR ITEM-ID...
+*
+**************************************************************************
+*
+IDMODE=IDMODE+0
+IF IDMODE EQ 0 THEN
+ IF EOF > 1 THEN RETURN
+ IF IDLST EQ '' THEN
+  ID=FN
+  IF EXT.FLG.PARAM=0 THEN
+   * REMOVE FILE EXTENSION
+   K=COUNT(FN,'.')
+   IF K>0 THEN
+    K=INDEX(FN,'.',K)
+    IF K>0 THEN
+     ID=FN[1,K-1]
+    END
+   END
+  END
+ END ELSE
+  ID=IDLST<1>
+  IDLST=DELETE(IDLST,1,0,0)
+ END
+*#QM#* IF TXT.FLG.PARAM=0 THEN
+*#QM#*  MARK.MAPPING FILE,OFF
+*#QM#* END
+ IDMODE=1
+END
+IF ID EQ '' THEN
+ CAN=1
+ BUF=''
+ CNT=0
+ ERR='Null ID is illegal!'
+ RETURN
+END
+CAN=0
+ISEQ=ISEQ+0
+*
+**************************************************************************
+*
+* CHECK IF ITEM EXISTS...
+*
+**************************************************************************
+*
+IF NOT(OVR.FLG.PARAM) AND ISEQ EQ 0 AND ITEM EQ '' THEN
+ OK=0
+ READV DUMMY FROM FILE,ID,1 ELSE OK=1
+ IF NOT(OK) THEN
+  IF EOF THEN IDMODE=0
+  CAN=1
+  BUF=''
+  CNT=0
+  ERR='Destination item exists!'
+  RETURN
+ END
+END
+*
+**************************************************************************
+*
+* CHECK IF NEED TO SPLIT ITEMS...
+*
+**************************************************************************
+*
+IF UNL.FLG.PARAM EQ 1 THEN
+ ISIZ=LEN(ITEM)
+ LOOP WHILE ISIZ+CNT>30000 DO
+  K=30000-ISIZ
+  IF K<0 THEN K=0 ELSE IF K>CNT THEN K=CNT
+  L=COUNT(BUF[1,K],AM)
+  IF L THEN K=INDEX(BUF[1,K],AM,L)
+  ITEM=ITEM:BUF[1,K]
+  BUF=BUF[K+1,999999999]
+  CNT=CNT-K
+  GOSUB 100
+  ISIZ=0
+ REPEAT
+END
+*
+**************************************************************************
+*
+* APPEND NEW DATA TO CURRENT ITEM...
+*
+**************************************************************************
+*
+ITEM=ITEM:BUF
+BUF=''
+CNT=0
+*
+**************************************************************************
+*
+* CHECK IF THIS IS LAST RECORD (EOF)...
+*
+**************************************************************************
+*
+IF EOF THEN
+ IF TXT.FLG.PARAM THEN
+  ISIZ=LEN(ITEM)
+  IF ITEM[ISIZ,1] EQ AM THEN
+   ITEM=ITEM[1,ISIZ-1]
+  END
+ END
+ GOSUB 100
+ ISEQ=0
+ IDMODE=0
+END
+RETURN
+*
+**************************************************************************
+*
+100 * UPDATE ITEM
+*
+**************************************************************************
+*
+IF NOT(CAN) THEN
+ IF ISEQ THEN
+  XID=ID:'_':((1000+ISEQ)[2,3])
+ END ELSE
+  XID=ID
+ END
+ ISIZ=LEN(ITEM)
+ IF EXTRA.AM.PARAM THEN
+  IF ITEM[ISIZ,1] EQ AM THEN ITEM=ITEM:AM
+ END
+ IF OVR.FLG.PARAM THEN OK=1 ELSE
+  OK=0
+  READV DUMMY FROM FILE,XID,1 ELSE OK=1
+ END
+ IF OK THEN
+  WRITE ITEM ON FILE,XID;*#GENERIC#*
+*#DEFAULT#*  WRITE ITEM ON FILE,XID
+*#CACHE#*  WRITE ITEM ON FILE,ID ON ERROR OK=0
+*#JB#*  WRITE ITEM ON FILE,XID ON ERROR OK=0
+*#MVON#*  WRITE ITEM ON FILE,XID ON ERROR OK=0 ELSE OK=0
+*#OAS#*  WRITE ITEM ON FILE,XID ON ERROR OK=0
+*#OI#*  WRITE ITEM ON FILE,XID ELSE OK=0
+*#ON#*  WRITE ITEM ON FILE,XID ON ERROR OK=0
+*#PICK#*  WRITE ITEM ON FILE,XID ON ERROR OK=0
+*#QM#*  WRITE ITEM ON FILE,XID ON ERROR OK=0
+*#UD#*  WRITE ITEM ON FILE,XID ON ERROR OK=0
+*#UV#*  WRITE ITEM ON FILE,XID ON ERROR OK=0 ELSE OK=0
+ END
+ IF OK THEN
+  ICNT=ICNT+1
+  BCNT=BCNT+ISIZ
+  IDS<-1>=XID
+  FNS<-1>=FN
+ END
+ ISEQ=ISEQ+1
+END
+ITEM=''
+RETURN
+*
+END

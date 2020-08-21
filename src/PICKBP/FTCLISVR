@@ -1,0 +1,796 @@
+SUBROUTINE FTCLISVR(SVC, MODE, MSGOUT, MSGIN, Xlate, ERRCD, ERRMSG, MAT PARAMS, MAT CLIENV)
+**************************************************************************
+*Copyright (c) 2006-2020 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTCLISVR
+* AUTHOR: PJS
+* VERSION: 8.0.2
+* CREATED: 06/12/2006
+* UPDATED: 08/14/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.2
+*  PJS 08/14/2020
+*   Fixed bug causing endless loop when client does not support packetized
+*   messages or streaming messages.
+*
+* 8.0.1
+*  PJS 02/11/2020
+*   Added support for MVON# platform (MVON). Removed several platform
+*   specific lines by adding a DEFAULT platform for the most common
+*   version of the code.
+*
+* 7.2.2
+*  PJS 03/18/2015
+*   Added UTF-8 hack for non-UTF-8-enabled platforms. Enable hack by
+*   setting attribute 63 of KMTCFG in ACCUTERMCTRL to 1, or at
+*   runtime, set CLI.CONFIG<1,63> to 1 before any UTF-8 data is used.
+*
+* 7.1.2
+*  PJS 03/19/2014
+*   Added support for OASYS platform.
+*
+* 7.1.1
+*  PJS 03/17/2012
+*   Modified the checksum implementation to handle ECS characters (the
+*   SEQ() function may return values in the 0-65535 range). This
+*   requires the maximum number of iterations before reducing the sums
+*   to be 254 instead of 4102, to prevent overflow of a 32 bit sum.
+*   For QM, check for ECS and delimiter swapping and use SWAPMARKS()
+*   in the checksum function because a) normal terminal I/O will perform
+*   the swap on input & output (unless binary mode), and b) the client
+*   checksum is working on un-swapped data. So the result of SWAPMARKS()
+*   in the checksum function is to use the same data as the client when
+*   computing the checksum.
+*
+* 5.4.2
+*  PJS 05/22/2009
+*   Modified ACK protocol to discard possible "noise" characters from
+*   outgoing packet acknowlegement ('OK') so that only the rightmost
+*   two characters of the ack are checked. This is to resolve a problem
+*   where long network latency (or maybe broken INPUTCLEAR on Universe)
+*   allowed random keyboard "noise" characters to be sent prior to the
+*   packet acknowlegement string ('OK'). This basically causes the protocol
+*   to hang waiting for an ack that it already had received but did not
+*   recognize due to the noise.
+*
+* 5.4.1
+*  PJS 01/23/2008
+*   Added support for ATCLIENT (QM) connections (added support for
+*   incoming packet types Q & R). Look for possible case-inversion
+*   errors in the final packet error handling logic.
+*
+* 5.3.4
+*  PJS 12/20/2007
+*   Added support for CACHE platform.
+*
+* 5.3.3
+*  PJS 11/08/2006
+*   Added support for ON (ONWare MVON) platform.
+*
+* 5.3.2
+*  PJS 07/24/2006
+*   Added support for NR (Northgate Reality) and OI (OpenInsight CTO)
+*   platforms.
+*
+* 5.3.1
+*  PJS 06/12/2006
+*   Initial release
+*
+**************************************************************************
+**************************************************************************
+*
+* GET/SEND CLIENT/SERVER MESSAGE FROM ACCUTERM
+*
+**************************************************************************
+**************************************************************************
+*
+* Packet types supported:
+*
+* First or intermediate packet without checksum:
+*  M {packet length} ...packet...
+*
+* First or intermediate packet with checksum:
+*  N {packet length} ...packet... {chksum}
+*
+* Final (or only) packet without message length or checksum:
+*  E {packet length} ...packet...
+*
+* Final (or only) packet with message length without checksum:
+*  F {packet length} ...packet {message length}
+*
+* Final (or only) packet without message length with checksum:
+*  G {packet length} ...packet... {chksum}
+*
+* Final (or only) packet with message length and checksum:
+*  H {packet length} ...packet {message length} {chksum}
+*
+* Message packet without checksum:
+*  Q {message length} ...message...
+*
+* Message packet with checksum:
+*  R {message length+chksum length} ...message... {chksum}
+*
+* Cancel message:
+*  X0000
+*
+* Packet fields:
+*  {packet length} 4 digit packet length - includes chksum field
+*  {message length} 8 digit total message length
+*  {chksum} 5 digit Fletcher's checksum - includes packet type & length fields
+*
+**************************************************************************
+*
+EQU ESC TO CHAR(27), STX TO CHAR(2), CR TO CHAR(13)
+EQU DEFAULT.RETRIES TO 3
+EQU DEFAULT.OUTPKTSZ TO 2000
+*
+DIM PARAMS(30)
+EQU MAX.POS.PARAM TO PARAMS(1)
+EQU MCP.FLG.PARAM TO PARAMS(10)
+*
+DIM CLIENV(10)
+EQU CLI.PLATFORM TO CLIENV(1)
+EQU CLI.PRODUCT TO CLIENV(2)
+EQU CLI.RELEASE TO CLIENV(3)
+EQU CLI.CAPAS TO CLIENV(4)
+EQU CLI.SVCS TO CLIENV(5)
+EQU CLI.SERIAL TO CLIENV(6)
+EQU CLI.LICENSE TO CLIENV(7)
+EQU CLI.USER TO CLIENV(8)
+EQU CLI.VERSION TO CLIENV(9)
+EQU CLI.CONFIG TO CLIENV(10)
+*
+* Get optional output buffer size from host configuration
+SZ = CLI.CONFIG<1,53>
+IF SZ MATCHES '1N0N' AND SZ >= 80 AND SZ <= 9999 THEN
+ OUTPKTSZ = SZ + 0
+END ELSE
+ OUTPKTSZ = DEFAULT.OUTPKTSZ
+END
+*
+* Get optional retry count from host configuration (note: value in
+* host configuration is actually number of tries, not retries!)
+N = CLI.CONFIG<1,54>
+IF N MATCHES '1N0N' AND N >= 1 AND N <= 20 THEN
+ ERROR.RETRIES = N - 1
+END ELSE
+ ERROR.RETRIES = DEFAULT.RETRIES
+END
+*
+* Check for ECS mode & delimiter swapping
+UTFHACK = CLI.CONFIG<1,63> + 0
+ECSFLG = UTFHACK
+SWPFLG = 0
+*#QM_ECS#*ECSFLG = SYSTEM(1044)
+*#QM_ECS#*IF ECSFLG THEN SWPFLG = NOT(PTERM(6,-1))
+*
+* Select client/server protocol based on capabilities of emulator & host config
+* NOTE: ATGUISHUTDOWN calls FTOBJREQ without setting up PARAMS & CLIENV, execpt
+* for the server code in CLI.SVCS to enable a shutdown even if FTINIT has not
+* been (or cannot be) called, hence the test for CLI.CAPAS = '' below.
+IF INDEX(CLI.CAPAS,'P',1) > 0 OR (CLI.CAPAS = '' AND SVC <> '0') THEN
+ PROTOCOL = 1 + (2 * (INDEX(CLI.CAPAS,'R',1) > 0) * NOT(CLI.CONFIG<1,55>));* 1=packetized, 3=streaming (2 is reserved)
+END ELSE
+ PROTOCOL = 0;* 0=basic
+END
+EEDC = (INDEX(CLI.CAPAS,'Q',1) > 0);* emulator has enhanced error detection & correction protocol extensions
+NOFINALACK = EEDC
+USE.MSGLEN = EEDC * NOT(CLI.CONFIG<1,56>)
+USE.CHKSUM = EEDC * NOT(CLI.CONFIG<1,57>)
+CAN.RESEND.LAST.MESSAGE = EEDC * (PROTOCOL = 3)
+XLENC = (Xlate <> 0) + (2 * (INDEX(CLI.CAPAS,'!',1) > 0));* 0=none, 1=AM->CRLF, 2=TAGS, 3=AM->CRLF+TAGS
+IF ECSFLG THEN XLENC = XLENC + 4;* indicate ECS support is enabled (don't escape characters above 128)
+*
+* Sort out command sequences based on service being used
+ACK.SEQ = ESC:STX:'o';* ACK previous packet & send next
+ERR.SEQ = ESC:STX:'e';* error in packet - resend last packet
+RLM.SEQ = ESC:STX:'n';* error in message - resend last message
+IF SVC = '0' THEN
+ * FTSERVER
+ RTN.SEQ = ESC:STX:'s';* return result to PickServer automation client
+ IF PROTOCOL > 0 THEN RTN.SEQ = RTN.SEQ:STX;* use packet or message protocol
+END ELSE
+ * FTOBJREQ
+ IF PROTOCOL < 2 THEN
+  IF PROTOCOL < 1 THEN
+   RTN.SEQ = ESC:STX:'a':SVC; * automation server command - send message as single packet, with ACK/NAK
+  END ELSE
+   RTN.SEQ = ESC:STX:'a':SVC:STX; * automation server command - send message in packets, with ACK/NAK after each one
+  END
+ END ELSE
+  RTN.SEQ = ESC:STX:'b':SVC:STX; * automation server command - send entire message in single packet - no ACK
+ END
+END
+*
+* Send message to emulator, then get reply
+*
+IF MODE = 0 THEN SKIP.SEND = 0 ELSE SKIP.SEND = 1;* bypass initial SEND.MESSAGE (FTSVRSUB)?
+ECHO OFF
+PROMPT ''
+MSGIN = ''
+SEND.ATTEMPT = 1
+LOOP
+ RESEND = 0
+ IF NOT(SKIP.SEND) THEN
+  GOSUB SEND.MESSAGE;* send message to emulator
+  * NOTE: any error detected in SEND.MESSAGE implies no response
+  * will be coming from the emulator, so just give up.
+ END ELSE
+  ERRCD = 0
+ END
+ IF ERRCD = 0 THEN
+  GOSUB GET.MESSAGE;* get message from emulator
+  * NOTE: certain error codes returned by GET.MESSAGE indicate an
+  * error detected by the emulator during the previous SEND.MESSAGE,
+  * so try to resend it.
+  IF ERRCD >= -129 AND ERRCD <= -121 THEN
+   * error codes in this range indicate an error detected while emulator was receiving last message
+   IF CAN.RESEND.LAST.MESSAGE AND NOT(SKIP.SEND) THEN RESEND = 1
+  END
+ END
+WHILE RESEND AND SEND.ATTEMPT <= ERROR.RETRIES DO
+ SEND.ATTEMPT = SEND.ATTEMPT + 1
+REPEAT
+ECHO ON
+RETURN
+*
+*
+SEND.MESSAGE: *
+*
+* Encode message as printable characters
+MSGBUF = MSGOUT
+CALL FTENCODE(MSGBUF,XLENC,MAX.POS.PARAM,MCP.FLG.PARAM)
+ERRCD = 0
+ERRMSG = ''
+BEGIN CASE
+  *
+ CASE PROTOCOL = 0
+  * Basic protocol - send raw message - no ACK, no chksum, no message length.
+  * This protocol is included for compatibility with DOS & Win16 versions of
+  * AccuTerm. All 32 bit versions support the packet protocol.
+  PRINT '':(RTN.SEQ:MSGBUF:CR):
+  *
+ CASE PROTOCOL = 1
+  * Packet protocol - break message into packets & send each packet
+  * with a header, waiting for an ACK after each packet.
+  ECHO OFF
+  PROMPT ''
+  LEAD.SEQ = RTN.SEQ;* send the return command before first packet only
+  IF USE.CHKSUM THEN MAX.PKT = OUTPKTSZ - 10 ELSE MAX.PKT = OUTPKTSZ - 5
+  IF USE.MSGLEN THEN MAX.LAST.PKT = MAX.PKT - 8 ELSE MAX.LAST.PKT = MAX.PKT
+  MSG.LEN = LEN(MSGBUF)
+  MSG.REM = MSG.LEN
+  MSG.UC.LEN = 0
+  LOOP
+   LINE.LEN = MSG.REM
+   IF LINE.LEN > MAX.LAST.PKT THEN
+    IF LINE.LEN > MAX.PKT THEN LINE.LEN = MAX.PKT ELSE LINE.LEN = MAX.LAST.PKT
+    IF USE.CHKSUM THEN
+     PKT.LTR = 'N'
+     PKT.XTRA = 5
+    END ELSE
+     PKT.LTR = 'M'
+     PKT.XTRA = 0
+    END
+   END ELSE
+    IF USE.MSGLEN THEN
+     IF USE.CHKSUM THEN
+      PKT.LTR = 'H'
+      PKT.XTRA = 13
+     END ELSE
+      PKT.LTR = 'F'
+      PKT.XTRA = 8
+     END
+    END ELSE
+     IF USE.CHKSUM THEN
+      PKT.LTR = 'G'
+      PKT.XTRA = 5
+     END ELSE
+      PKT.LTR = 'E'
+      PKT.XTRA = 0
+     END
+    END
+   END
+   PKT = MSGBUF[1,LINE.LEN]
+   GOSUB CALC.PKT.UC.LEN
+   MSG.UC.LEN = MSG.UC.LEN + PKT.UC.LEN
+   IF PKT.LTR = 'H' OR PKT.LTR = 'F' THEN
+    TAIL = ((100000000+(MSG.UC.LEN))[2,8])
+   END ELSE
+    TAIL = ''
+   END
+   PKT.LEN = PKT.UC.LEN + PKT.XTRA
+   PKT = PKT.LTR : ((10000+(PKT.LEN))[2,4]) : PKT : TAIL
+   IF USE.CHKSUM THEN
+    GOSUB CALC.CHKSUM
+    PKT = PKT : ((100000+CHKS)[2,5])
+   END
+   ERRCNT = 0
+   LOOP
+    INPUTCLEAR;*#DEFAULT#*
+*#AP#*    LOOP WHILE SYSTEM(14) DO IN X REPEAT
+*#ENH#*    LOOP WHILE SYSTEM(14) DO INPUT X,0 REPEAT
+*#NR#*    LOOP WHILE SYSTEM(14) DO INPUT X,0 REPEAT
+*#R83#*    LOOP WHILE SYSTEM(14) DO IN X REPEAT
+    PRINT '':(LEAD.SEQ:PKT:CR):
+    INPUT ANS:
+    ANS.AL = OCONV(ANS,'MCA')
+    IF ANS.AL <> '' THEN ANS = ANS[INDEX(ANS,ANS.AL[1,1],1),999];* discard any stray control characters, etc.
+    ANS.UC = OCONV(ANS,'MCU')
+    IF ANS.UC = 'EXIT' OR ANS.UC = 'END' THEN
+     ERRCNT = 99
+     ERRCD = -100;* user abort
+     ERRMSG = 'User abort!'
+    END
+    LEAD.SEQ = '';* only first packet needs this
+    K = LEN(ANS.UC)
+    IF K > 2 THEN ANS.R2 = ANS.UC[K-1,2] ELSE ANS.R2 = ANS.UC ;* discard all but last 2 characters (assume leading characters are noise)
+   UNTIL ANS.R2 = 'OK' OR ERRCNT >= ERROR.RETRIES DO
+    ERRCNT = ERRCNT + 1
+   REPEAT
+   IF ANS.R2 = 'OK' THEN
+    ERRCNT = 0;* this ones good so reset for next packet
+    MSGBUF = MSGBUF[LINE.LEN+1,999999999]
+    MSG.REM = LEN(MSGBUF)
+   END
+  UNTIL MSG.REM = 0 OR ERRCNT > 0 DO REPEAT
+  IF ERRCNT > 0 THEN
+   IF ANS.UC[1,5] = 'ERR: ' THEN
+    ERRCD = FIELD(ANS,' ',2)
+    ERRMSG = ANS[INDEX(ANS,' ',2)+1,999]
+   END ELSE
+    ERRCD = -109;* NAK received from client
+    ERRMSG = 'Client/server protocol error!'
+   END
+  END
+  IF MSG.REM > 0 THEN
+   PRINT '':(RTN.SEQ:'X0000':CR):;* cancel message due to errors!
+   INPUT ANS:
+  END
+ CASE PROTOCOL >= 2
+  * Message protocol - send entire message with header in one packet - no ACK
+  LINE.LEN = LEN(MSGBUF)
+  IF USE.CHKSUM THEN
+   PKT.LTR = 'R'
+   PKT.XTRA = 5
+  END ELSE
+   PKT.LTR = 'Q'
+   PKT.XTRA = 0
+  END
+  PKT = MSGBUF
+  GOSUB CALC.PKT.UC.LEN
+  PKT.LEN = PKT.UC.LEN + PKT.XTRA
+  PKT = PKT.LTR : ((PKT.LEN+100000000)[2,8]) : MSGBUF
+  IF USE.CHKSUM THEN
+   GOSUB CALC.CHKSUM
+   PKT = PKT : ((100000+CHKS)[2,5])
+  END
+  PRINT '':(RTN.SEQ:PKT:CR):
+END CASE
+RETURN
+*
+*
+GET.MESSAGE: *
+*
+GET.ATTEMPT = 1
+LOOP
+ MSGIN = ''
+ MSGBUF = ''
+ MSG.BUFCNT = 0
+ MSG.DONE = 0
+ ERRCNT = 0
+ ERRMSG = ''
+ ERRCD = 0
+ RETRIES = 0
+ MSG.LEN = 0
+ MSG.UC.LEN = 0
+ LOOP
+  * get next packet
+  INPUT LINE:
+  PKT.ERR = 0
+  PKT.TYPE = 0
+  LINE.UC = OCONV(LINE[1,5],'MCU')
+  BEGIN CASE
+   CASE LINE.UC = 'EXIT' OR LINE.UC = 'END'
+    * user abort
+    ERRCD = -100
+    MSGIN = 'EXIT'
+    ERRCNT = 1
+    MSG.DONE = 1
+   CASE LINE.UC = 'ERR: '
+    * protocol error from last SEND.MESSAGE
+    PKT.ERR = FIELD(LINE,' ',2)
+    IF NOT(PKT.ERR MATCHES '1N0N' OR PKT.ERR MATCHES '-1N0N') THEN PKT.ERR = -109
+    ERRMSG = LINE[INDEX(LINE,' ',2)+1,999]
+    IF ERRMSG = '' THEN ERRMSG = 'Client/server protocol error!'
+    ERRCNT = 1
+    MSG.DONE = 1
+   CASE 1
+    * look for properly formatted message packet
+    LINE.LEN = LEN(LINE)
+    FOR PKT.POS = 1 TO LINE.LEN - 4
+     K = INDEX('MNEFGHQR', LINE[PKT.POS,1], 1) ;* check for valid packet type
+     IF K > 0 THEN
+      IF K >= 7 THEN NLEN = 8 ELSE NLEN = 4 ;* what size is the length field?
+      PKT.LEN = LINE[PKT.POS+1,NLEN]
+      IF PKT.LEN MATCHES (NLEN:'N') THEN ;* check if valid packet length
+       IF PKT.LEN <= LINE.LEN - PKT.POS - NLEN THEN ;* to verify packet length we need to add PKT.UTB (later), but this gets us close
+        BEGIN CASE
+         CASE K = 1
+          * found first or middle packet type M
+          PKT = LINE[PKT.POS,LINE.LEN-PKT.POS+1]
+          GOSUB CALC.PKT.UC.LEN
+          IF PKT.LEN = PKT.UC.LEN - 5 THEN
+           MSG.UC.LEN = MSG.UC.LEN + PKT.UC.LEN - 5
+           MSGBUF = MSGBUF : LINE[PKT.POS+5,LINE.LEN-PKT.POS-4]
+           MSG.BUFCNT = MSG.BUFCNT + LINE.LEN - PKT.POS - 4
+           IF MSG.BUFCNT > 5000 THEN
+            * flush buffer to message
+            MSGIN = MSGIN : MSGBUF
+            MSGBUF = ''
+            MSG.BUFCNT = 0
+           END
+           PKT.TYPE = K
+           PKT.POS = LINE.LEN
+          END ELSE
+           PKT.ERR = -103;* packet length mismatch
+          END
+         CASE K = 2
+          * found first or middle packet type N
+          IF LINE.LEN - PKT.POS >= 9 THEN
+           CHKX = LINE[LINE.LEN-4,5]
+           PKT = LINE[PKT.POS,LINE.LEN-PKT.POS-4]
+           GOSUB CALC.CHKSUM
+           IF PKT.LEN = PKT.UC.LEN THEN
+            IF CHKX = CHKS THEN
+             MSG.UC.LEN = MSG.UC.LEN + PKT.UC.LEN - 5
+             MSGBUF = MSGBUF : PKT[6,LINE.LEN-PKT.POS-9]
+             MSG.BUFCNT = MSG.BUFCNT + LINE.LEN - PKT.POS - 9
+             IF MSG.BUFCNT > 5000 THEN
+              * flush buffer to message
+              MSGIN = MSGIN : MSGBUF
+              MSGBUF = ''
+              MSG.BUFCNT = 0
+             END
+             PKT.TYPE = K
+             PKT.POS = LINE.LEN
+            END ELSE
+             PKT.ERR = -104;* checksum mismatch
+            END
+           END ELSE
+            PKT.ERR = -103;* packet length mismatch
+           END
+          END ELSE
+           PKT.ERR = -108;* truncated checksum field
+          END
+         CASE K = 3
+          * found final packet type E
+          PKT = LINE[PKT.POS,LINE.LEN-PKT.POS+1]
+          GOSUB CALC.PKT.UC.LEN
+          IF PKT.LEN = PKT.UC.LEN - 5 THEN
+           MSG.UC.LEN = MSG.UC.LEN + PKT.UC.LEN - 5
+           MSGIN = MSGIN : MSGBUF : LINE[PKT.POS+5,LINE.LEN-PKT.POS-4]
+           MSGBUF = ''
+           MSG.BUFCNT = 0
+           PKT.TYPE = K
+           MSG.DONE = 1
+           PKT.POS = LINE.LEN
+          END ELSE
+           PKT.ERR = -103;* packet length mismatch
+          END
+         CASE K = 4
+          * found final packet type F
+          IF LINE.LEN - PKT.POS >= 12 THEN
+           MSG.LEN = LINE[LINE.LEN-7,8];* get message length for verification
+           IF MSG.LEN MATCHES '8N' THEN
+            PKT = LINE[PKT.POS,LINE.LEN-PKT.POS+1]
+            GOSUB CALC.PKT.UC.LEN
+            IF PKT.LEN = PKT.UC.LEN - 5 THEN
+             MSG.UC.LEN = MSG.UC.LEN + PKT.UC.LEN - 13
+             MSGIN = MSGIN : MSGBUF : LINE[PKT.POS+5,LINE.LEN-PKT.POS-12]
+             MSGBUF = ''
+             MSG.BUFCNT = 0
+             IF MSG.LEN = MSG.UC.LEN THEN
+              PKT.TYPE = K
+              MSG.DONE = 1
+              PKT.POS = LINE.LEN
+             END ELSE
+              PKT.ERR = -107;* message length mismatch
+             END
+            END ELSE
+             PKT.ERR = -105;* invalid message length field
+            END
+           END ELSE
+            PKT.ERR = -103;* packet length mismatch
+           END
+          END ELSE
+           PKT.ERR = -106;* truncated message length field
+          END
+         CASE K = 5
+          * found final packet type G
+          IF LINE.LEN - PKT.POS >= 9 THEN
+           CHKX = LINE[LINE.LEN-4,5]
+           PKT = LINE[PKT.POS,LINE.LEN-PKT.POS-4]
+           GOSUB CALC.CHKSUM
+           IF PKT.LEN = PKT.UC.LEN THEN
+            IF CHKX = CHKS THEN
+             MSG.UC.LEN = MSG.UC.LEN + PKT.UC.LEN - 5
+             MSGIN = MSGIN : MSGBUF : PKT[6,LINE.LEN-PKT.POS-9]
+             MSGBUF = ''
+             MSG.BUFCNT = 0
+             PKT.TYPE = K
+             MSG.DONE = 1
+             PKT.POS = LINE.LEN
+            END ELSE
+             PKT.ERR = -104;* checksum mismatch
+            END
+           END ELSE
+            PKT.ERR = -103;* packet length mismatch
+           END
+          END ELSE
+           PKT.ERR = -108;* truncated checksum field
+          END
+         CASE K = 6
+          * found final packet type H
+          IF LINE.LEN - PKT.POS >= 17 THEN
+           CHKX = LINE[LINE.LEN-4,5]
+           PKT = LINE[PKT.POS,LINE.LEN-PKT.POS-4]
+           GOSUB CALC.CHKSUM
+           IF PKT.LEN = PKT.UC.LEN THEN
+            IF CHKX = CHKS THEN
+             MSG.UC.LEN = MSG.UC.LEN + PKT.UC.LEN - 13
+             MSG.LEN = LINE[LINE.LEN-12,8];* get message length for verification
+             IF MSG.LEN MATCHES '8N' THEN
+              MSGIN = MSGIN : MSGBUF : PKT[6,LINE.LEN-PKT.POS-17]
+              MSGBUF = ''
+              MSG.BUFCNT = 0
+              IF MSG.LEN = MSG.UC.LEN THEN
+               PKT.TYPE = K
+               MSG.DONE = 1
+               PKT.POS = LINE.LEN
+              END ELSE
+               PKT.ERR = -107;* message length mismatch
+              END
+             END ELSE
+              PKT.ERR = -105;* invalid message length field
+             END
+            END ELSE
+             PKT.ERR = -104;* checksum mismatch
+            END
+           END ELSE
+            PKT.ERR = -103;* packet length mismatch
+           END
+          END ELSE
+           PKT.ERR = -106;* truncated message length field
+          END
+         CASE K = 7
+          * single packet message type Q
+          PKT = LINE[PKT.POS,LINE.LEN-PKT.POS+1]
+          GOSUB CALC.PKT.UC.LEN
+          IF PKT.LEN = PKT.UC.LEN THEN
+           MSG.UC.LEN = MSG.UC.LEN + PKT.UC.LEN - 9
+           MSGIN = MSGIN : MSGBUF : PKT[10,LINE.LEN-PKT.POS-8]
+           MSGBUF = ''
+           MSG.BUFCNT = 0
+           PKT.TYPE = K
+           MSG.DONE = 1
+           PKT.POS = LINE.LEN
+          END ELSE
+           PKT.ERR = -103;* packet length mismatch
+          END
+         CASE K = 8
+          * single packet message with checksum type R
+          IF LINE.LEN - PKT.POS >= 14 THEN
+           CHKX = LINE[LINE.LEN-4,5]
+           PKT = LINE[PKT.POS,LINE.LEN-PKT.POS-4]
+           GOSUB CALC.CHKSUM
+           IF PKT.LEN = PKT.UC.LEN THEN
+            IF CHKX = CHKS THEN
+             MSG.UC.LEN = MSG.UC.LEN + PKT.UC.LEN - 9
+             MSGIN = MSGIN : MSGBUF : PKT[10,LINE.LEN-PKT.POS-13]
+             MSGBUF = ''
+             MSG.BUFCNT = 0
+             PKT.TYPE = K
+             MSG.DONE = 1
+             PKT.POS = LINE.LEN
+            END ELSE
+             PKT.ERR = -104;* checksum mismatch
+            END
+           END ELSE
+            PKT.ERR = -103;* packet length mismatch
+           END
+          END ELSE
+           PKT.ERR = -108;* truncated checksum field
+          END
+        END CASE
+       END ELSE
+        IF PKT.ERR = 0 THEN PKT.ERR = -103;* packet length mismatch
+       END
+      END ELSE
+       IF PKT.ERR = 0 THEN PKT.ERR = -102;* invalid packet length field
+      END
+     END ELSE
+      IF PKT.ERR = 0 THEN PKT.ERR = -101;* invalid packet type
+     END
+    NEXT PKT.POS
+    * packet identified, or error
+    IF PKT.TYPE = 0 THEN
+     * corrupt packet!
+     IF PROTOCOL < 2 THEN
+      RETRIES = RETRIES + 1
+      IF RETRIES <= ERROR.RETRIES THEN
+       PRINT ERR.SEQ:;* retransmit corrupt packet
+      END ELSE
+       ERRCNT = ERRCNT + 1;* elevate packet error to message error
+       IF ERRCD = 0 THEN ERRCD = PKT.ERR;* save first packet error
+       PRINT ACK.SEQ:;* ACK the packet anyway, in case not last packet
+       RETRIES = 0
+      END
+     END ELSE
+      ERRCNT = ERRCNT + 1;* bump message error count
+      IF ERRCD = 0 THEN ERRCD = PKT.ERR;* save first packet error
+      RETRIES = 0
+     END
+     * check if we may have missed finding final packet due to error in packet
+     IF RETRIES = 0 THEN
+      * not a retry
+      IF INDEX('EFGHQRefghqr',LINE[1,1],1) THEN
+       * packet header looks like a final packet
+       IF LINE[2,4] MATCHES '4N' THEN
+        * probably a final packet - set the DONE flag
+        MSG.DONE = 1
+       END
+      END
+     END
+    END ELSE
+     * good packet received
+     IF PROTOCOL < 2 THEN
+      IF PROTOCOL = 0 OR NOT(MSG.DONE) OR NOT(NOFINALACK) THEN
+       PRINT ACK.SEQ:;* ACK this packet & transmit next one
+      END
+     END
+     RETRIES = 0
+    END
+  END CASE
+ UNTIL MSG.DONE DO
+ REPEAT
+WHILE CAN.RESEND.LAST.MESSAGE AND ERRCNT > 0 AND ERRCD <> -100 AND GET.ATTEMPT <= ERROR.RETRIES DO
+ GET.ATTEMPT = GET.ATTEMPT + 1
+ PRINT RLM.SEQ:;* resend the last message
+REPEAT
+*
+IF ERRCNT = 0 THEN
+ ERRCD = 0;* ignore corrected errors
+ ERRMSG = ''
+ CALL FTDECODE(MSGIN,XLENC,MAX.POS.PARAM)
+ IF MSGIN[1,5] = 'ERR: ' THEN
+  * extract error info from message
+  PKT.ERR = FIELD(MSGIN,' ',2)
+  IF PKT.ERR MATCHES '1N0N' OR PKT.ERR MATCHES '-1N0N' THEN
+   ERRCD = PKT.ERR
+   ERRMSG = MSGIN[INDEX(MSGIN,' ',2)+1,999]
+   IF ERRMSG = '' THEN ERRMSG = 'Client/server protocol error!'
+   MSGIN = ''
+  END
+ END
+END ELSE
+ IF ERRCD = 0 THEN ERRCD = PKT.ERR
+ IF ERRCD <> -100 THEN MSGIN = '';* dont return corrupt message
+ BEGIN CASE
+  CASE ERRCD = -100
+   ERRMSG = 'User abort!'
+  CASE ERRCD = -101
+   ERRMSG = 'Invalid packet type!'
+  CASE ERRCD = -102
+   ERRMSG = 'Invalid packet length!'
+  CASE ERRCD = -103
+   ERRMSG = 'Packet size error!'
+  CASE ERRCD = -104
+   ERRMSG = 'Checksum mismatch!'
+  CASE ERRCD = -105
+   ERRMSG = 'Invalid message length!'
+  CASE ERRCD = -106
+   ERRMSG = 'Truncated message length!'
+  CASE ERRCD = -107
+   ERRMSG = 'Message size error!'
+  CASE ERRCD = -108
+   ERRMSG = 'Truncated checksum!'
+  CASE 1
+   IF ERRMSG = '' THEN ERRMSG = 'Client/server protocol error!'
+ END CASE
+END
+RETURN
+*
+*
+CALC.CHKSUM: * COMPUTE FLETCHER'S CHECKSUM OF PACKET
+*
+* Note: this algorithm was described in "Fletcher's Error Detection
+* Algorithm: How to implement it efficiently and how to avoid the
+* most common pitfalls" by Anastase Nakassis (ACM Press). This
+* implementation assumes at least signed 32-bit arithmetic operations,
+* hence the modulo 255 reduction every 4100 iterations.
+*
+* Note: for performance reasons, the module reduction & buffer
+* reconfiguration is performed every 500 iterations instead of
+* every 4102, which is the maximum before overflow.
+*
+* Note: the maximum number of iterations was changed from 500 to
+* 250 to prevent possible overflow situations when the SEQ() function
+* returns values in the range of 0-65535 when running in ECS mode.
+*
+* When the UTFHACK flag is set, this function converts UTF-8 sequences
+* to Unicode values before calculating the checksum.
+*
+A = 0
+B = 0
+N = LEN(PKT)
+PKT.UC.LEN = N
+I = 1
+LOOP WHILE I <= N DO
+ M = N - I + 1
+ IF M > 250 THEN M = 250
+ *#QM_ECS#* IF SWPFLG THEN PKTX = SWAPMARKS(PKT[I,M]) ELSE
+ PKTX = PKT[I,M]
+ *#QM_ECS#* END
+ FOR J = 1 TO M
+  C = SEQ(PKTX[J,1])
+  IF UTFHACK THEN
+   IF C >= 192 AND C <= 223 THEN
+    *UTF-8 lead byte for U+0080 - U+07FF (2 byte sequence)
+    IF J + 1 > M THEN PKTX = PKTX : PKT[I+M,1]; M = M + 1
+    C = ((C - 192) * 64) + SEQ(PKTX[J+1,1]) - 128
+    J = J + 1
+    PKT.UC.LEN = PKT.UC.LEN - 1
+   END ELSE
+    IF C >= 224 AND C <= 239 THEN
+     *UTF-8 lead byte for U+0800 - U+FFFF (3 byte sequence)
+     IF J + 2 > M THEN PKTX = PKTX : PKT[I+M,J-M+2]; M = J + 2
+     C = ((C - 224) * 4096) + ((SEQ(PKTX[J+1,1]) - 128) * 64) + SEQ(PKTX[J+2,1]) - 128
+     J = J + 2
+     PKT.UC.LEN = PKT.UC.LEN - 2
+    END
+   END
+  END
+  A = A + C ;* Note: U2 uses UNISEQ instead of SEQ in NLS mode
+  B = B + A
+ NEXT J
+ A = REM(A,255)
+ B = REM(B,255)
+ I = I + M
+REPEAT
+CHKS = (B * 256) + A
+RETURN
+*
+CALC.PKT.UC.LEN: * CALCULATE PACKET LENGTH IN UNICODE CHARACTERS
+*
+N = LEN(PKT)
+PKT.UC.LEN = N
+IF UTFHACK THEN
+ I = 1
+ LOOP WHILE I <= N DO
+  M = N - I + 1
+  IF M > 250 THEN M = 250
+  PKTX = PKT[I,M]
+  FOR J = 1 TO M
+   C = SEQ(PKTX[J,1])
+   IF C >= 128 AND C <= 191 THEN
+    *UTF-8 trail byte
+    PKT.UC.LEN = PKT.UC.LEN - 1
+   END
+  NEXT J
+  I = I + M
+ REPEAT
+END
+RETURN
+*
+END
+

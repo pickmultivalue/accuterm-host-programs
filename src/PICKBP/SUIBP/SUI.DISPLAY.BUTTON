@@ -1,0 +1,162 @@
+SUBROUTINE SUI.DISPLAY.BUTTON(Left, Top, Width, Height, State, Caption, RtnCom, MAT TermDef)
+**************************************************************************
+*Copyright (c) 2004 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: SUI.DISPLAY.BUTTON
+* AUTHOR: PJS
+* VERSION: 1.0.1
+* CREATED: 06/01/2004
+* UPDATED: 08/03/2004
+*
+* MAINTENANCE RECORD:
+*
+* 1.0.1
+*  PJS 08/03/2004
+*   Fixed problem when State is NULL. Should be same as ZERO (inactive)
+*   instead of active. Now draw button using SUICFG.BUTTON.ACTIVE
+*   attribute for all lines except last line. Use SUICFG.BUTTON.SELECTED
+*   for last line (or only line if single line button). This allows the
+*   last line of the active button to be underlined, indicating which
+*   button is active.
+*
+*************************************************************************
+*************************************************************************
+*
+* SMART USER INTERFACE: Display Command Button
+*
+*************************************************************************
+*************************************************************************
+*
+*   Input Interface:
+*
+*    Left, Top: upper-left corner of button (relative to current window)
+*
+*    Width, Height: size of button
+*
+*    State:   button display state
+*              0 = inactive
+*              1 = active
+*              2 = disabled
+*
+*    Caption: button caption (multi-line caption is OK - separate
+*             lines with sub-value marks)
+*
+*    TermDef: terminal definitions as set up by SUI.GET.TERM
+*
+*
+*   Output Interface:
+*
+*    RtnCom:   zero if success, else error code
+*
+*************************************************************************
+*
+$INCLUDE SUI.TERMDEF
+$INCLUDE SUI.WINDEF
+$INCLUDE SUI.CONFIG
+*
+EQU SVM TO CHAR(252)
+EQU ESC TO CHAR(27), STX TO CHAR(2), CR TO CHAR(13)
+*
+IF Width < 1 OR Height < 1 THEN
+ RtnCom = SUI.ERROR.INVSIZE$
+ RETURN
+END
+*
+* Adjust screen positions based on current window
+BtnWd = Width
+BtnHt = Height
+BegCol = Left ;* Screen beginning column
+BegRow = Top ;* Screen beginning row
+WinInf = TERM.WINDOW<1,2>
+IF WinInf EQ '' THEN
+ WinWd = TERM.WIDTH
+ WinHt = TERM.HEIGHT
+END ELSE
+ BegCol = BegCol + WinInf<1,1,SUI.WINLEFT$> + WinInf<1,1,SUI.CLILEFT$>
+ BegRow = BegRow + WinInf<1,1,SUI.WINTOP$> + WinInf<1,1,SUI.CLITOP$>
+ WinWd = WinInf<1,1,SUI.CLIWIDTH$>
+ WinHt = WinInf<1,1,SUI.CLIHEIGHT$>
+END
+IF Left < 0 THEN
+ RtnCom = SUI.ERROR.INVPOS$
+ RETURN
+END
+IF Left + BtnWd > WinWd THEN
+ BtnWd = WinWd - Left
+ IF BtnWd <= 0 OR (BtnWd < 1 AND Width > 1) THEN
+  RtnCom = SUI.ERROR.INVSIZE$
+  RETURN
+ END 
+END
+IF Top < 0 THEN
+ RtnCom = SUI.ERROR.INVPOS$
+ RETURN
+END
+IF Top + BtnHt > WinHt THEN
+ BtnHt = WinHt - Top
+ IF BtnHt <= 0 THEN
+  RtnCom = SUI.ERROR.INVSIZE$
+  RETURN
+ END
+END
+EndCol = BegCol + BtnWd - 1 ;* Ending screen column
+EndRow = BegRow + BtnHt - 1 ;* Ending screen row
+*
+* Format the button caption
+Text = Caption
+IF BtnHt = 1 THEN
+ CONVERT SVM TO ' ' IN Text
+END
+N = DCOUNT(Text,SVM)
+FOR I = 1 TO BtnHt
+ Spc = BtnWd - LEN(Text<1,1,I>)
+ IF Spc < 0 THEN
+  Text<1,1,I> = Text<1,1,I>[1,BtnWd]
+ END ELSE
+  Spc1 = INT(Spc / 2)
+  Spc2 = Spc - Spc1
+  Text<1,1,I> = SPACE(Spc1):Text<1,1,I>:SPACE(Spc2)
+ END
+NEXT I
+*
+* Display button in proper visual attribute
+IF State = 1 THEN Attr = SUICFG.BUTTON.ACTIVE ELSE
+ IF State = 2 THEN Attr = SUICFG.BUTTON.DISABLED ELSE Attr = SUICFG.BUTTON.INACTIVE
+END
+Dsp = ''
+IF SUICFG.BUTTON.BORDER AND INDEX(TERM.SPECIAL,'B',1) THEN
+ * Draw button border using AccuTerm Visual Styles 
+ Dsp = Dsp:ESC:STX:'r':BegCol:',':BegRow:',':EndCol:',':EndRow:',N,':'NIRB'[SUICFG.BUTTON.BORDER+1,1]:CR
+END
+FOR DspRow = BegRow TO EndRow
+ IF State = 1 AND DspRow = EndRow THEN Attr = SUICFG.BUTTON.SELECTED ;* draw last line of active button underline
+ IF TERM.ATTRTYPE = 1 THEN
+  IF EndCol >= TERM.WIDTH - 1 THEN
+   IF DspRow < TERM.HEIGHT - 1 THEN Dsp = Dsp:@(0,DspRow+1):TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+  END ELSE
+   Dsp = Dsp:@(EndCol+1,DspRow):TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+  END
+  IF BegCol = 0 THEN
+   IF DspRow > 0 THEN Dsp = Dsp:@(TERM.WIDTH-1,DspRow-1):TermDef(TERM.ATT$+Attr)
+  END ELSE
+   Dsp = Dsp:@(BegCol-1,DspRow):TermDef(TERM.ATT$+Attr)
+  END
+  Dsp = Dsp:@(BegCol,DspRow)
+ END ELSE
+  Dsp = Dsp:@(BegCol,DspRow):TermDef(TERM.ATT$+Attr)
+ END
+ Dsp = Dsp:Text<1,1,DspRow-BegRow+1>
+NEXT DspRow
+IF TERM.ATTRTYPE NE 1 THEN
+ Dsp = Dsp:TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+END
+Dsp = Dsp:@(BegCol,BegRow)
+PRINT Dsp:
+RtnCom = 0
+RETURN
+END

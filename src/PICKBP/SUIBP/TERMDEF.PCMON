@@ -1,0 +1,215 @@
+*************************************************************************
+*
+* Terminal definition record
+*
+* The ID of this file is "TERMDEF.XXX" where XXX
+* is the term type code returned by SYSTEM(7).
+*
+* To create synonym terminal definitions, create a
+* one-line definition with the label "USE:" followed
+* by the ID of the actual terminal definition. E.G.
+*
+* USE: PCMON
+*
+*************************************************************************
+*
+*
+* TERMINAL INFORMATION
+*
+DESC: AccuTerm in Pick PC Monitor Emulation
+ATTRTYPE: 0         * 0 = CHARACTER, 1 = EMBEDDED, 2 = TAG
+OFFSET: 0           * CURSOR POSITION OFFSET (0 OR 1)
+HICTL: 0            * 1 = TREAT ASCII 128-159 AS CONTROL CHARACTERS (ANSI)
+NORMWD: 80          * NORMAL WIDTH (80)
+NORMHT: 25          * NORMAL HEIGHT (24)
+EXTWD: 80           * EXTENDED WIDTH (132)
+EXTHT: 25           * EXTENDED HEIGHT (24)
+PAGES: 1            * NUMBER OF PAGES SUPPORTED BY TERMINAL
+SPECIAL: 1          * 1 = USE ACCUTERM SPECIAL FEATURES
+*
+* TERMINAL STATE COMMANDS
+*
+* Note: Native PC Monitor does not have several keypad keys programmed, so we do it here!
+RESET: ESC STX 'FKS=^N' CR ESC STX 'FKS>^N' CR ESC STX 'FKS1^W' CR ESC STX 'FKU6^K' CR ESC STX 'FKU7^L' CR ESC STX 'FKU2^O' CR ESC STX 'FKU4^Y' CR ESC STX 'FKU5^T' CR ESC STX 'FKU3^?' CR ESC STX 'FNS0^AP' CR ESC STX 'FNS1^AQ' CR ESC STX 'FNS2^AR' CR * Reprogram Shift+Enter as Ctrl+N & other missing keypad keys
+NORMAL:             * NORMAL (80 COLUMN) MODE
+EXTENDED:           * EXTENDED (132 COLUMN) MODE
+CSRON:              * DISPLAY THE CURSOR
+CSROFF:             * HIDE THE CURSOR
+CSRLINE: ESC STX 'PInitSession.CursorType=0' CR * SET CUSROR STYLE TO UNDERLINE
+CSRBLK: ESC STX 'PInitSession.CursorType=1' CR * SET CURSOR STYLE TO BLOCK
+AUXON: ESC '*' DC1  * ENABLE TRANSPARENT PRINT
+AUXOFF: ESC '*' DC2 * DISABLE TRANSPARENT PRINT
+SELPAGE:            * SELECT PAGE (USES VARIABLE 'PG')
+*
+* EDITING COMMANDS
+*
+CLEAR: FF           * CLEAR ENTIRE SCREEN
+CEOS: ESC '*' ETX   * CLEAR TO END OF SCREEN
+CEOL: ESC '*' EOT   * CLEAR TO END OF LINE
+INSCHR: ESC '*h'    * INSERT CHARACTER
+DELCHR: ESC '*i'    * DELETE CHARACTER
+INSLINE: ESC '*j'   * INSERT LINE
+DELLINE: ESC '*k'   * DELETE LINE
+CPYBLK:             * COPY BLOCK (USES VARIABLES 'SRC', 'LEFT', 'TOP', 'RIGHT', 'BOTTOM', 'DEST', 'COL', 'ROW')
+CLRBLK:             * CLEAR BLOCK (USES VARIABLES 'LEFT', 'TOP', 'RIGHT', 'BOTTOM')
+*
+* VIDEO ATTRIBUTES
+*
+* Note: video attributes are implemented by using direct
+* assignment of foreground/background colors using AccuTerm
+* commands, not PC Monitor commands. This is because the
+* native PC Monitor commands do not support any dark
+* background colors, making it impossible to assign "light
+* gray" as a background color (light gray = dark white).
+* The selected colors are chosen to work well in conjunction
+* with borders (2K2 only), and may not yield pleasant
+* results with older AccuTerm versions.
+*
+* Blinking is not supported.
+* 
+NV: ESC STX 'A0' CR ESC STX 'B7' CR * NORMAL VIDEO = light gray / black
+BV:                 * BLINKING VIDEO
+RV: ESC STX 'A0' CR ESC STX 'B15' CR * REVERSE VIDEO = white / black
+RBV:                * REVERSE BLINKING VIDEO
+UV: ESC STX 'A0' CR ESC STX 'B7' CR * UNDERLINE VIDEO = light gray / black
+UBV:                * UNDERLINED BLINK VIDEO
+URV: ESC STX 'A0' CR ESC STX 'B15' CR * UNDERLINED REVERSE VIDEO = white / black
+URBV:               * UNDERLINE REVERSE BLINK VIDEO
+DV: ESC STX 'A8' CR ESC STX 'B7' CR * DIM VIDEO = light gray / dark gray
+DBV:                * DIM BLINKING VIDEO
+DRV: ESC STX 'A15' CR ESC STX 'B1' CR * DIM REVERSE VIDEO = dark blue / white
+DRBV:               * DIM REVERSE BLINKING VIDEO
+DUV: ESC STX 'A8' CR ESC STX 'B7' CR * DIM UNDERLINE VIDEO = light gray / dark gray
+DUBV:               * DIM UNDERLINE BLINK VIDEO
+DURV: ESC STX 'A15' CR ESC STX 'B1' CR * DIM UNDERLINE REVERSE VIDEO = dark blue / white
+DURBV:              * DIM UNDERLINE REVERSE BLINK VIDEO
+*
+* LINE DRAWING MODE
+*
+GRON:               
+GROFF:              
+*
+* SINGLE LINE CHARACTERS
+*
+GH: CHAR(196)       * GRAPHIC HORIZONAL CHARACTER
+GV: CHAR(179)       * VERTICAL CHARACTER
+GTL: CHAR(218)      * UPPER LEFT CORNER
+GTI: CHAR(194)      * UPPER INTERSECT
+GTR: CHAR(191)      * UPPER RIGHT CORNER
+GLI: CHAR(195)      * LEFT INTERSECT
+GCI: CHAR(197)      * CENTER INTERSECT
+GRI: CHAR(180)      * RIGHT INTERSECT
+GBL: CHAR(192)      * LOWER LEFT CORNER
+GBI: CHAR(193)      * LOWER INTERSECT
+GBR: CHAR(217)      * LOWER RIGHT CORNER
+*
+* DOUBLE LINE CHARACTERS
+*
+DGH: CHAR(205)      * GRAPHIC HORIZONAL CHARACTER
+DGV: CHAR(186)      * VERTICAL CHARACTER
+DGTL: CHAR(201)     * UPPER LEFT CORNER
+DGTI: CHAR(203)     * UPPER INTERSECT
+DGTR: CHAR(187)     * UPPER RIGHT CORNER
+DGLI: CHAR(204)     * LEFT INTERSECT
+DGCI: CHAR(206)     * CENTER INTERSECT
+DGRI: CHAR(185)     * RIGHT INTERSECT
+DGBL: CHAR(200)     * LOWER LEFT CORNER
+DGBI: CHAR(202)     * LOWER INTERSECT
+DGBR: CHAR(188)     * LOWER RIGHT CORNER
+*
+*
+*************************************************************************
+* KEYBOARD COMMANDS
+*************************************************************************
+*
+* EDITING KEYS
+*
+* Note: codes for PGUP, PGDN, HOME, END, INS, DEL,
+* Shift+ENTER, Shift+TAB are programmed in the
+* RESET string.
+*
+ENTER: CR           * KBD CARRIAGE RETURN
+BKSP: BS            * KBD BACKSPACE
+UP: SUB             * KBD UP ARROW
+DOWN: LF            * KBD DOWN ARROW
+LEFT: NAK           * KBD LEFT ARROW
+RIGHT: ACK          * KBD RIGHT ARROW
+PGUP: VT            * KBD PAGE UP
+PGDN: FF            * KBD PAGE DOWN
+HOME: EM            * KBD HOME KEY
+END: DC4            * KBD END KEY
+INS: SI             * KBD INSERT KEY
+DEL: DEL            * KBD DELETE KEY
+TAB: HT             * KBD TAB KEY
+ESCAPE: ESC         * KBD ESCAPE KEY
+*
+* SHIFTED EDITING KEYS
+*
+SENTER: SO          * KBD SHIFT CARRIAGE RETURN
+SBKSP:              * KBD SHIFT BACKSPACE
+SUP:                * KBD SHIFT UP ARROW
+SDOWN:              * KBD SHIFT DOWN ARROW
+SLEFT:              * KBD SHIFT LEFT ARROW
+SRIGHT:             * KBD SHIFT RIGHT ARROW
+SPGUP:              * KBD SHIFT PAGE UP
+SPGDN:              * KBD SHIFT PAGE DOWN
+SHOME:              * KBD SHIFT HOME KEY
+SEND:               * KBD SHIFT END KEY
+SINS:               * KBD SHIFT INSERT KEY
+SDEL:               * KBD SHIFT DELETE KEY
+STAB: ETB           * KBD SHIFT TAB KEY
+*
+*
+*
+* FUNCTION KEY VALUES
+*
+F1: STX "@"         * KBD F1 KEY
+F2: STX "A"         * KBD F2 KEY
+F3: STX "B"         * KBD F3 KEY
+F4: STX "C"         * KBD F4 KEY
+F5: STX "D"         * KBD F5 KEY
+F6: STX "E"         * KBD F6 KEY
+F7: STX "F"         * KBD F7 KEY
+F8: STX "G"         * KBD F7 KEY
+F9: STX "H"         * KBD F9 KEY
+F10: STX "I"        * KBD F10 KEY
+F11: STX "J"        * KBD F11 KEY
+F12: STX "K"        * KBD F12 KEY
+F13:                * KBD F13 KEY
+F14:                * KBD F14 KEY
+F15:                * KBD F15 KEY
+F16:                * KBD F16 KEY
+*
+* SHIFTED FUNCTION KEY VALUES
+*
+SF1: SOH "P"        * KBD SHIFT F1 KEY (redefined to avoid conflict with mouse double-click)
+SF2: SOH "Q"        * KBD SHIFT F2 KEY (ditto)
+SF3: SOH "R"        * KBD SHIFT F3 KEY (ditto)
+SF4: STX "S"        * KBD SHIFT F4 KEY
+SF5: STX "T"        * KBD SHIFT F5 KEY
+SF6: STX "U"        * KBD SHIFT F6 KEY
+SF7: STX "V"        * KBD SHIFT F7 KEY
+SF8: STX "W"        * KBD SHIFT F8 KEY
+SF9: STX "X"        * KBD SHIFT F9 KEY
+SF10: STX "Y"       * KBD SHIFT F10 KEY
+SF11: STX "Z"       * KBD SHIFT F11 KEY
+SF12: STX "["       * KBD SHIFT F12 KEY
+SF13:               * KBD SHIFT F13 KEY
+SF14:               * KBD SHIFT F14 KEY
+SF15:               * KBD SHIFT F15 KEY
+SF16:               * KBD SHIFT F16 KEY
+*
+*
+*
+* MOUSE BUTTONS - SINGLE CLICK
+*
+LEFTBUTTON: STX 'p' CR * KBD LEFT MOUSE BUTTON
+RIGHTBUTTON: STX 'q' CR * KBD RIGHT MOUSE BUTTON
+MIDBUTTON: STX 'r' CR * KBD MIDDLE MOUSE BUTTON
+*
+* MOUSE BUTTONS - DOUBLE CLICK
+*
+DBLLEFTBUTTON: STX 'P' CR * KBD LEFT MOUSE DOUBLE CLICK
+DBLRIGHTBUTTON: STX 'Q' CR * KBD RIGHT MOUSE DOUBLE CLICK
+DBLMIDBUTTON: STX 'R' CR * KBD MIDDLE MOUSE DOUBLE CLICK
+*

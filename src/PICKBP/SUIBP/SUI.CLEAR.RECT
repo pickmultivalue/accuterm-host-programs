@@ -1,0 +1,142 @@
+SUBROUTINE SUI.CLEAR.RECT(Left, Top, Width, Height, RtnCom, MAT TermDef)
+**************************************************************************
+*Copyright (c) 2004 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: SUI.CLEAR.RECT
+* AUTHOR: PJS
+* VERSION: 1.0.0
+* CREATED: 06/01/2004
+* UPDATED: 
+*
+* MAINTENANCE RECORD:
+*
+*************************************************************************
+*************************************************************************
+*
+* SMART USER INTERFACE: Clear Rectangle in Current Window
+*
+*************************************************************************
+*************************************************************************
+*
+*   Input Interface:
+*
+*    Left, Top: upper-left corner of rectangle (relative to current window)
+*
+*    Width, Height: size of rectangle
+*
+*    TermDef: terminal definitions as set up by SUI.GET.TERM
+*
+*
+*   Output Interface:
+*
+*    RtnCom:  zero if success, else error code
+*
+*************************************************************************
+*
+$INCLUDE SUI.TERMDEF
+$INCLUDE SUI.WINDEF
+$INCLUDE SUI.CONFIG
+*
+EQU VM TO CHAR(253), SVM TO CHAR(252)
+EQU ESC TO CHAR(27), STX TO CHAR(2), EM TO CHAR(25), CR TO CHAR(13)
+*
+* Substitution variable strings for CLRBLK command
+EQU varLeft TO 'LEFT'
+EQU varTop TO 'TOP'
+EQU varRight TO 'RIGHT'
+EQU varBottom TO 'BOTTOM'
+*
+* Adjust screen positions based on current window
+RectWd = Width
+RectHt = Height
+BegCol = Left ;* Screen beginning column
+BegRow = Top ;* Screen row
+WinInf = TERM.WINDOW<1,2>
+IF WinInf EQ '' THEN
+ WinWd = TERM.WIDTH
+ WinHt = TERM.HEIGHT
+END ELSE
+ BegCol = BegCol + WinInf<1,1,SUI.WINLEFT$> + WinInf<1,1,SUI.CLILEFT$>
+ BegRow = BegRow + WinInf<1,1,SUI.WINTOP$> + WinInf<1,1,SUI.CLITOP$>
+ WinWd = WinInf<1,1,SUI.CLIWIDTH$>
+ WinHt = WinInf<1,1,SUI.CLIHEIGHT$>
+END
+IF Left < 0 THEN
+ RtnCom = SUI.ERROR.INVPOS$
+ RETURN
+END
+IF Left + RectWd > WinWd THEN
+ RectWd = WinWd - Left
+ IF RectWd <= 0 OR (RectWd < 1 AND Width > 1) THEN
+  RtnCom = SUI.ERROR.INVSIZE$
+  RETURN
+ END 
+END
+IF Top < 0 THEN
+ RtnCom = SUI.ERROR.INVPOS$
+ RETURN
+END
+IF Top + RectHt > WinHt THEN
+ RectHt = WinHt - Top
+ IF RectHt <= 0 THEN
+  RtnCom = SUI.ERROR.INVSIZE$
+  RETURN
+ END
+END
+EndCol = BegCol + RectWd - 1 ;* Ending screen column
+EndRow = BegRow + RectHt - 1 ;* Ending screen row
+*
+* Look for quickest way to clear
+RtnCom = 0
+Dsp = ''
+IF TERM.ATTRTYPE NE 1 THEN Dsp = Dsp:TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+BEGIN CASE
+ CASE BegCol <= 0 AND BegRow <= 0 AND EndCol >= TERM.WIDTH - 1 AND EndRow >= TERM.HEIGHT - 1
+  Dsp = Dsp:TERM.CLEAR ;* clear entire Screen
+ CASE BegCol <= 0 AND EndCol >= TERM.WIDTH - 1 AND BegRow + EndRow >= TERM.HEIGHT - 1
+  Dsp = Dsp:@(0,BegRow):TERM.CEOS ;* clear to end of Screen
+ CASE EndCol >= TERM.WIDTH - 1
+  FOR Y = BegRow TO EndRow
+   Dsp = Dsp:@(BegCol,Y):TERM.CEOL ;* clear to end of line
+  NEXT Y
+ CASE 1
+  IF TERM.CLRBLK NE '' THEN
+   * Use the native terminal CLRBLK command
+   Cmd = TERM.CLRBLK    
+   varName = varLeft; varVal = BegCol; GOSUB VARSUBST
+   varName = varTop; varVal = BegRow; GOSUB VARSUBST
+   varName = varRight; varVal = EndCol; GOSUB VARSUBST
+   varName = varBottom; varVal = EndRow; GOSUB VARSUBST
+   IF RtnCom = 0 THEN Dsp = Dsp:Cmd
+  END ELSE
+   * Last resort - just erase by printing spaces
+   Spc = SPACE(EndCol-BegCol+1)
+   FOR Y = BegRow TO EndRow
+    Dsp = Dsp:@(BegCol,Y):Spc
+   NEXT Y
+  END
+END CASE 
+Dsp = Dsp:@(BegCol,BegRow)
+PRINT Dsp:
+RETURN
+!
+VARSUBST: *
+varx = SVM:varName:SVM
+K = INDEX(Cmd,varx,1)
+IF K = 0 THEN
+ varx = SVM:varName:'+1':SVM
+ K = INDEX(Cmd,varx,1)
+ varVal = varVal + 1
+END
+IF K THEN
+ Cmd = Cmd[1,K-1]:varVal:Cmd[K+LEN(varx),9999]
+END ELSE
+ RtnCom = SUI.ERROR.BADVAR$
+END
+RETURN
+END

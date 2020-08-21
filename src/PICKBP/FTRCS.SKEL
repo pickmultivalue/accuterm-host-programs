@@ -1,0 +1,560 @@
+SUBROUTINE FTRCS.SKEL(ACTION, FNAME, ID, RECORD, CLIENT, ERRCD, ERRMSG)
+**************************************************************************
+*
+*
+*
+*
+*
+*
+*
+**************************************************************************
+*
+* MODULE: FTRCS.SKEL
+* AUTHOR: PJS
+* VERSION: 8.0.2
+* CREATED: 01/06/2005
+* UPDATED: 05/06/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.2
+*  PJS 05/06/2020
+*   Added new action codes for FSI functions to version 3.
+*
+* 8.0.1
+*  PJS 04/02/2020
+*   Updated RCS hook interface (version 3). Added new action codes
+*   11-16 for EXECUTE, CALL and CONV
+*
+* 7.1.1
+*  PJS 10/25/2012
+*   Updated RCS hook interface (version 2). Added extra before and
+*   after actions for READ, UPDATE, DELETE, LOCK, UNLOCK.
+*
+* 5.2.1
+*  PJS 01/06/2005
+*   Skeleton RCS hook interface subroutine
+*
+**************************************************************************
+*
+* Input interface:
+*
+*  ACTION:  0 = INITIALIZE (no action required - optionally return interface version 1 to 3)
+*    For version 1:
+*           1 = AFTER READ RECORD
+*           2 = BEFORE UPDATE RECORD
+*           3 = BEFORE DELETE RECORD
+*           4 = BEFORE UNLOCK RECORD
+*    For version 2 (negotiated):
+*           5 = BEFORE LOCK RECORD
+*           6 = BEFORE READ RECORD
+*           7 = AFTER UPDATE RECORD
+*           8 = AFTER DELETE RECORD
+*           9 = AFTER UNLOCK RECORD
+*          10 = AFTER LOCK RECORD
+*    For version 3 (negotiated):
+*          11 = BEFORE EXECUTE
+*          12 = AFTER EXECUTE
+*          13 = BEFORE SUBROUTINE CALL
+*          14 = AFTER SUBROUTINE CALL
+*          15 = BEFORE ICONV/OCONV
+*          16 = AFTER ICONV/OCONV
+
+*    FSI sub-functions (version 3):
+*          21 = BEFORE ITEM LIST
+*          22 = AFTER ITEM LIST
+*          23 = BEFORE SERVER INFO
+*          24 = AFTER SERVER INFO
+*          25 = BEFORE ITEM INFO
+*          26 = AFTER ITEM INFO
+*          27 = BEFORE FILE EXISTS
+*          28 = AFTER FILE EXISTS
+*          29 = BEFORE ITEM EXISTS
+*          30 = AFTER ITEM EXISTS
+*          31 = BEFORE GET SETTING
+*          32 = AFTER GET SETTING
+*          33 = BEFORE SAVE SETTING
+*          34 = AFTER SAVE SETTING
+*          35 = BEFORE GET CONFIG
+*          36 = AFTER GET CONFIG
+*
+*  FNAME:   file name being accessed (hook may change this name)
+*  ID:      item-id being accessed (hook may change this name)
+*  RECORD:  item contents after read, before update. n/a for lock, unlock or delete.
+*  CLIENT:  name of client program (ATWED32, etc.)
+*
+*  NOTE: for some actions, the FNAME & ID arguments are EQUated to different
+*  variable names, like CMD or OPTS. RECORD is used for generic data in and out.
+*
+* Output interface:
+*
+*  ERRCD:   0 if no error, else error number. Use an arbitrary number that is not
+*             likely to conflict with system error message numbers. Or use one of
+*             these well known error codes:
+*               200 - file name missing
+*               201 - file not found or open error
+*               202 - item not found or read error
+*               203 - item ID missing
+*               223 - ADD failed because item exists
+*               235 - UPDATE or DELETE failed due to item lock
+*               260 - READ failed due to item lock
+*               261 - UPDATE failed for other reason (network error, permissions, etc.)
+*           -1 may be used in any of the "BEFORE" actions to indicate that the hook
+*              has performed the requested action without error and no further processing
+*              should be performed.
+*
+*  ERRMSG:  text error message to return to client upon failure (not necessary if using one of the known error codes)
+*  FNAME:   changed if RCS requires updates to a different file
+*  RECORD:  modified item (after read, before update)
+*
+* Interface version negotiation:
+*
+*  For ACTION=0, if RECORD<1> = 'VER' on entry, RECORD<2> is the highest
+*  interface version supported by FTSVRSUB. If the RCS hook routine
+*  supports any interface version > 1, it may return its highest supported
+*  interface version in RECORD<3>. FTSVRSUB will then use the lower of
+*  RECORD<2> or RECORD<3> as the negotiated interface version. The default
+*  interface version is 1.
+*
+* Required configuration:
+*
+*  To enable this RCS hook subroutine, create an 'RCS' item in the
+*  ACCUTERMCTRL file. Attribute 1 should be 'X' and attribute 2
+*  should be the name of the hook subroutine.
+*
+**************************************************************************
+*
+EQU CMD TO FNAME
+EQU NAME TO FNAME
+EQU DIRECTION TO FNAME
+EQU REQUEST TO FNAME
+EQU OPTS TO ID
+EQU FUNC TO ID
+EQU CODE TO ID
+EQU DIO TO RECORD
+*
+ERRCD = 0
+ERRMSG = ''
+*
+* Decode action
+*
+BEGIN CASE
+ *
+ **************************************************************************
+ *
+ * The following actions are supported for all interface versions
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 0
+  * Initialize (negotiate the version of the RCS interface)
+  IF RECORD<1> = 'VER' AND RECORD<2> > 1 THEN RECORD<3> = 3 ;* HOOK supports interface version 3
+  PRINT 'RCS HOOK: INITIALIZE (ACTION=':ACTION:' VERSION=':RECORD<3>:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 1
+  * After read record
+  PRINT 'RCS HOOK: AFTER READ (ACTION=':ACTION:' FILE=':FNAME:' ITEM=':ID:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 2
+  * Before update record
+  PRINT 'RCS HOOK: BEFORE UPDATE (ACTION=':ACTION:' FILE=':FNAME:' ITEM=':ID:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 3
+  * Before delete record
+  PRINT 'RCS HOOK: BEFORE DELETE (ACTION=':ACTION:' FILE=':FNAME:' ITEM=':ID:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 4
+  * Before unlock record
+  PRINT 'RCS HOOK: BEFORE UNLOCK (ACTION=':ACTION:' FILE=':FNAME:' ITEM=':ID:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ **************************************************************************
+ *
+ * The following actions are supported for interface version 2 and above
+ *  
+ **************************************************************************
+ **************************************************************************
+ *
+ CASE ACTION = 5
+  * Before lock record
+  PRINT 'RCS HOOK: BEFORE LOCK (ACTION=':ACTION:' FILE=':FNAME:' ITEM=':ID:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 6
+  * Before read record
+  PRINT 'RCS HOOK: BEFORE READ (ACTION=':ACTION:' FILE=':FNAME:' ITEM=':ID:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 7
+  * After update record
+  PRINT 'RCS HOOK: AFTER UPDATE (ACTION=':ACTION:' FILE=':FNAME:' ITEM=':ID:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 8
+  * After delete record
+  PRINT 'RCS HOOK: AFTER DELETE (ACTION=':ACTION:' FILE=':FNAME:' ITEM=':ID:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 9
+  * After unlock record
+  PRINT 'RCS HOOK: AFTER UNLOCK (ACTION=':ACTION:' FILE=':FNAME:' ITEM=':ID:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 10
+  * After lock record
+  PRINT 'RCS HOOK: AFTER LOCK (ACTION=':ACTION:' FILE=':FNAME:' ITEM=':ID:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ **************************************************************************
+ *
+ * The following actions are supported for interface version 3
+ *
+ **************************************************************************
+ **************************************************************************
+ *
+ CASE ACTION = 11
+  * Before execute command
+  *  Input:
+  *   CMD<1>:   command line to execute
+  *   CMD<2>:   stacked data
+  *   CMD<N>:   stacked data
+  *   OPTS:     1 = return captured output, 0 = discard output
+  *  Hook can modify CMD to change the command and/or data.
+  *  If hook sets ERRCD=-1, then it must return the output of the
+  *  EXECUTE in RECORD (CAPTURING).
+  PRINT 'RCS HOOK: BEFORE EXECUTE (COMMAND=':CMD<1>:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 12
+  * After execute command
+  *  Input:
+  *   CMD<1>:   command line just executed
+  *   CMD<2>:   stacked data
+  *   CMD<N>:   stacked data
+  *   OPTS:     1 = return captured output, 0 = discard output
+  *   RECORD:   data returned by command execution
+  *  Hook can modify the RECORD argument to change the results (output) of
+  *  the command.
+  PRINT 'RCS HOOK: AFTER EXECUTE (COMMAND=':CMD<1>:' RESULT=':RECORD<1>:'... CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 13
+  * Before subroutine call
+  *  Input:
+  *   NAME:     subroutine name to CALL
+  *   FUNC:     function argument passed to subroutine
+  *   DIO:      arguments passed to subroutine (dynamic array)
+  *  Hook can modify any arguments to change the subroutine name,
+  *  function or data. If the hook sets ERRCD=-1, then it must return
+  *  the result of the CALL in DIO.
+  PRINT 'RCS HOOK: BEFORE SUBROUTINE CALL (SUB=':NAME:' FUNC=':FUNC:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 14
+  * After subroutine call
+  *  Input:
+  *   NAME:    subroutine name that was CALLed
+  *   FUNC:    function argument passed to subroutine
+  *   DIO:     data returned by subroutine
+  *  Hook can modify the DIO argument to change the results of
+  *  the subroutine CALL.
+  PRINT 'RCS HOOK: AFTER SUBROUTINE CALL (SUB=':NAME:' FUNC=':FUNC:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 15
+  * Before ICONV / OCONV
+  *  Input:
+  *   DIRECTION: 'I' for ICONV, 'O' for OCONV
+  *   CODE:      conversion code
+  *   RECORD:    data to be converted
+  *  Hook can modify any arguments to change the conversion.
+  *  If the hook sets ERRCD=-1, then it must return the
+  *  conversion result in RECORD.
+  PRINT 'RCS HOOK: BEFORE CONVERSION (DIR=':DIRECTION:' CONV=':CODE:' DATA=':RECORD:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 16
+  * After ICONV / OCONV
+  *  Input:
+  *   DIRECTION: 'I' for ICONV, 'O' for OCONV
+  *   CONV:      conversion code
+  *   RECORD:    result of conversion
+  *  Hook can modify RECORD to change the conversion result.
+  PRINT 'RCS HOOK: AFTER CONVERSION (DIR=':DIRECTION:' CONV=':CODE:' DATA=':RECORD:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 21
+  * Before item list
+  *  Input:
+  *   FUNC:     FSI function index (1)
+  *   REQUEST:  FSI request (dynamic array)
+  *    REQUEST<1> = File name to retrieve item list
+  *    REQUEST<2> = Bitmask containing file attributes for selection
+  *    REQUEST<3> = Maximum number of items to return (default is 1000)
+  *    REQUEST<4> = reserved
+  *    REQUEST<5> = list of properties (MV) to return
+  *     properties can be null to returns only the item ID, or one or more of the following codes:
+  *     -1 - return bitmask of file attributes
+  *     -2 - return item size
+  *     -3 - return account name of Q pointers
+  *
+  *  Hook can modify REQUEST to change the file name, max items
+  *  or selection attributes.
+  *
+  *  If the hook sets ERRCD=-1, then it must return the the item list in DIO. See ACTION 22 for details.
+  PRINT 'RCS HOOK: BEFORE ITEM LIST (FILE=':REQUEST<1>:' ATTR=':REQUEST<2>:' MAX=':REQUEST<3>:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 22
+  * After item list
+  *  Input:
+  *   FUNC:     FSI function index (1)
+  *   REQUEST:  see ACTION 21
+  *   DIO:      item list (dynamic array)
+  *    DIO<1>     = number of items selected
+  *    DIO<2,N>   = list of items (MV)
+  *    DIO<2,N,1> = item ID
+  *    DIO<2,N,2> = value of property in REQUEST<5,1>
+  *    DIO<2,N,K> = value of property in REQUEST<5,K-1>
+  *
+  *  Hook can modify the returned item list or item properties in DIO.
+  PRINT 'RCS HOOK: AFTER ITEM LIST (FILE=':REQUEST<1>:' ATTR=':REQUEST<2>:' COUNT=':DIO<1>:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 23
+  * Before server info
+  *  Input:
+  *   FUNC:     FSI function index (2)
+  *   REQUEST:
+  *    'S' - RETURN SERVER NAME
+  *    'A' - RETURN ACCOUNT NAME
+  *    'U' - RETURN USER NAME
+  *    'P' - RETURN PORT NUMBER
+  *    'M' - RETURN MD NAME
+  *    'V' - RETURN FTBP LIBRARY VERSION
+  *    'R' - RETURN SERVER RIGHTS (READ.WRITE.CONV.EXEC)
+  *    '*' - RETURN ALL INFO (SERVER]ACCOUNT]USER]PORT]MDNAME]VERSION]RIGHTS)
+  *  
+  *  If the hook sets ERRCD=-1, then it must return the
+  *  the requested info in DIO.
+  PRINT 'RCS HOOK: BEFORE SERVER INFO (REQUEST=':REQUEST:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 24
+  * After server info
+  *  Input:
+  *   FUNC:     FSI function index (2)
+  *   REQUEST:  see ACTION 23
+  *   DIO:   server info
+  *
+  *  Hook can modify the server info in DIO.
+  PRINT 'RCS HOOK: AFTER SERVER INFO (REQUEST=':REQUEST:' INFO=':DIO:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 25
+  * Before item info
+  *  Input:
+  *   FUNC:     FSI function index (3)
+  *   REQUEST:  FSI request (dynamic array)
+  *    REQUEST<1> = File name to retrieve info
+  *    REQUEST<2> = Item ID to retrieve info
+  *    REQUEST<3> = list of properties (MV) to return
+  *     properties can be one or more of the following codes:
+  *     -1 - return bitmask of file attributes
+  *     -2 - return item size
+  *     -3 - return account name of Q pointer (if item is a Q pointer)
+  *
+  *  Hook can modify REQUEST to change the file name, item ID
+  *  or properties.
+  *
+  *  If the hook sets ERRCD=-1, then it must return the item info in DIO. See ACTION 26 for details.
+  PRINT 'RCS HOOK: BEFORE ITEM INFO (FILE=':REQUEST<1>:' ID=':REQUEST<2>:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 26
+  * After item info
+  *  Input:
+  *   FUNC:     FSI function index (3)
+  *   REQUEST:  see ACTION 25
+  *   DIO:      null if item does not exist, otherwise 
+  *    DIO<1,1> = value of property in REQUEST<3,1>
+  *    DIO<1,N> = value of property in REQUEST<3,N>
+  *
+  *  Hook can modify the item info in DIO.
+  PRINT 'RCS HOOK: AFTER ITEM INFO (FILE=':REQUEST<1>:' ID=':REQUEST<2>:' INFO=':DIO:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 27
+  * Before file exists
+  *  Input:
+  *   FUNC:     FSI function index (4)
+  *   REQUEST:  FSI request (dynamic array)
+  *    REQUEST<1> = File name to test
+  *
+  *  Hook can modify REQUEST to change the file name.
+  *
+  *  If the hook sets ERRCD=-1, then it must return set DIO to 1 if the file
+  *  exists or 0 if it does not exist.
+  PRINT 'RCS HOOK: BEFORE FILE EXISTS (FILE=':REQUEST<1>:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 28
+  * After file exists
+  *  Input:
+  *   FUNC:     FSI function index (4)
+  *   REQUEST:  FSI request (dynamic array)
+  *    REQUEST<1> = File name to test
+  *   DIO:      0 if file does not exist, 1 if file exists
+  *
+  *  Hook can modify DIO to indicate file existence.
+  *
+  PRINT 'RCS HOOK: AFTER FILE EXISTS (FILE=':REQUEST<1>:' EXIST=':DIO:' CLIENT=':CLIENT:')'
+  *
+  **************************************************************************
+  *
+ CASE ACTION = 29
+  * Before item exists
+  *  Input:
+  *   FUNC:     FSI function index (5)
+  *   REQUEST:  FSI request (dynamic array)
+  *    REQUEST<1> = File name to test
+  *    REQUEST<2> = Item ID to test
+  *
+  *  Hook can modify REQUEST to change the file name or item ID.
+  *
+  *  If the hook sets ERRCD=-1, then it must return set DIO to 1 if the item
+  *  exists or 0 if it does not exist.
+  PRINT 'RCS HOOK: BEFORE ITEM EXISTS (FILE=':REQUEST<1>:' ID=':REQUEST<2>:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 30
+  * After item exists
+  *  Input:
+  *   FUNC:     FSI function index (5)
+  *   REQUEST:  FSI request (dynamic array)
+  *    REQUEST<1> = File name to test
+  *    REQUEST<2> = Item ID to test
+  *   DIO:      0 if item does not exist, 1 if item exists
+  *
+  *  Hook can modify DIO to indicate item existence.
+  *
+  PRINT 'RCS HOOK: AFTER ITEM EXISTS (FILE=':REQUEST<1>:' ID=':REQUEST<2>:' EXIST=':DIO:' CLIENT=':CLIENT:')'
+  *
+  **************************************************************************
+  *
+ CASE ACTION = 31
+  * Before get setting
+  *  Input:
+  *   FUNC:     FSI function index (6)
+  *   REQUEST:  FSI request (dynamic array)
+  *    REQUEST<1> = setting item ID (settings are stored in ACCUTERMCTRL)
+  *    REQUEST<2> = attribute number of setting to return
+  *
+  *  Hook can modify REQUEST to change the setting item ID or attribute number.
+  *
+  *  If the hook sets ERRCD=-1, then it must return set DIO to setting value.
+  PRINT 'RCS HOOK: BEFORE GET SETTING (ID=':REQUEST<1>:' ATTRIBUTE=':REQUEST<2>:' CLIENT=':CLIENT:')'
+  *
+  **************************************************************************
+  * 
+ CASE ACTION = 32
+  * After get setting
+  *  Input:
+  *   FUNC:     FSI function index (6)
+  *   REQUEST:  FSI request (dynamic array)
+  *    REQUEST<1> = setting item ID (settings are stored in ACCUTERMCTRL)
+  *    REQUEST<2> = attribute number of setting to return
+  *   DIO:       value of the setting (may be MV data)
+  *
+  *  Hook can modify DIO to alter the setting returned.
+  *
+  PRINT 'RCS HOOK: AFTER GET SETTING (ID=':REQUEST<1>:' ATTRIBUTE=':REQUEST<2>:' SETTING':DIO:' CLIENT=':CLIENT:')'
+ *
+ **************************************************************************
+ *
+ CASE ACTION = 33
+  * Before save setting
+  *  Input:
+  *   FUNC:     FSI function index (7)
+  *   REQUEST:  FSI request (dynamic array)
+  *    REQUEST<1> = setting item ID (settings are stored in ACCUTERMCTRL)
+  *    REQUEST<2> = attribute number of setting to store
+  *    REQUEST<3> = new setting value to store
+  *
+  *  Hook can modify REQUEST to change the setting item ID, attribute number.
+  *  or value.
+  *
+  *  The hook can set ERRCD=-1 to bypass saving the setting.
+  *
+  PRINT 'RCS HOOK: BEFORE SAVE SETTING (ID=':REQUEST<1>:' ATTRIBUTE=':REQUEST<2>:' SETTING':REQUEST<3>:' CLIENT=':CLIENT:')'
+  *
+  **************************************************************************
+  *
+ CASE ACTION = 34
+  * After save setting
+  *  Input:
+  *   FUNC:     FSI function index (7)
+  *   REQUEST:  FSI request (dynamic array)
+  *    REQUEST<1> = setting item ID (settings are stored in ACCUTERMCTRL)
+  *    REQUEST<2> = attribute number of setting to return
+  *    REQUEST<3> = new setting value to store
+  *
+  PRINT 'RCS HOOK: AFTER SAVE SETTING (ID=':REQUEST<1>:' ATTRIBUTE=':REQUEST<2>:' SETTING':REQUEST<3>:' CLIENT=':CLIENT:')'
+  *
+  **************************************************************************
+  *
+ CASE ACTION = 35
+  * Before get config
+  *  Input:
+  *   FUNC:     FSI function index (8)
+  *
+  *  If the hook sets ERRCD=-1, then it must return set DIO to the configuration
+  *  in the same format as the KMTCFG item in ACCUTERMCTRL.
+  *
+  PRINT 'RCS HOOK: BEFORE GET CONFIG (CLIENT=':CLIENT:')'
+  *
+  **************************************************************************
+  *
+ CASE ACTION = 36
+  * After get config
+  *  Input:
+  *   FUNC:     FSI function index (8)
+  *   DIO:      the first 30 attributes of the KMTCFG item in ACCUTERMCTRL.
+  *
+  *  Hook can modify DIO to alter the config returned.
+  *  
+  PRINT 'RCS HOOK: AFTER GET CONFIG (CLIENT=':CLIENT:')'
+  *
+  **************************************************************************
+  *
+END CASE
+*  
+RETURN
+END

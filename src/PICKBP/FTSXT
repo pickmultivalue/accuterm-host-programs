@@ -1,0 +1,410 @@
+SUBROUTINE FTSXT(FUNC,Data,ERRCD,ERRMSG,MAT PARAMS,MAT CLIENV,MD)
+**************************************************************************
+*Copyright (c) 1996-2013 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTSXT
+* AUTHOR: PJS
+* VERSION: 7.2.1
+* CREATED: 01/01/1996
+* UPDATED: 09/17/2013
+*
+* MAINTENANCE RECORD:
+*
+* 7.2.1
+*  PJS 09/17/2013
+*   Added support for column heading option from file transfer wizard.
+*
+* 5.3.2
+*  PJS 08/29/2006
+*   Changed DICT file open syntax to accomodate funky D3 & Ehnanced
+*   R83 path syntax.
+*
+* 5.3.1
+*  PJS 07/24/2006
+*   Changed size of VARS() array from 25 to 26, defining VARS(26)
+*   as MD. Define previously unused VARS(24) as DFILE, the file
+*   variable for the dictionary. Added new MD subroutine argument
+*   which the caller should open to MD or VOC.
+*
+* 5.1.2
+*  PJS 11/29/2002
+*  FIL.CNV.PARAM variable was not getting reset in DO.EXTENDED
+*  for "document" transfers.
+*
+* 5.1.1
+*  PJS 09/15/2002
+*  Updated function 5 to handle database column names. Addded CLST
+*  variable to VARS() as VARS(15) so column names can be passed to
+*  FTMODE, and eventually to the converter program. The column names
+*  in CLST are in the same position order as the attribute names in
+*  ALST.
+*
+*  Save & restore several file transfer settings before and after
+*  Extended transfer function so that next Upload, Download, Import,
+*  or Export uses default settings instead of leftover settings. Also,
+*  use default setting if parameter = 32767, so we have a way to say
+*  "use default" for any argument in the Extended transfer.
+*
+* 5.0.1
+*  PJS 02/17/2002
+*  Added new function (5) to handle extended file transfer features,
+*  including item renaming and OEM/ANSI character set conversion.
+*  Added new element to CLIENV() array for FTBP library version number.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*   ADDED MAT CLIENV ARGUMENT - CONTAINS ACCUTERM INFORMATION
+*   FILE CONVERSION LOGIC MOVED TO FTMODE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM SERVER EXTENSION - FILE TRANSFER SUPPORT
+*
+**************************************************************************
+**************************************************************************
+*
+DIM PARAMS(30),VARS(26),CLIENV(10)
+*
+EQU AM TO CHAR(254)
+EQU VM TO CHAR(253)
+*
+EQU TXT.FLG.PARAM TO PARAMS(13)
+EQU EXT.FLG.PARAM TO PARAMS(14)
+EQU OVR.FLG.PARAM TO PARAMS(15)
+EQU UNL.FLG.PARAM TO PARAMS(17)
+EQU DCH.FLG.PARAM TO PARAMS(18)
+EQU DIR.FLG.PARAM TO PARAMS(21)
+EQU FIL.FLG.PARAM TO PARAMS(22)
+EQU FIL.CNV.PARAM TO PARAMS(23)
+EQU OEM.CHR.PARAM TO PARAMS(24)
+EQU PRO.FLG.PARAM TO PARAMS(25)
+*
+EQU ICNT TO VARS(1)
+EQU BCNT TO VARS(2)
+EQU IDMODE TO VARS(3)
+EQU ALST TO VARS(4)
+EQU HDR TO VARS(5)
+EQU EXP TO VARS(6)
+EQU GEN TO VARS(7)
+EQU PFX TO VARS(8)
+EQU SID TO VARS(9)
+EQU SKP TO VARS(10)
+EQU FILE TO VARS(11)
+EQU FNAME TO VARS(12)
+EQU ID TO VARS(13)
+EQU IDLST TO VARS(14)
+EQU CLST TO VARS(15)
+EQU IDS TO VARS(16)
+EQU ISIZ TO VARS(17)
+EQU ISEQ TO VARS(18)
+EQU ITEM TO VARS(19)
+EQU XSIZ TO VARS(20)
+EQU PATH TO VARS(21)
+EQU FN TO VARS(22)
+EQU FNLST TO VARS(23)
+EQU DFILE TO VARS(24)
+EQU FNS TO VARS(25)
+EQU MD.VAR TO VARS(26)
+*
+EQU CLI.PLATFORM TO CLIENV(1)
+EQU CLI.PRODUCT TO CLIENV(2)
+EQU CLI.RELEASE TO CLIENV(3)
+EQU CLI.CAPAS TO CLIENV(4)
+EQU CLI.SVCS TO CLIENV(5)
+EQU CLI.SERIAL TO CLIENV(6)
+EQU CLI.LICENSE TO CLIENV(7)
+EQU CLI.USER TO CLIENV(8)
+EQU CLI.VERSION TO CLIENV(9)
+EQU CLI.CONFIG TO CLIENV(10)
+*
+**************************************************************************
+*
+* INITIALIZED & DECODE FUNCTION
+*
+**************************************************************************
+*
+MAT VARS=''
+MD.VAR = MD
+ERR=0
+*
+BEGIN CASE
+ CASE FUNC=1
+  GOSUB DO.DOWNLOAD
+ CASE FUNC=2
+  GOSUB DO.UPLOAD
+ CASE FUNC=3
+  GOSUB DO.EXPORT
+ CASE FUNC=4
+  GOSUB DO.IMPORT
+ CASE FUNC=5
+  GOSUB DO.EXTENDED
+ CASE 1
+  STAT='Invalid function code!'
+END CASE
+IF STAT<>'' THEN
+ Data=''
+ ERRCD=32001; * ARBRITARY ERROR CODE
+ ERRMSG=STAT
+END
+ECHO OFF; * MAY BE LEFT ON AFTER DOING FILE TRANSFER
+RETURN
+*
+**************************************************************************
+*
+* DOWNLOAD FILE(S)
+*
+**************************************************************************
+*
+DO.DOWNLOAD: *
+*
+DIR.FLG.PARAM=1
+GOSUB SETUP.PARAMS
+IF ERR THEN RETURN
+IDLST=LST
+SUBNAME='FTRDITMS'
+CALL FTMODE(STAT,SUBNAME,MAT PARAMS,MAT VARS,MAT CLIENV)
+Data=XSIZ
+RETURN
+*
+**************************************************************************
+*
+* UPLOAD FILE(S)
+*
+**************************************************************************
+*
+DO.UPLOAD: *
+*
+DIR.FLG.PARAM=0
+GOSUB SETUP.PARAMS
+IF ERR THEN RETURN
+FNLST=LST
+SUBNAME='FTWTITMS'
+CALL FTMODE(STAT,SUBNAME,MAT PARAMS,MAT VARS,MAT CLIENV)
+Data=XSIZ
+RETURN
+*
+**************************************************************************
+*
+* EXPORT FILE
+*
+**************************************************************************
+*
+DO.EXPORT: *
+*
+DIR.FLG.PARAM=1
+GOSUB SETUP.PARAMS
+IF ERR THEN RETURN
+DCH.FLG.PARAM=(Data<1,2> <> 0)
+TXT.FLG.PARAM=1; * ALWAYS IN TEXT MODE
+FIL.CNV.PARAM=1; * ALLOW AUTOMATIC FILE FORMAT CONVERSIONS
+J=1;L=0;LOOP K=INDEX(PATH,'\',J) WHILE K DO L=K; J=J+1 REPEAT
+FNLST=PATH[L+1,9999]; * EXTRACT FILE NAME
+PATH=PATH[1,L]; * EXTRACT DIRECTORY
+IDLST=LST
+ALST=Data<5>
+HDR=Data<1,4>; IF HDR MATCHES '1N0N' THEN HDR=HDR+0 ELSE HDR=0
+EXP=(Data<1,5> <> 0)
+SUBNAME='FTRDDATA'
+CALL FTMODE(STAT,SUBNAME,MAT PARAMS,MAT VARS,MAT CLIENV)
+Data=XSIZ
+RETURN
+*
+**************************************************************************
+*
+* IMPORT FILE
+*
+**************************************************************************
+*
+DO.IMPORT: *
+*
+DIR.FLG.PARAM=0
+GOSUB SETUP.PARAMS
+IF ERR THEN RETURN
+DCH.FLG.PARAM=(Data<1,2> <> 0)
+TXT.FLG.PARAM=1; * ALWAYS IN TEXT MODE
+FIL.CNV.PARAM=1; * ALLOW AUTOMATIC FILE FORMAT CONVERSIONS
+J=1;L=0;LOOP K=INDEX(PATH,'\',J) WHILE K DO L=K; J=J+1 REPEAT
+FNLST=PATH[L+1,9999]; * EXTRACT FILE NAME
+PATH=PATH[1,L]; * EXTRACT DIRECTORY
+IDLST=LST
+ALST=Data<5>
+HDR=Data<1,4>; IF HDR MATCHES '1N0N' THEN HDR=HDR+0 ELSE HDR=0
+SKP=Data<1,5>; IF SKP MATCHES '1N0N' THEN SKP=SKP+0 ELSE SKP=0
+GEN=(Data<1,6> <> 0)
+PFX=Data<1,7>
+SID=Data<1,8>; IF SID MATCHES '1N0N' THEN SID=SID+0 ELSE SID=0
+SUBNAME='FTWTDATA'
+CALL FTMODE(STAT,SUBNAME,MAT PARAMS,MAT VARS,MAT CLIENV)
+Data=XSIZ
+RETURN
+*
+**************************************************************************
+*
+* EXTENDED FILE TRANSFER (SEND/RECEIVE/ITEM/FILE)
+*
+**************************************************************************
+*
+DO.EXTENDED: *
+*
+* SAVE DEFAULT SETTINGS
+SAVE.EXT.FLG=EXT.FLG.PARAM
+SAVE.OEM.CHR=OEM.CHR.PARAM
+SAVE.TXT.FLG=TXT.FLG.PARAM
+SAVE.OVR.FLG=OVR.FLG.PARAM
+* PARSE NEW SETTINGS
+DIR.FLG.PARAM=(Data<1> = 0); * UPLOAD=1 DOWNLOAD=0
+DBMODE=(Data<2> <> 0)       ; * DOCUMENT=0 DATABASE=1
+IF Data<3> NE 32767 THEN EXT.FLG.PARAM=(Data<3> <> 0); * PRESERVE FILE EXTENSION?
+IF Data<4> NE 32767 THEN OEM.CHR.PARAM=(Data<4> <> 0); * USE OEM/ANSI CONVERSION?
+PRO.FLG.PARAM=(Data<5> <> 0); * PROTOCOL: KERMIT=1 ASCII=0
+IF Data<6> NE 32767 THEN TXT.FLG.PARAM=(Data<6> = 0) ; * BINARY=1 TEXT=0
+IF Data<7> NE 32767 THEN OVR.FLG.PARAM=Data<7>       ; * PROTECT=0 OVERWRITE=1 MERGE=2
+IF NUM(OVR.FLG.PARAM) THEN OVR.FLG.PARAM=OVR.FLG.PARAM+0 ELSE OVR.FLG.PARAM=0
+* CHECK HOST FILE NAME
+FNAME=Data<8>
+IF FNAME[1,5] EQ 'DICT ' THEN
+ OPEN FNAME TO FILE ELSE
+  ERR=1
+  STAT='Unable to open file ':FNAME
+  GOTO RESTORE.PARAMS
+ END
+ DFILE=MD
+ FNAME=FNAME[6,99]
+END ELSE
+ OPEN FNAME TO FILE ELSE
+  ERR=1
+  STAT='Unable to open file ':FNAME
+  GOTO RESTORE.PARAMS
+ END
+ OPEN 'DICT',FNAME TO DFILE ELSE
+  ERR=1
+  STAT='Unable to open file DICT ':FNAME
+  GOTO RESTORE.PARAMS
+ END
+END
+* PARSE HOST ID LIST
+IDLST=''
+TMP=Data<9>
+IF TMP<>'' THEN
+ N=DCOUNT(TMP,VM)
+ FOR I=1 TO N
+  IDLST<-1>=TMP<1,I>
+ NEXT I
+END
+* GET DOS DIRECTORY
+PATH=Data<10>
+* PARSE DOS FILE LIST
+FNLST=''
+TMP=Data<11>
+IF TMP<>'' THEN
+ N=DCOUNT(TMP,VM)
+ FOR I=1 TO N
+  FNLST<-1>=TMP<1,I>
+ NEXT I
+END
+*
+IF DBMODE THEN
+ * DATABASE MODE
+ ALST=Data<12>              ; * ATTRIBUTE NAME LIST
+ CLST=Data<20>              ; * COLUMN NAME LIST
+ HDR=Data<13>               ; * USE HEADER RECORD?
+ IF NUM(HDR) THEN HDR=HDR+0 ELSE HDR=0
+ DCH.FLG.PARAM=Data<19>     ; * TAB=0 COMMA=1
+ IF NUM(DCH.FLG.PARAM) THEN DCH.FLG.PARAM=DCH.FLG.PARAM+0 ELSE DCH.FLG.PARAM=0
+ TXT.FLG.PARAM=1            ; * ALWAYS USE TEXT FOR DATABASE TRANSFERS
+ FIL.CNV.PARAM=1            ; * ALLOW AUTOMATIC FILE FORMAT CONVERSION
+ IF DIR.FLG.PARAM THEN
+  * DOWNLOAD
+  EXP=(Data<18> <> 0)       ; * EXPLODE MULTIVALUES?
+  SUBNAME='FTRDDATA'
+ END ELSE
+  * UPLOAD
+  SKP=Data<14>              ; * NUMBER OF HEADER ROWS TO SKIP
+  IF NUM(SKP) THEN SKP=SKP+0 ELSE SKP=0
+  GEN=(Data<15> <> 0)       ; * GENERATE SEQUENTIAL IDS?
+  PFX=Data<16>              ; * ITEM ID PREFIX
+  SID=Data<17>              ; * STARTING ITEM ID NUMBER
+  IF NUM(SID) THEN SID=SID+0 ELSE SID=0
+  SUBNAME='FTWTDATA'
+ END
+END ELSE
+ FIL.CNV.PARAM=0            ; * NO AUTOMATIC FILE FORMAT CONVERSION
+ IF DIR.FLG.PARAM THEN
+  * DOWNLOAD
+  SUBNAME='FTRDITMS'
+ END ELSE
+  * UPLOAD
+  SUBNAME='FTWTITMS'
+ END
+END
+CALL FTMODE(STAT,SUBNAME,MAT PARAMS,MAT VARS,MAT CLIENV)
+Data=XSIZ
+*
+RESTORE.PARAMS: *
+* RESTORE DEFAULT SETTINGS
+EXT.FLG.PARAM=SAVE.EXT.FLG
+OEM.CHR.PARAM=SAVE.OEM.CHR
+TXT.FLG.PARAM=SAVE.TXT.FLG
+OVR.FLG.PARAM=SAVE.OVR.FLG
+*
+RETURN
+*
+**************************************************************************
+*
+* PARSE DATA INTO STANDARD PARAMETERS
+*
+**************************************************************************
+*
+SETUP.PARAMS: *
+*
+PRO.FLG.PARAM=(Data<1,1> <> 0)
+TXT.FLG.PARAM=(Data<1,2> = 0)
+OVR.FLG.PARAM=Data<1,3>
+IF NUM(OVR.FLG.PARAM) THEN
+ OVR.FLG.PARAM=OVR.FLG.PARAM+0
+ IF OVR.FLG.PARAM<0 OR OVR.FLG.PARAM>2 THEN OVR.FLG.PARAM=1
+END ELSE
+ OVR.FLG.PARAM=0
+END
+FNAME=Data<2>
+IF FNAME[1,5] EQ 'DICT ' THEN
+ OPEN FNAME TO FILE ELSE
+  ERR=1
+  STAT='Unable to open file ':FNAME
+  RETURN
+ END
+ DFILE=MD
+ FNAME=FNAME[6,99]
+END ELSE
+ OPEN FNAME TO FILE ELSE
+  ERR=1
+  STAT='Unable to open file ':FNAME
+  RETURN
+ END
+ OPEN 'DICT',FNAME TO DFILE ELSE
+  ERR=1
+  STAT='Unable to open file DICT ':FNAME
+  RETURN
+ END
+END
+PATH=Data<3>
+LST=''
+TMP=Data<4>
+IF TMP<>'' THEN
+ N=DCOUNT(TMP,VM)
+ FOR I=1 TO N
+  LST<-1>=TMP<1,I>
+ NEXT I
+END
+RETURN
+*
+END

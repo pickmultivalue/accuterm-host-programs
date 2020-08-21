@@ -1,0 +1,116 @@
+SUBROUTINE FTCLIENV(MAT CLIENV)
+**************************************************************************
+*Copyright (c) 2000-2010 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTCLIENV
+* AUTHOR: PJS
+* VERSION: 8.0.1
+* CREATED: 09/15/2000
+* UPDATED: 10/18/2019
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.1
+*  PJS 10/18/2019
+*   Added '$' to capability string to indicate that premium features are
+*   enabled.
+*
+* 7.0.1
+*  PJS 06/05/2010
+*   Updated capabilties list (documentation only).
+*
+* 5.5.1
+*  PJS 03/13/2009
+*   Updated capabilities list for AccuTerm 7
+*
+* 5.3.1
+*  PJS 05/08/2006
+*   Updated for 5.3a release. This routine has been superceded by
+*   the new FTINITEX subroutine.
+*
+* 5.0.1
+*  PJS 02/17/2002
+*   ADDED CLI.VERSION TO CLIENV() ARRAY POSITION 9
+*   TO RETURN VERSION NUMBER OF FTBP LIBRARY
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* INITIALIZE CLIENV ARRAY WITH ACCUTERM VERSION INFORMATION
+*
+**************************************************************************
+**************************************************************************
+*
+* FTCLIENV() SUBROUTINE INTERFACE
+*
+* THIS ROUTINE CALLS FTVSINF AND INITIALIZES THE CLIENV ARRAY WITH THE
+* RETURNED VALUES.
+*
+DIM CLIENV(10)
+EQU CLI.PLATFORM TO CLIENV(1)   ;* 0=not AccuTerm, 1=DOS, 2=Win16, 3=Win32
+EQU CLI.PRODUCT TO CLIENV(2)    ;* 0=unknown, 1=AccuTerm, 2=AccuTerm/PLUS, 3=AccuTerm/Win16, 4=AccuTerm/Standard, 5=AccuTerm/Internet, 6=AccuTerm/Control, 7=AccuTerm/Lite, 10=AccuTerm/Mobile
+EQU CLI.RELEASE TO CLIENV(3)    ;* product release (format is 5.301, where letter suffix is converted to numeric 01 to 26)
+EQU CLI.CAPAS TO CLIENV(4)      ;* client capabilities string (documented below)
+EQU CLI.SVCS TO CLIENV(5)       ;* client services string (documented below)
+EQU CLI.SERIAL TO CLIENV(6)     ;* AccuTerm serial number
+EQU CLI.LICENSE TO CLIENV(7)    ;* AccuTerm license type (1=single, 2=small business, 3=enterprise, 4=personal, 5=developer, 6=bundled, 7=organization, 8=component, 9=evaluation)
+EQU CLI.USER TO CLIENV(8)       ;* Registered user, company, location
+EQU CLI.VERSION TO CLIENV(9)    ;* Host program version
+EQU CLI.RESERVED TO CLIENV(10)  ;* Reserved for future use
+*
+* CAPABILITIES: string of characters representing capabilities available
+*          A = ASCII file transfer protocol supported
+*          B = border effects (visual styles) are enabled
+*          C = data capture supported
+*          D = file download supported
+*          E = execute DOS/Windows commands
+*          F = character set translation supported during file transfer
+*          G = GUI supported
+*          H = server mode supported
+*          I = image display supported
+*          J = screen save/restore supported
+*          K = Kermit file transfer protocol supported
+*          L = background image supported
+*          M = query settings (ATWIN.INI) supported (ESC STX '&')
+*          O = Object Bridge supported
+*          P = packetized messages supported
+*          Q = message integrity checks supported (also optional final ACK, save/restore mouse)
+*          R = reliable connection
+*          S = VBA scripting supported
+*          T = file transfer error info available
+*          U = file upload supported
+*          V = host capabilities (ESC STX '=') supported
+*          W = synchronous scripts supported (ESC STX 'R')
+*          X = file conversion supported
+*          Y = query status supported (ESC STX 'y')
+*          Z = case inversion is in effect
+*          ! = use tagged delimiters in FTENCODE/FTDECODE
+*          $ = PREMIUM FEATURES ARE ENABLED
+*
+* SERVICES: string of letters representing services available
+*          0 = server mode supported (same as H in CAPABILITIES above)
+*          a = Object Bridge (same as O in CAPABILITIES above)
+*          b = File format conversion (same as X in capabilities above)
+*          g = GUI (same as G in capabilities above)
+*
+*
+MAT CLIENV = ''
+CALL FTVSINF(CLI.PLATFORM, CLI.PRODUCT, CLI.RELEASE, CLI.CAPAS, CLI.SVCS, CLI.SERIAL, CLI.LICENSE, CLI.USER)
+*
+CALL FTVERSN(VERSN)
+CLI.VERSION = VERSN
+*
+RETURN
+*
+END

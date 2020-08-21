@@ -1,0 +1,82 @@
+SUBROUTINE ATGUIBEGINMACRO(ID, ERRORS, STATE)
+**************************************************************************
+*Copyright (c) 1999-2006 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUIBEGINMACRO
+* AUTHOR: PJS
+* VERSION: 5.3.1
+* CREATED: 11/01/1999
+* UPDATED: 06/12/2006
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.1
+*  PJS 06/12/2006
+*   Updated to use new version of FTOBJREQ, which requires that
+*   the PARAMS & CLIENV arrays be completely initialized.
+*
+* 5.2.1
+*  PJS 10/27/2004
+*   Adjust macro position in state variable for contents of
+*   local (posted) event queue.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI MANAGER - BEGIN MACRO
+*
+* CALL THIS SUBROUTINE TO BEGIN RECORDING A MACRO.
+*
+* INPUT:
+*
+*  ID         permanent macro identifier (cached on user's PC)
+*               null if temporary or non-cached macro
+*
+* OUTPUT:
+*  ERRORS     ERRORS<1> is non-zero if errors have occurred
+*
+* OTHER:
+*  STATE      internal use only - do not modify
+*
+**************************************************************************
+*
+$INCLUDE ATGUIEQUATES
+EQU THISPGM TO 'ATGUIBEGINMACRO'
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30), CLIENV(10)
+ERRORS = GRSUCCESS
+IF NOT(STATE<1>) THEN
+ CALL ATGUIERROR(3, THISPGM, '', 0, GRFATAL, '', ERRORS)
+ RETURN
+END
+*
+* CHECK IF RECORDING MACRO
+*
+IF STATE<2> THEN
+ CALL ATGUIERROR(2, THISPGM, '', 0, GRNOMAC, '', ERRORS)
+ RETURN
+END
+*
+* START NEW MACRO
+*
+REC = 'MACRO' : VM : DATE() : '.' : TIME() : VM : ID ;* MACRO HEADER
+REC = REC : AM : GCCONTEXT : VM : ATGUIVERSION : VM : STATE<3> ;* SPECIFY CURRENT VERSION & SCALE
+M = 50 + STATE<5>
+K = INDEX(STATE, AM, M)
+IF K THEN STATE = STATE[1, K] ;* DISCARD ANY PREVIOUS MACRO
+STATE<2> = 1 ;* TURN ON MACRO FLAG
+STATE<M+1> = REC
+RETURN
+*
+END

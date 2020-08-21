@@ -1,0 +1,325 @@
+*
+**************************************************************************
+*Copyright (c) 1999-2020 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: WED
+* AUTHOR: PJS
+* VERSION: 8.0.1
+* CREATED: 11/01/1999
+* UPDATED: 02/11/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.1
+*  PJS 02/11/2020
+*   Added support for MVON# platform (MVON).
+*
+* 7.1.2
+*  PJS 03/19/2014
+*   Added support for OASYS platform.
+*
+* 7.1.1
+*  PJS 09/17/2012
+*   Changed max items from 10 to 20.
+*
+* 7.0.3
+*  PJS 06/02/2011
+*   Added check for 'E' capability (execute external program) and if not
+*   present show error message and terminate (ATIE "safe" connections).
+*
+* 7.0.2
+*  PJS 02/11/2011
+*   Moved command line parse into separate subroutine (FTCMDLN)
+*   which is shared by other command-line programs. The new parser
+*   can handle simple upper-case conversion of the command line
+*   on those platforms which normally support this feature.
+*
+* 7.0.1
+*  PJS 09/15/2009
+*   Updated for AccuTerm 7 release.
+*
+* 5.3.5
+*  PJS 12/20/2007
+*   Added support for CACHE platform.
+*
+* 5.3.4
+*  PJS 12/14/2006
+*   Change SELECT statement to include list variable so when QM
+*   'MODE SELECTV' is in effect program will still compile.
+*
+* 5.3.3
+*  PJS 11/08/2006
+*   Added NO.PAGE=@(0,0) to disable pagination for QM, ON, etc.
+*   Added support for ON (ONWare MVON) platform.
+*
+* 5.3.2
+*  PJS 07/24/2006
+*   Changed NR platform to use @ACCOUNT instead of U50BB. Added
+*   support for OI (OpenInsight CTO) platform.
+*
+* 5.3.1
+*  PJS 05/08/2006
+*   Updated for 5.3a release. Combined old calls to FTINIT and
+*   FTCLIENV to call new FTINITEX subroutine.
+*
+* 5.0.5
+*  PJS 08/16/2005
+*   Changed U50BB to @ACCOUNT for PICK (D3) platform type, to
+*   account for unpredictable format of U50BB result: "WHO (A"
+*   vs. "WHO (C".
+*
+* 5.0.4
+*  PJS 03/05/2004
+*   Added new NR (Northgate Reality 9+) platform type, same as
+*   old MD, except uses the SENTENCE() function for command line.
+*
+* 5.0.3
+*  PJS 10/24/2003
+*   Integrated QM platform specific code per mods from Martin
+*   Phillips. Fixed incorrect NEXT variable in line 183.
+*
+* 5.0.2
+*  PJS 10/08/2002
+*   Added new ULTX (ancient Ultimate) platform type and
+*   updated message text for AccuTerm 2K2.
+*
+* 5.0.1
+*  PJS 02/17/2002
+*  Added new element to CLIENV() array for FTBP library version number.
+*
+* 4.1.2
+*   PJS 10/06/2001
+*    Added /T and /A command line options for atwed32.exe.
+*
+* 4.1.1
+*  PJS 09/12/2001
+*   Argument list to FTSVRSUB added SESSIONID variable. SESSIONID has
+*   dollar-sign ($) prefix for new AutoClose support.
+*
+* 4.0.8
+*  PJS 07/24/2001
+*   Added @SENTENCE to Ultimate+ version
+*
+* 4.0.7
+*  PJS 06/04/2001
+*   Argument list to FTSVRSUB added FV variable
+*
+* 4.0.6
+*  PJS 05/11/2001
+*   Added new platform types: SEQ (Sequoia/mvEnterprise) & VIS (UniVision)
+*
+* 4.0.5
+*  PJS 04/15/2001
+*   Added (L) command line option to open in read-only mode
+*
+* 4.0.4
+*  PJS 12/14/2000
+*   Added new platform type: MVBASE
+*
+* 4.0.3
+*  PJS 11/24/2000
+*   Added new platform type: AP
+*
+* 4.0.2
+*  PJS 11/03/2000
+*   Added platform specific support code for Ultimate
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM WINDOWS EDITOR
+*
+**************************************************************************
+**************************************************************************
+*
+EQU REL TO '3.0'
+EQU AM TO CHAR(254), CR TO CHAR(13), LF TO CHAR(10)
+EQU ESC TO CHAR(27), STX TO CHAR(2)
+*
+WEDPGM = 'ATWED32.EXE'
+EQU MAXITMS TO 20 ;* MAXIMUM NUMBER OF DOCUMENTS TO EDIT
+*
+DIM FTCONF(30)
+EQU MAX.POS.PARAM TO FTCONF(1)
+EQU MCP.FLG.PARAM TO FTCONF(10)
+EQU SVRNAME TO FTCONF(26)
+EQU READ.OK TO FTCONF(27)
+EQU WRITE.OK TO FTCONF(28)
+EQU CONV.OK TO FTCONF(29)
+EQU EXEC.OK TO FTCONF(30)
+*
+DIM CLIENV(10)
+EQU CLI.PLATFORM TO CLIENV(1)
+EQU CLI.PRODUCT TO CLIENV(2)
+EQU CLI.RELEASE TO CLIENV(3)
+EQU CLI.CAPAS TO CLIENV(4)
+EQU CLI.SVCS TO CLIENV(5)
+EQU CLI.SERIAL TO CLIENV(6)
+EQU CLI.LICENSE TO CLIENV(7)
+EQU CLI.USER TO CLIENV(8)
+EQU CLI.VERSION TO CLIENV(9)
+EQU CLI.CONFIG TO CLIENV(10)
+*
+NO.PAGE=@(0,0) ;* DISABLE PAGINATION (QM, ON)
+*
+**************************************************************************
+*
+* CHECK IF FTCHK HAS BEEN RUN SINCE THIS PROGRAM WAS INSTALLED
+*
+PRINT 'You should RUN FTBP FTCHK and select your host platform';*#GENERIC#*
+PRINT 'before you run this program!';*#GENERIC#*
+SLEEP 3;*#GENERIC#*
+*
+**************************************************************************
+*
+CALL FTINITEX('',MAT FTCONF,MAT CLIENV,FV,STAT)
+IF STAT NE '' THEN
+ PRINT STAT
+ STOP
+END
+*
+IF CLI.PLATFORM<2 THEN
+ PRINT 'WED requires AccuTerm 2000 or later to run!'
+ STOP
+END
+IF INDEX(CLI.CAPAS,'Z',1) THEN
+ PRINT 'Upper case / lower case inversion must be disabled to run WED.'
+ PRINT 'Try typing "PTERM CASE NOINVERT" before running WED.'
+ STOP
+END
+IF INDEX(CLI.CAPAS,'H',1)=0 THEN
+ PRINT 'This version of AccuTerm does not support server mode!'
+ STOP
+END
+IF INDEX(CLI.CAPAS,'E',1)=0 THEN
+ PRINT 'This version of AccuTerm does not support WED!'
+ STOP
+END
+CALL FTPGMDIR(PATH) ;* NEED PATH TO LAUNCH EDITOR PROGRAM
+IF INDEX(CLI.CAPAS,'M',1) THEN
+ * QUERY PROGRAM NAME FROM ATWIN.INI
+ PRINT ESC:STX:'&MVSERVICES,EDIT':CR:
+ ECHO OFF; PROMPT ''
+ INPUT ANS:
+ ECHO ON; PROMPT '?'
+ ANS=FIELD(ANS,',',3)
+ IF ANS<>'' THEN WEDPGM=ANS
+END
+PRINT ESC:STX:'PInitSession.Output CStr(Abs(FileExists("':PATH:WEDPGM:'"))) & Chr$(13)':CR:
+ECHO OFF; PROMPT ''
+INPUT ANS:
+ECHO ON; PROMPT '?'
+IF ANS=0 THEN
+ PRINT 'A required component (':WEDPGM:') has not been installed.'
+ STOP
+END
+*
+SESSIONID = '$':TIME() ;* UNIQUE AUTOCLOSE ID FOR SERVER
+*
+* GET COMMAND LINE
+*
+PRINT 'Enter file name & item list to edit':; INPUT CMDLINE; CMDLINE='WED ':CMDLINE;*#GENERIC#*
+*#ADDS#*CMDLINE = SENTENCE()
+*#AP#*TCLREAD CMDLINE
+*#CACHE#*CMDLINE = @SENTENCE
+*#ENH#*CMDLINE = SENTENCE()
+*#JB#*CMDLINE = @SENTENCE
+*#MD#*PRINT 'Enter file name & item list to edit':; INPUT CMDLINE; CMDLINE='WED ':CMDLINE
+*#MVBASE#*CMDLINE = SENTENCE()
+*#MVON#*CMDLINE = @SENTENCE
+*#NR#*CMDLINE = SENTENCE()
+*#OAS#*CMDLINE = @SENTENCE
+*#OI#*CMDLINE = @SENTENCE
+*#ON#*CMDLINE = @SENTENCE
+*#PICK#*TCLREAD CMDLINE
+*#QM#*CMDLINE = @SENTENCE
+*#R83#*PRINT 'Enter file name & item list to edit':; INPUT CMDLINE; CMDLINE='WED ':CMDLINE
+*#SEQ#*CMDLINE = SENTENCE()
+*#UD#*CMDLINE = @SENTENCE
+*#ULT#*CMDLINE = @SENTENCE; CONVERT AM TO ' ' IN CMDLINE
+*#ULTX#*CMDLINE = @SENTENCE; CONVERT AM TO ' ' IN CMDLINE
+*#UV#*CMDLINE = @SENTENCE
+*#VIS#*CMDLINE = SENTENCE()
+*
+* PARSE COMMAND LINE
+*
+CALL FTCMDLN(MAXITMS,CMDLINE,VERB,FILENAME,ITMLST,OPTIONS,STAT)
+IF STAT <> '' THEN
+ IF OCONV(STAT,'MCU') = 'TOO MANY ITEMS' THEN
+  PRINT 'Cannot open more than ':MAXITMS:' documents; extra discarded!'
+  PRINT 'Press <Enter> to continue...':
+  PROMPT ''
+  INPUT ANS
+  PROMPT '?'
+ END
+END
+*
+* GET ACCOUNT NAME
+*
+WHO = OCONV('','U50BB');*#GENERIC#*
+ACCT = FIELD(WHO,' ',3);*#GENERIC#*
+IF ACCT = '' THEN ACCT = FIELD(WHO,' ',2);*#GENERIC#*
+*#ADDS#*ACCT = FIELD(OCONV('','U50BB'),' ',2)
+*#AP#*WHO = OCONV('','U50BB')
+*#AP#*ACCT = FIELD(WHO,' ',3)
+*#AP#*IF ACCT = '' THEN ACCT = FIELD(WHO,' ',2)
+*#CACHE#*ACCT = @WHO
+*#ENH#*ACCT = FIELD(OCONV('','U50BB'),' ',2)
+*#JB#*ACCT = @WHO
+*#MD#*ACCT = FIELD(OCONV('','U50BB'),' ',2)
+*#MVBASE#*ACCT = FIELD(OCONV('','U50BB'),' ',2)
+*#MVON#*ACCT = @WHO
+*#NR#*ACCT = @ACCOUNT
+*#OAS#*ACCT = @WHO
+*#OI#*ACCT = @APPID<1>
+*#ON#*ACCT = @WHO
+*#PICK#*ACCT = @ACCOUNT
+*#QM#*ACCT = @WHO
+*#R83#*ACCT = FIELD(OCONV('','U50BB'),' ',2)
+*#SEQ#*WHO = OCONV('','U50BB')
+*#SEQ#*ACCT = FIELD(WHO,' ',3)
+*#SEQ#*IF ACCT = '' THEN ACCT = FIELD(WHO,' ',2)
+*#UD#*ACCT = @WHO
+*#ULT#*ACCT = FIELD(OCONV('','U50BB'),' ',2)
+*#ULTX#*ACCT = FIELD(OCONV('','U50BB'),' ',2)
+*#UV#*ACCT = @WHO
+*#VIS#*ACCT = FIELD(OCONV('','U50BB'),' ',2)
+*
+* BUILD NEW COMMAND LINE
+*
+NEWCMDS = ''
+IF FILENAME <> '' THEN
+ IF INDEX(FILENAME,' ',1) THEN FILENAME = '"':FILENAME:'"'
+ NEWCMDS = NEWCMDS : ' /F=' : FILENAME
+END
+IF INDEX(OPTIONS,'L',1) THEN NEWCMDS = NEWCMDS : ' /L' ;* READ-ONLY?
+ITMCNT = DCOUNT(ITMLST,AM)
+FOR I = 1 TO ITMCNT
+ ID = ITMLST<I>
+ IF INDEX(ID,' ',1) THEN ID = '"':ID:'"'
+ NEWCMDS = NEWCMDS : ' /I=' : ID
+NEXT I
+*
+* LAUNCH THE EDITOR PROGRAM
+*
+NEWCMDS = '/T=MVDB /H=':SESSIONID:' /A=':ACCT:NEWCMDS
+PRINT ESC:STX:'<':PATH:WEDPGM:' ':NEWCMDS
+CALL FTSVRSUB(SESSIONID,MAT FTCONF,MAT CLIENV,FV) ;* ENTER SERVER MODE SO EDITOR CAN READ/WRITE DATA
+*
+* DONE
+*
+PROMPT '?'
+STOP
+*
+END

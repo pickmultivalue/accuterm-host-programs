@@ -1,0 +1,90 @@
+*
+**************************************************************************
+*Copyright (c) 2004 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: MAKE.TERM.ITEM
+* AUTHOR: PJS
+* VERSION: 1.0.0
+* CREATED: 06/01/2004
+* UPDATED: 
+*
+* MAINTENANCE RECORD:
+*
+*************************************************************************
+*************************************************************************
+*
+* SMART USER INTERFACE Utility
+*
+* Creates new EQUates for terminal elements defined in SUI.TERMDEF.
+* The new EQUates are saved as "TI", and should be used to update
+* the EQUates in SUI.GET.TERM. Also creates a terminal definition
+* template, "TERMDEF.XXX".
+*
+*************************************************************************
+*************************************************************************
+*
+EQU AM TO CHAR(254)
+OPEN 'SUIBP' TO FN.TERM ELSE STOP 201,'SUIBP'
+READ Z FROM FN.TERM,'SUI.TERMDEF' ELSE STOP 202,'SUI.TERMDEF'
+N = DCOUNT(Z,AM)
+F = 0
+W = 'USE':AM:'0'
+T = ''
+FOR I = 1 TO N
+ Ln = TRIM(Z<I>)
+ IF Ln[1,1] NE '!' THEN
+  IF Ln[1,4] EQ 'EQU ' THEN
+   OK = 0
+   K = INDEX(Ln,' ;* ',1)
+   IF K THEN CMT = Ln[K+2,999] ELSE CMT = ''
+   ID = FIELD(FIELD(Ln,' ',2),'.',2)
+   IF ID[LEN(ID),1] EQ '$' THEN
+    IF ID NE 'TERM.ATT$' THEN
+     * KEY
+     NBR = FIELD(Ln,' ',4)
+     IF NBR >= 1 AND NBR <= 159 THEN
+      ID = ID[1,LEN(ID)-1]
+      LOCATE NBR IN W<4> BY 'AR' SETTING K ELSE
+       INS ID BEFORE W<3,K>
+       INS NBR BEFORE W<4,K>
+       T<-1> = ((ID : ': ') 'L#20') : CMT
+       OK = 1
+      END
+     END
+    END
+   END ELSE
+    * COMMAND
+    NBR = FIELD(FIELD(Ln,'(',2),')',1)
+    IF NBR >= 1 AND NBR <= 90 THEN
+     LOCATE NBR IN W<2> BY 'AR' SETTING K ELSE
+      INS ID BEFORE W<1,K>
+      INS NBR BEFORE W<2,K>
+      T<-1> = ((ID : ': ') 'L#20') : CMT
+      OK = 1
+     END
+    END
+   END
+   IF NOT(OK) THEN PRINT 'BAD: ':I:' - ':Ln
+  END ELSE
+   IF F THEN
+    IF Ln[1,1] EQ '*' AND Ln[1,9] NE '* RESERVE' THEN T<-1> = Ln
+   END ELSE
+    F = (Ln EQ '***') ;* LOOK FOR INDICATOR COMMENT
+   END
+  END
+ END ELSE
+  I = N
+ END
+NEXT I
+W<1> = "EQU TERM.CMD.STRS TO '" : W<1> : "'"
+W<2> = "EQU TERM.CMD.NBRS TO '" : W<2> : "'"
+W<3> = "EQU TERM.KEY.STRS TO '" : W<3> : "'"
+W<4> = "EQU TERM.KEY.NBRS TO '" : W<4> : "'"
+WRITE W ON FN.TERM,'TI'
+WRITE T ON FN.TERM,'TERMDEF.XXX'
+END

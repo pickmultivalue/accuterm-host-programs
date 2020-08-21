@@ -1,0 +1,222 @@
+SUBROUTINE SUI.FOLD.TEXT(Value, Width, NewLine, LinePos, ChgLine, ChgBeg, ChgEnd)
+**************************************************************************
+*Copyright (c) 2004 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: SUI.FOLD.TEXT
+* AUTHOR: PJS
+* VERSION: 1.0.1
+* CREATED: 06/01/2004
+* UPDATED: 07/27/2004
+*
+* MAINTENANCE RECORD:
+*
+* 1.0.1
+*  PJS 07/27/2004
+*   Fixed problem when ChgLine = 1, and PrevCnt = 0. Also fixed problem
+*   with ChgBeg and ChgEnd being returned as zero when ChgLine is non-
+*   zero.
+*
+*************************************************************************
+*************************************************************************
+*
+* SMART USER INTERFACE: Mult-Line Text Folding
+*
+*   This is an "internal use" subroutine, called by the
+*   SUI.INPUT.MLTEXT and SUI.DISPLAY.TEXT subroutines.
+*   Do not call directly.
+*
+**************************************************************************
+**************************************************************************
+*
+* The Fold algorithm used here includes an optimization so that
+* unaffected lines are not re-folded. This is accomplished by
+* calculating a "window" before which, a change would not affect,
+* and after which, once the previous and current line-breaks
+* are in sync, a change would also not affect. The changed line
+* number is passed in ChgLine, and the current fold positions are
+* passed in LinePos. If you need to perform a complete refold,
+* simply pass 0 for ChgLine. If ChgLine is non-zero, ChgBeg and
+* ChgEnd are caluclated and return the first and last lines that
+* require refreshing. The new line break positions are returned
+* in LinePos.
+*
+**************************************************************************
+*
+EQU BEL TO CHAR(7), AM TO CHAR(254)
+*
+* List of characters to keep on the "line before" when breaking lines
+BreakBefore = '"':"#$'(=>`[^{~"
+* List of characters to keep on the "line after" when breaking lines
+BreakAfter = ' !%&)*+,-./:;>?\]_|}'
+*
+MinBrk = INT((Width * 2) / 3) + 1 ;* Minimum width for folding value at blanks
+LineCnt = DCOUNT(LinePos,AM) - 1
+PrevLen = LinePos<LineCnt+1> - 1
+CurLen = LEN(Value)
+Delta = CurLen - PrevLen
+*
+** This is debugging code to ensure that optimized folding works correctly
+*IF ChgLine THEN
+* * First try optimized method
+* SaveLinePos = LinePos
+* SaveLineCnt = LineCnt
+* SavePrevLen = PrevLen
+* SaveChgLine = ChgLine
+* GOSUB DO.FOLD.DBG
+* * Now try complete method
+* OptLinePos = LinePos
+* OptLineCnt = LineCnt
+* OptChgBeg = ChgBeg
+* OptChgEnd = ChgEnd
+* LinePos = SaveLinePos
+* LineCnt = SaveLineCnt
+* PrevLen = SavePrevLen
+* ChgLine = 0
+* GOSUB DO.FOLD.DBG
+* * Compare results
+* IF LinePos <> OptLinePos OR LineCnt <> OptLineCnt THEN
+*  PRINT BEL:
+*  DEBUG
+*  * Repeat optimized method for debugging
+*  ChkLinePos = LinePos
+*  ChkLineCnt = LineCnt
+*  LinePos = SaveLinePos
+*  LineCnt = SaveLineCnt
+*  PrevLen = SavePrevLen
+*  ChgLine = SaveChgLine
+*  GOSUB DO.FOLD.DBG
+* END ELSE
+*  ChgLine = SaveChgLine
+*  ChgBeg = OptChgBeg
+*  ChgEnd = OptChgEnd
+* END
+* RETURN
+*END
+*DO.FOLD.DBG: *
+*
+PrevPos = LinePos ;* Previous line break positions
+PrevCnt = LineCnt ;* Previous line count
+PrevIdx = 1  ;* Current line in previous state
+LinePos = '' ;* Initialize line break positions
+LineCnt = 0  ;* Initialize line count
+ChgBeg = 0 ;* Line number of first changed line
+ChgEnd = 0 ;* Line number of last changed line
+InSync = 0
+*
+* Check if change is on last line, and list line is empty
+IF ChgLine = PrevCnt AND PrevPos<PrevCnt> = PrevPos<PrevCnt+1> THEN
+ ChgLine = ChgLine - 1 ;* Back up one - nothing on last line to change
+END
+*
+X = 1
+K = 0
+*
+* Copy line breaks that are not affected by the change and
+* adjust positions in previous state to account for insert
+* or delete
+IF ChgLine > 0 AND PrevCnt > 0 THEN
+ ChgWndStart = PrevPos<ChgLine> - Width ;* All characters before this cannot be influenced by change
+ ChgWndEnd = PrevPos<ChgLine> + Delta + Width ;* Characters after this MAY NOT be influenced by change
+ FOR I = 1 TO PrevCnt + 1
+  IF I > ChgLine THEN
+   * Adjust position to make comparison with updated value easier
+   PrevPos<I> = PrevPos<I> + Delta
+  END ELSE
+   IF PrevPos<I> <= CurLen THEN
+    K = PrevPos<I+1>
+    IF K < ChgWndStart THEN
+     * Line break cannot be influenced by update, so just copy it
+     LineCnt = LineCnt + 1
+     LinePos<LineCnt> = X
+     K = K - X
+     X = X + K
+    END
+   END
+  END
+ NEXT I
+END
+*
+* Main fold loop
+LOOP UNTIL X > CurLen OR InSync DO
+ LineCnt = LineCnt + 1
+ * Examine next line for break position
+ Part = Value[X,Width]
+ plen = LEN(Part)
+ K = INDEX(Part,NewLine,1) ;* Look for next hard line break
+ IF K = 0 THEN
+  IF X + plen - 1 < CurLen THEN
+   K = INDEX(Part,' ',COUNT(Part,' ')) ;* Look for next blank
+   IF K < MinBrk THEN
+    FOR I = LEN(Part) TO K + 1 STEP -1 ;* Look for other break character in last third of part
+     C = Part[I,1]
+     IF INDEX(BreakAfter,C,1) THEN
+      K = I
+      I = 0
+     END ELSE
+      IF INDEX(BreakBefore,C,1) THEN
+       IF I > 1 THEN
+        K = I - 1
+        I = 0
+       END
+      END
+     END
+    NEXT I
+    IF K = 0 THEN K = plen
+   END
+  END ELSE
+   K = plen
+  END
+ END
+ IF ChgLine > 0 AND PrevCnt > 0 THEN
+  * Synchronize PrevPos<PrevIdx> to current line
+  LOOP WHILE PrevIdx <= PrevCnt AND (ChgLine = PrevIdx OR PrevPos<PrevIdx> < X) DO PrevIdx = PrevIdx + 1 REPEAT
+  * When in sync, if line numbers are different, then flag change for re-display
+  IF LineCnt NE PrevIdx THEN
+   ChgEnd = LineCnt
+   IF ChgBeg = 0 THEN ChgBeg = ChgEnd
+  END
+  * Check if current line contains change or if breaks are different from previous state
+  IF ChgLine = LineCnt OR X NE PrevPos<PrevIdx> OR X + K NE PrevPos<PrevIdx+1> THEN
+   * Remmeber first & last changed lines
+   ChgEnd = LineCnt
+   IF ChgBeg = 0 THEN ChgBeg = ChgEnd
+  END ELSE
+   * This line breaks at the same position as in previous state
+   IF X > ChgWndEnd THEN
+    * This line is after the change window, so assume rest of lines are unchanged
+    IF PrevIdx <= PrevCnt THEN
+     InSync = 1
+     FOR I = PrevIdx TO PrevCnt + 1
+      LinePos<LineCnt> = PrevPos<I>
+      LineCnt = LineCnt + 1
+     NEXT I
+     LineCnt = LineCnt - 2
+    END
+   END
+  END
+ END
+ IF NOT(InSync) THEN
+  LinePos<LineCnt> = X ;* Break line at this position
+  X = X + K 
+ END
+REPEAT
+IF NOT(InSync) THEN
+ IF K = Width OR Value[X-1,1] = NewLine THEN
+  * Reserve extra line in case want to append to value
+  LineCnt = LineCnt + 1
+  LinePos<LineCnt> = X
+ END
+ LinePos<LineCnt+1> = X ;* For convienence, set final position to CurLen + 1 (= X)
+END
+IF ChgLine THEN
+ IF ChgBeg = 0 THEN ChgBeg = 1
+ IF ChgEnd = 0 THEN ChgEnd = LineCnt
+ IF ChgEnd < ChgLine THEN ChgEnd = ChgLine
+END
+RETURN
+END

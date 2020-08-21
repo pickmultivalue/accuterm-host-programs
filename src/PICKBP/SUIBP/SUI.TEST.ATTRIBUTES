@@ -1,0 +1,154 @@
+*
+**************************************************************************
+*Copyright (c) 2004 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: SUI.TEST.ATTRIBUTES
+* AUTHOR: PJS
+* VERSION: 1.0.0
+* CREATED: 06/01/2004
+* UPDATED: 
+*
+* MAINTENANCE RECORD:
+*
+**************************************************************************
+**************************************************************************
+*
+* Smart User Interface test program - display all attributes
+*
+**************************************************************************
+**************************************************************************
+*
+EQU VM TO CHAR(253)
+EQU ESC TO CHAR(27), STX TO CHAR(2), CR TO CHAR(13)
+*
+NO.PAGE=@(0,0)
+*
+$INCLUDE SUI.TERMDEF
+CALL SUI.GET.TERM(MAT TermDef)
+$INCLUDE SUI.CONFIG
+*
+* Attribute test
+*
+PRINT TERM.RESET:
+PRINT TERM.CLEAR:
+PRINT 'Display Attributes:'
+PRINT
+PRINT TERM.NV:'NORMAL':TERM.NV
+PRINT TERM.RV:'REVERSE':TERM.NV
+PRINT TERM.DV:'DIM':TERM.NV
+PRINT TERM.UV:'UNDERLINE':TERM.NV
+PRINT TERM.DRV:'DIM REVERSE':TERM.NV
+PRINT TERM.DUV:'DIM UNDERLINE':TERM.NV
+PRINT TERM.URV:'UNDERLINE REVERSE':TERM.NV
+PRINT TERM.DURV:'DIM UNDERLINE REVERSE':TERM.NV
+PRINT TERM.NV:
+*
+PRINT @(25,0):'Element Attributes:'
+*
+* Labels:
+*
+PRINT @(25,2):TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL):'Normal screen background':TERM.NV:
+PRINT @(25,3):TermDef(TERM.ATT$+SUICFG.LABEL.NORMAL):'Normal label':TERM.NV:
+PRINT @(25,4):TermDef(TERM.ATT$+SUICFG.LABEL.DISABLED):'Disabled label':TERM.NV:
+*
+* Text fields:
+*
+PRINT @(25,6):TermDef(TERM.ATT$+SUICFG.TEXT.INACTIVE):'Inactive text':TERM.NV:
+PRINT @(25,7):TermDef(TERM.ATT$+SUICFG.TEXT.ACTIVE):'Active text':TERM.NV:
+PRINT @(25,8):TermDef(TERM.ATT$+SUICFG.TEXT.SELECTED):'Selected text':TERM.NV:
+PRINT @(25,9):TermDef(TERM.ATT$+SUICFG.TEXT.DISABLED):'Disabled text':TERM.NV:
+*
+* Command buttons:
+*
+PRINT @(25,11):TermDef(TERM.ATT$+SUICFG.BUTTON.INACTIVE):'Inactive button':TERM.NV:
+PRINT @(25,12):TermDef(TERM.ATT$+SUICFG.BUTTON.ACTIVE):'Active button':TERM.NV:
+PRINT @(25,13):TermDef(TERM.ATT$+SUICFG.BUTTON.DISABLED):'Disabled button':TERM.NV:
+*
+* List boxes:
+*
+PRINT @(25,15):TermDef(TERM.ATT$+SUICFG.LIST.INACTIVE):'Inactive list':TERM.NV:
+PRINT @(25,16):TermDef(TERM.ATT$+SUICFG.LIST.ACTIVE):'Active list':TERM.NV:
+PRINT @(25,17):TermDef(TERM.ATT$+SUICFG.LIST.SELECTED):'Selected list':TERM.NV:
+PRINT @(25,18):TermDef(TERM.ATT$+SUICFG.LIST.DISABLED):'Disabled list':TERM.NV:
+PRINT @(25,19):TermDef(TERM.ATT$+SUICFG.LIST.HEADING):'List heading':TERM.NV:
+*
+PRINT @(25,21):TermDef(TERM.ATT$+SUICFG.WINDOW.TITLE):'Window title':TERM.NV:
+*
+IF INDEX(TERM.SPECIAL,'B',1) THEN
+ PRINT @(55,0):'Element Display:'
+ *
+ * Labels:
+ *
+ PRINT @(55,2):TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL):'Normal screen background':TERM.NV:
+ IF SUICFG.LABEL.BORDER THEN PRINT ESC:STX:'r55,3,66,3,N,':'NIRB'[SUICFG.LABEL.BORDER+1,1]:CR:
+ PRINT @(55,3):TermDef(TERM.ATT$+SUICFG.LABEL.NORMAL):'Normal label':TERM.NV:
+ IF SUICFG.LABEL.BORDER THEN PRINT ESC:STX:'r55,4,68,4,N,':'NIRB'[SUICFG.LABEL.BORDER+1,1]:CR:
+ PRINT @(55,4):TermDef(TERM.ATT$+SUICFG.LABEL.DISABLED):'Disabled label':TERM.NV:
+ *
+ * Text fields:
+ *
+ IF SUICFG.TEXT.BORDER THEN PRINT ESC:STX:'r55,6,69,6,N,':'NIRB'[SUICFG.TEXT.BORDER+1,1]:CR:
+ PRINT @(55,6):TermDef(TERM.ATT$+SUICFG.TEXT.INACTIVE):'Inactive text  ':TERM.NV:
+ IF SUICFG.TEXT.BORDER THEN PRINT ESC:STX:'r55,7,69,7,N,':'NIRB'[SUICFG.TEXT.BORDER+1,1]:CR:
+ PRINT @(55,7):TermDef(TERM.ATT$+SUICFG.TEXT.ACTIVE):'Active text    ':TERM.NV:
+ IF SUICFG.TEXT.BORDER THEN PRINT ESC:STX:'r55,8,69,8,N,':'NIRB'[SUICFG.TEXT.BORDER+1,1]:CR:
+ PRINT @(55,8):TermDef(TERM.ATT$+SUICFG.TEXT.SELECTED):'Selected text':TERM.NV:
+ IF SUICFG.TEXT.BORDER THEN PRINT ESC:STX:'r55,9,69,9,N,':'NIRB'[SUICFG.TEXT.BORDER+1,1]:CR:
+ PRINT @(55,9):TermDef(TERM.ATT$+SUICFG.TEXT.DISABLED):'Disabled text  ':TERM.NV:
+ *
+ * Command buttons:
+ *
+ IF SUICFG.BUTTON.BORDER THEN PRINT ESC:STX:'r55,11,69,11,N,':'NIRB'[SUICFG.BUTTON.BORDER+1,1]:CR:
+ PRINT @(55,11):TermDef(TERM.ATT$+SUICFG.BUTTON.INACTIVE):'Inactive button':TERM.NV:
+ IF SUICFG.BUTTON.BORDER THEN PRINT ESC:STX:'r55,12,69,12,N,':'NIRB'[SUICFG.BUTTON.BORDER+1,1]:CR:
+ PRINT @(55,12):TermDef(TERM.ATT$+SUICFG.BUTTON.ACTIVE):' Active button ':TERM.NV:
+ IF SUICFG.BUTTON.BORDER THEN PRINT ESC:STX:'r55,13,69,13,N,':'NIRB'[SUICFG.BUTTON.BORDER+1,1]:CR:
+ PRINT @(55,13):TermDef(TERM.ATT$+SUICFG.BUTTON.DISABLED):'Disabled button':TERM.NV:
+ *
+ * List boxes:
+ *
+ IF SUICFG.LIST.BORDER THEN PRINT ESC:STX:'r55,15,69,15,N,':'NIRB'[SUICFG.LIST.BORDER+1,1]:CR:
+ PRINT @(55,15):TermDef(TERM.ATT$+SUICFG.LIST.INACTIVE):'Inactive list  ':TERM.NV:
+ IF SUICFG.LIST.BORDER THEN PRINT ESC:STX:'r55,16,69,16,N,':'NIRB'[SUICFG.LIST.BORDER+1,1]:CR:
+ PRINT @(55,16):TermDef(TERM.ATT$+SUICFG.LIST.ACTIVE):'Active list    ':TERM.NV:
+ IF SUICFG.LIST.BORDER THEN PRINT ESC:STX:'r55,17,69,17,N,':'NIRB'[SUICFG.LIST.BORDER+1,1]:CR:
+ PRINT @(55,17):TermDef(TERM.ATT$+SUICFG.LIST.SELECTED):'Selected list  ':TERM.NV:
+ IF SUICFG.LIST.BORDER THEN PRINT ESC:STX:'r55,18,69,18,N,':'NIRB'[SUICFG.LIST.BORDER+1,1]:CR:
+ PRINT @(55,18):TermDef(TERM.ATT$+SUICFG.LIST.DISABLED):'Disabled list  ':TERM.NV:
+ IF SUICFG.LIST.BORDER THEN PRINT ESC:STX:'r55,19,69,19,N,':'NIRB'[SUICFG.LIST.BORDER+1,1]:CR:
+ PRINT @(55,19):TermDef(TERM.ATT$+SUICFG.LIST.HEADING):'List heading   ':TERM.NV:
+ *
+ PRINT @(55,21):TermDef(TERM.ATT$+SUICFG.WINDOW.TITLE):'Window title':TERM.NV:
+END
+*
+* Box drawing:
+*
+PRINT @(0,14):'Line drawing:':
+PRINT TERM.GRON:
+PRINT @(4,15):TERM.DGTL:STR(TERM.DGH,15):TERM.DGTR:
+FOR Y = 16 TO 21
+ PRINT @(4,Y):TERM.DGV:@(20,Y):TERM.DGV:
+NEXT Y
+PRINT @(4,22):TERM.DGBL:STR(TERM.DGH,15):TERM.DGBR:
+PRINT @(6,16):TERM.GTL:STR(TERM.GH,11):TERM.GTR:
+FOR Y = 17 TO 20
+ PRINT @(6,Y):TERM.GV:@(18,Y):TERM.GV:
+NEXT Y
+PRINT @(6,21):TERM.GBL:STR(TERM.GH,11):TERM.GBR:
+PRINT TERM.GROFF:
+*
+PRINT @(0,23):TERM.NV:
+IF TERM.SPECIAL NE '' THEN PRINT 'AccuTerm detected - ': ELSE PRINT 'Not running AccuTerm - ':
+PRINT 'Press ENTER to continue':
+PROMPT ''
+INPUT ANS:
+*
+PRINT TERM.CLEAR:
+*
+STOP
+END

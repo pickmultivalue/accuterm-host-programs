@@ -1,0 +1,107 @@
+SUBROUTINE ATGUICREATELIST(APPID, FORMID, CTLID, PARENTID, EVENTMASK, STYLE, Left, TOP, WIDTH, HEIGHT, ERRORS, STATE)
+**************************************************************************
+*Copyright (c) 1999-2006 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUICREATELIST
+* AUTHOR: PJS
+* VERSION: 5.3.1
+* CREATED: 11/01/1999
+* UPDATED: 06/12/2006
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.1
+*  PJS 06/12/2006
+*   Updated to use new version of FTOBJREQ, which requires that
+*   the PARAMS and CLIENV arrays be completely initialized.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI MANAGER - CREATE LISTBOX CONTROL
+*
+* CALL THIS SUBROUTINE TO CREATE A LISTBOX CONTROL.
+*
+* INPUT:
+*  APPID      application identifier
+*  FORMID     form identifier
+*  CTLID      control identifier (unique within scope of form)
+*  PARENTID   identifier of parent container (eg frame) if any
+*  EVENTMASK  all forms must specify GECLOSE
+*  STYLE      0 = single selection, 1 = multiple selections, 2 = drop-down list
+*  Left       horizontal position of the control relative to its
+*               parent form or frame
+*  TOP        vertical position of the control relative to its
+*               parent form or frame
+*  WIDTH      width of the control
+*  HEIGHT     height of the control
+*
+* OUTPUT:
+*  ERRORS     ERRORS<1> is non-zero if errors have occurred
+*
+* OTHER:
+*  STATE      internal use only - do not modify
+*
+**************************************************************************
+*
+$INCLUDE ATGUIEQUATES
+EQU THISPGM TO 'ATGUICREATELIST'
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30), CLIENV(10)
+ERRORS = GRSUCCESS
+FOR I = 1 TO 30
+ PARAMS(I) = STATE<20,I>
+NEXT I
+FOR I = 1 TO 10
+ CLIENV(I) = STATE<20+I>
+NEXT I
+IF NOT(STATE<1>) THEN
+ CALL ATGUIERROR(3, THISPGM, '', 0, GRFATAL, '', ERRORS)
+ RETURN
+END
+*
+* VALIDATE PARAMETERS
+*
+IF APPID EQ '' OR FORMID EQ '' OR CTLID EQ '' THEN
+ CALL ATGUIERROR(2, THISPGM, FORMID, '', GRNOID, '', ERRORS)
+ RETURN
+END
+BEGIN CASE
+ CASE STYLE EQ 0
+  CTLTYPE = GXLIST
+ CASE STYLE EQ 1
+  CTLTYPE = GXLISTMULTISEL
+ CASE STYLE EQ 2
+  CTLTYPE = GXDRPDWNLST
+CASE 1
+  CALL ATGUIERROR(2, THISPGM, CTLID, 'STYLE', GRINVARG, '', ERRORS)
+  RETURN
+END CASE
+ID = APPID : '*' : FORMID : '*' : CTLID
+REC = GCCREATE : VM : ID : VM : PARENTID : VM : CTLTYPE : VM : Left : VM : TOP : VM : WIDTH : VM : HEIGHT : VM : EVENTMASK
+*
+* CHECK IF RECORDING MACRO
+*
+IF STATE<2> THEN
+ STATE = STATE : AM : REC ;* APPEND TO MACRO
+ RETURN
+END
+*
+* SEND COMMAND TO SERVER
+*
+CALL FTOBJREQ('g', REC, RSP, 0, MAT PARAMS, MAT CLIENV)
+CALL ATGUIERRORS(RSP, ERRORS)
+RETURN
+*
+END

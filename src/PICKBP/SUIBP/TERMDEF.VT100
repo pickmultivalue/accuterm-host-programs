@@ -1,0 +1,196 @@
+*************************************************************************
+*
+* Terminal definition record
+*
+* The ID of this file is "TERM.DVR.XXX" where XXX
+* is the term type code returned by SYSTEM(7).
+*
+* To create synonym terminal definitions, create a
+* one-line definition with the label "USE:" followed
+* by the ID of the actual terminal definition. E.G.
+*
+* USE: VT100
+*
+*************************************************************************
+*
+*
+* TERMINAL INFORMATION
+*
+DESC: VT100 TERMINAL
+ATTRTYPE: 0         * 0 = CHARACTER, 1 = EMBEDDED, 2 = TAG
+HICTL: 1            * 1 = TREAT ASCII 128-159 AS CONTROL CHARACTERS (ANSI)
+NORMWD: 80          * NORMAL WIDTH (80)
+NORMHT: 24          * NORMAL HEIGHT (24)
+EXTWD: 132          * EXTENDED WIDTH (132)
+EXTHT: 24           * EXTENDED HEIGHT (24)
+PAGES: 1            * NUMBER OF PAGES SUPPORTED BY TERMINAL
+SPECIAL: 1          * 1 = USE ACCUTERM SPECIAL FEATURES
+*
+* TERMINAL STATE COMMANDS
+*
+* program Shift+Enter to send Ctrl+N, program shifted fkeys, disable application mode
+RESET: ESC 'P1|17/1B5B35367E;18/1B5B35377E;19/1B5B35387E;20/1B5B35397E;21/1B5B36307E;23/1B5B36317E;24/1B5B36327E;25/1B5B36337E;26/1B5B36347E;28/1B5B36357E;29/1B5B36367E' ESC '\' ESC '[?1l' ESC '>'
+NORMAL: ESC '[?3h'  * NORMAL (80 COLUMN) MODE
+EXTENDED: ESC '[?3l' * EXTENDED (132 COLUMN) MODE
+CSRON: ESC '[?25h'  * DISPLAY THE CURSOR
+CSROFF: ESC '[?25l' * HIDE THE CURSOR
+CSRLINE:            * SET CUSROR STYLE TO UNDERLINE
+CSRBLK:             * SET CURSOR STYLE TO BLOCK
+AUXON: ESC '[5i'    * ENABLE TRANSPARENT PRINT
+AUXOFF: ESC '[4i'   * DISABLE TRANSPARENT PRINT
+SELPAGE:            * SELECT PAGE (USES VARIABLE 'PG')
+*
+* EDITING COMMANDS
+*
+CLEAR: ESC '[H' ESC '[2J' * CLEAR ENTIRE SCREEN
+CEOS: ESC '[0J'     * CLEAR TO END OF SCREEN
+CEOL: ESC '[0K'     * CLEAR TO END OF LINE
+INSCHR: ESC '[@'    * INSERT CHARACTER
+DELCHR: ESC '[P'    * DELETE CHARACTER
+INSLINE: ESC '[L'   * INSERT LINE
+DELLINE: ESC '[M'   * DELETE LINE
+CPYBLK:             * COPY BLOCK (USES VARIABLES 'SRC', 'LEFT', 'TOP', 'RIGHT', 'BOTTOM', 'DEST', 'COL', 'ROW')
+CLRBLK:             * CLEAR BLOCK (USES VARIABLES 'LEFT', 'TOP', 'RIGHT', 'BOTTOM')
+*
+* VIDEO ATTRIBUTES
+*
+NV: ESC '[0m'       * NORMAL VIDEO
+BV: ESC '[0;5m'     * BLINKING VIDEO
+RV: ESC '[0;7m'     * REVERSE VIDEO
+RBV: ESC '[0;5;7m'  * REVERSE BLINKING VIDEO
+UV: ESC '[0;4m'     * UNDERLINE VIDEO
+UBV: ESC '[0;4;5m'  * UNDERLINED BLINK VIDEO
+URV: ESC '[0;4;7m'  * UNDERLINED REVERSE VIDEO
+URBV: ESC '[0;4;5;7m' * UNDERLINE REVERSE BLINK VIDEO
+DV: ESC '[0;1m'     * DIM VIDEO
+DBV: ESC '[0;1;5m'  * DIM BLINKING VIDEO
+DRV: ESC '[0;1;7m'  * DIM REVERSE VIDEO
+DRBV: ESC '[0;1;5;7m' * DIM REVERSE BLINKING VIDEO
+DUV: ESC '[0;1;4m'  * DIM UNDERLINE VIDEO
+DUBV: ESC '[0;1;4;5m' * DIM UNDERLINE BLINK VIDEO
+DURV: ESC '[0;1;4;7m' * DIM UNDERLINE REVERSE VIDEO
+DURBV: ESC '[0;1;4;5;7m' * DIM UNDERLINE REVERSE BLINK VIDEO
+*
+* LINE DRAWING MODE
+*
+GRON: ESC ')0' SO   * ASSIGN GRAPHICS TO G1, THEN ASSIGN G1 TO GL
+GROFF: SI           * ASSIGN G0 TO GL
+*
+* SINGLE LINE CHARACTERS
+*
+GH: 'q'             * GRAPHIC HORIZONAL CHARACTER
+GV: 'x'             * VERTICAL CHARACTER
+GTL: 'l'            * UPPER LEFT CORNER
+GTI: 'w'            * UPPER INTERSECT
+GTR: 'k'            * UPPER RIGHT CORNER
+GLI: 't'            * LEFT INTERSECT
+GCI: 'n'            * CENTER INTERSECT
+GRI: 'u'            * RIGHT INTERSECT
+GBL: 'm'            * LOWER LEFT CORNER
+GBI: 'v'            * LOWER INTERSECT
+GBR: 'j'            * LOWER RIGHT CORNER
+*
+* DOUBLE LINE CHARACTERS
+*
+DGH: 'q'            * GRAPHIC HORIZONAL CHARACTER
+DGV: 'x'            * VERTICAL CHARACTER
+DGTL: 'l'           * UPPER LEFT CORNER
+DGTI: 'w'           * UPPER INTERSECT
+DGTR: 'k'           * UPPER RIGHT CORNER
+DGLI: 't'           * LEFT INTERSECT
+DGCI: 'n'           * CENTER INTERSECT
+DGRI: 'u'           * RIGHT INTERSECT
+DGBL: 'm'           * LOWER LEFT CORNER
+DGBI: 'v'           * LOWER INTERSECT
+DGBR: 'j'           * LOWER RIGHT CORNER
+*
+*
+*************************************************************************
+* KEYBOARD COMMANDS
+*************************************************************************
+*
+* EDITING KEYS
+*
+ENTER: CR           * KBD CARRIAGE RETURN
+BKSP: BS            * KBD BACKSPACE
+UP: ESC '[A'        * KBD UP ARROW
+DOWN: ESC '[B'      * KBD DOWN ARROW
+LEFT: ESC '[D'      * KBD LEFT ARROW
+RIGHT: ESC '[C'     * KBD RIGHT ARROW
+PGUP: ESC '[5~'     * KBD PAGE UP
+PGDN: ESC '[6~'     * KBD PAGE DOWN
+HOME: ESC '[H'      * KBD HOME KEY
+END: ESC '[1~'      * KBD END KEY
+INS: ESC '[2~'      * KBD INSERT KEY
+DEL: DEL            * KBD DELETE KEY
+TAB: HT             * KBD TAB KEY
+ESCAPE: ESC         * KBD ESCAPE KEY
+*
+* SHIFTED EDITING KEYS
+*
+SENTER:             * KBD SHIFT CARRIAGE RETURN
+SBKSP:              * KBD SHIFT BACKSPACE
+SUP:                * KBD SHIFT UP ARROW
+SDOWN:              * KBD SHIFT DOWN ARROW
+SLEFT:              * KBD SHIFT LEFT ARROW
+SRIGHT:             * KBD SHIFT RIGHT ARROW
+SPGUP:              * KBD SHIFT PAGE UP
+SPGDN:              * KBD SHIFT PAGE DOWN
+SHOME:              * KBD SHIFT HOME KEY
+SEND:               * KBD SHIFT END KEY
+SINS:               * KBD SHIFT INSERT KEY
+SDEL:               * KBD SHIFT DELETE KEY
+STAB: ESC '[Z'      * KBD SHIFT TAB KEY
+*
+*
+*
+* FUNCTION KEY VALUES
+*
+F1: ESC 'OP'        * KBD F1 KEY
+F2: ESC 'OQ'        * KBD F2 KEY
+F3: ESC 'OR'        * KBD F3 KEY
+F4: ESC 'OS'        * KBD F4 KEY
+F5:                 * KBD F5 KEY
+F6:                 * KBD F6 KEY
+F7:                 * KBD F7 KEY
+F8:                 * KBD F7 KEY
+F9:                 * KBD F9 KEY
+F10:                * KBD F10 KEY
+F11:                * KBD F11 KEY
+F12:                * KBD F12 KEY
+F13:                * KBD F13 KEY
+F14:                * KBD F14 KEY
+F15:                * KBD F15 KEY
+F16:                * KBD F16 KEY
+*
+* SHIFTED FUNCTION KEY VALUES
+*
+SF1:                * KBD SHIFT F1 KEY
+SF2:                * KBD SHIFT F2 KEY
+SF3:                * KBD SHIFT F3 KEY
+SF4:                * KBD SHIFT F4 KEY
+SF5:                * KBD SHIFT F5 KEY
+SF6:                * KBD SHIFT F6 KEY
+SF7:                * KBD SHIFT F7 KEY
+SF8:                * KBD SHIFT F8 KEY
+SF9:                * KBD SHIFT F9 KEY
+SF10:               * KBD SHIFT F10 KEY
+SF11:               * KBD SHIFT F11 KEY
+SF12:               * KBD SHIFT F12 KEY
+SF13:               * KBD SHIFT F13 KEY
+SF14:               * KBD SHIFT F14 KEY
+SF15:               * KBD SHIFT F15 KEY
+SF16:               * KBD SHIFT F16 KEY
+*
+* MOUSE BUTTONS - SINGLE CLICK
+*
+LEFTBUTTON: ESC '[101~' ESC '[' * KBD LEFT MOUSE BUTTON
+RIGHTBUTTON: ESC '[102~' ESC '[' * KBD RIGHT MOUSE BUTTON
+MIDBUTTON: ESC '[103~' ESC '[' * KBD MIDDLE MOUSE BUTTON
+*
+* MOUSE BUTTONS - DOUBLE CLICK
+*
+DBLLEFTBUTTON: ESC '[111~' ESC '[' * KBD LEFT MOUSE DOUBLE CLICK
+DBLRIGHTBUTTON: ESC '[112~' ESC '[' * KBD RIGHT MOUSE DOUBLE CLICK
+DBLMIDBUTTON: ESC '[113~' ESC '[' * KBD MIDDLE MOUSE DOUBLE CLICK
+*

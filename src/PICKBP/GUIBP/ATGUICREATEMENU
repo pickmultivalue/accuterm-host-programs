@@ -1,0 +1,103 @@
+SUBROUTINE ATGUICREATEMENU(APPID, FORMID, MENUID, STYLE, ITEMS, ERRORS, STATE)
+**************************************************************************
+*Copyright (c) 1999-2006 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUICREATEMENU
+* AUTHOR: PJS
+* VERSION: 5.3.1
+* CREATED: 11/01/1999
+* UPDATED: 06/12/2006
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.1
+*  PJS 06/12/2006
+*   Updated to use new version of FTOBJREQ, which requires that
+*   the PARAMS and CLIENV arrays be completely initialized.
+*
+* 4.0.2
+*  PJS 11/05/2001
+*   Null FORMID should not raise error since MDI app does not have FORMID
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI MANAGER - CREATE MENU
+*
+* CALL THIS SUBROUTINE TO CREATE A TOP-LEVEL OR POP-UP MENU.
+*
+* INPUT:
+*  APPID      application identifier
+*  FORMID     form identifier
+*  MENUID     menu identifier (unique within scope of form)
+*  STYLE      0 = top-level menu, 1 = pop-up menu
+*  ITEMS      menu items separated by VM, sub-menu items separated by SVM
+*
+* OUTPUT:
+*  ERRORS     ERRORS<1> is non-zero if errors have occurred
+*
+* OTHER:
+*  STATE      internal use only - do not modify
+*
+**************************************************************************
+*
+$INCLUDE ATGUIEQUATES
+EQU THISPGM TO 'ATGUICREATEMENU'
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30), CLIENV(10)
+ERRORS = GRSUCCESS
+FOR I = 1 TO 30
+ PARAMS(I) = STATE<20,I>
+NEXT I
+FOR I = 1 TO 10
+ CLIENV(I) = STATE<20+I>
+NEXT I
+IF NOT(STATE<1>) THEN
+ CALL ATGUIERROR(3, THISPGM, '', 0, GRFATAL, '', ERRORS)
+ RETURN
+END
+*
+* VALIDATE PARAMETERS
+*
+IF APPID EQ '' OR MENUID EQ '' THEN
+ CALL ATGUIERROR(2, THISPGM, FORMID, '', GRNOID, '', ERRORS)
+ RETURN
+END
+BEGIN CASE
+ CASE STYLE EQ 0
+  CTLTYPE = GXMENU
+ CASE STYLE EQ 1
+  CTLTYPE = GXPOPUP
+ CASE 1
+  CALL ATGUIERROR(2, THISPGM, CTLID, 'STYLE', GRINVARG, '', ERRORS)
+  RETURN
+END CASE
+ID = APPID : '*' : FORMID : '*' : MENUID
+REC = GCCREATE : VM : ID : VM : '' : VM : CTLTYPE : VM : 0 : VM : 0 : VM : 0 : VM : 0 : VM : GECLICK
+REC = REC : AM : GCSETPROP : VM : VM : GPITEMS : VM :VM : VM : ITEMS
+*
+* CHECK IF RECORDING MACRO
+*
+IF STATE<2> THEN
+ STATE = STATE : AM : REC ;* APPEND TO MACRO
+ RETURN
+END
+*
+* SEND COMMAND TO SERVER
+*
+CALL FTOBJREQ('g', REC, RSP, 0, MAT PARAMS, MAT CLIENV)
+CALL ATGUIERRORS(RSP, ERRORS)
+RETURN
+*
+END

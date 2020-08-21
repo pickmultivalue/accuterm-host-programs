@@ -1,0 +1,123 @@
+SUBROUTINE SUI.DISPLAY.FRAME(Left, Top, Width, Height, Frame, RtnCom, MAT TermDef)
+**************************************************************************
+*Copyright (c) 2004 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: SUI.DISPLAY.FRAME
+* AUTHOR: PJS
+* VERSION: 1.0.0
+* CREATED: 06/01/2004
+* UPDATED: 
+*
+* MAINTENANCE RECORD:
+*
+*************************************************************************
+*************************************************************************
+*
+* SMART USER INTERFACE: Draw frame using line drawing characters
+*
+*************************************************************************
+*************************************************************************
+*
+*   Input Interface:
+*
+*    Col, Row: upper-left corner of frame (relative to current window)
+*
+*    Width, Height: size of frame
+*
+*
+*    Frame: window frame style
+*            1 = single frame
+*            2 = double frame
+*
+*    TermDef: terminal definitions as set up by SUI.GET.TERM
+*
+*
+*   Output Interface:
+*
+*    RtnCom: zero if success, else error code
+*
+*************************************************************************
+*
+$INCLUDE SUI.TERMDEF
+$INCLUDE SUI.WINDEF
+$INCLUDE SUI.CONFIG
+*
+IF Width < 2 OR Height < 2 THEN
+ RtnCom = SUI.ERROR.INVSIZE$
+ RETURN
+END
+*
+IF Frame < 1 OR Frame > 2 THEN
+ RtnCom = SUI.ERROR.INVSTYLE$
+ RETURN
+END
+*
+* Adjust screen positions based on current window
+FrameWd = Width
+FrameHt = Height
+BegCol = Left ;* Screen beginning column
+BegRow = Top ;* Screen row
+WinInf = TERM.WINDOW<1,2>
+IF WinInf EQ '' THEN
+ WinWd = TERM.WIDTH
+ WinHt = TERM.HEIGHT
+END ELSE
+ BegCol = BegCol + WinInf<1,1,SUI.WINLEFT$> + WinInf<1,1,SUI.CLILEFT$>
+ BegRow = BegRow + WinInf<1,1,SUI.WINTOP$> + WinInf<1,1,SUI.CLITOP$>
+ WinWd = WinInf<1,1,SUI.CLIWIDTH$>
+ WinHt = WinInf<1,1,SUI.CLIHEIGHT$>
+END
+IF Left < 0 THEN
+ RtnCom = SUI.ERROR.INVPOS$
+ RETURN
+END
+IF Left + FrameWd > WinWd THEN
+ FrameWd = WinWd - Left
+ IF FrameWd < 2 THEN
+  RtnCom = SUI.ERROR.INVSIZE$
+  RETURN
+ END 
+END
+IF Top < 0 THEN
+ RtnCom = SUI.ERROR.INVPOS$
+ RETURN
+END
+IF Top + FrameHt > WinHt THEN
+ FrameHt = WinHt - Top
+ IF FrameHt < 2 THEN
+  RtnCom = SUI.ERROR.INVSIZE$
+  RETURN
+ END
+END
+EndCol = BegCol + FrameWd - 1 ;* Ending screen column
+EndRow = BegRow + FrameHt - 1 ;* Ending screen row
+*
+* Draw frame
+IF TERM.GH NE '' THEN
+ Dsp = ''
+ Dsp = Dsp:TERM.GRON
+ Dsp = Dsp:@(BegCol,BegRow)
+ IF Frame = 2 AND TERM.DGTL NE '' THEN Dsp = Dsp:TERM.DGTL ELSE Dsp = Dsp:TERM.GTL
+ IF Frame = 2 AND TERM.DGH NE '' THEN Dsp = Dsp:STR(TERM.DGH,EndCol-BegCol-1) ELSE Dsp = Dsp:STR(TERM.GH,EndCol-BegCol-1)
+ IF Frame = 2 AND TERM.DGTR NE '' THEN Dsp = Dsp:TERM.DGTR ELSE Dsp = Dsp:TERM.GTR
+ FOR FrmRow = BegRow + 1 TO EndRow - 1
+  Dsp = Dsp:@(BegCol,FrmRow)
+  IF Frame = 2 AND TERM.DGV NE '' THEN Dsp = Dsp:TERM.DGV ELSE Dsp = Dsp:TERM.GV
+  Dsp = Dsp:@(EndCol,FrmRow)
+  IF Frame = 2 AND TERM.DGV NE '' THEN Dsp = Dsp:TERM.DGV ELSE Dsp = Dsp:TERM.GV
+ NEXT FrmRow   
+ Dsp = Dsp:@(BegCol,EndRow)
+ IF Frame = 2 AND TERM.DGBL NE '' THEN Dsp = Dsp:TERM.DGBL ELSE Dsp = Dsp:TERM.GBL
+ IF Frame = 2 AND TERM.DGH NE '' THEN Dsp = Dsp:STR(TERM.DGH,EndCol-BegCol-1) ELSE Dsp = Dsp:STR(TERM.GH,EndCol-BegCol-1)
+ IF Frame = 2 AND TERM.DGBR NE '' THEN Dsp = Dsp:TERM.DGBR ELSE Dsp = Dsp:TERM.GBR
+ Dsp = Dsp:TERM.GROFF
+ PRINT Dsp:
+END
+*
+RETURN
+END

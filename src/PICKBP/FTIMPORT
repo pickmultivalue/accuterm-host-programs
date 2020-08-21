@@ -1,0 +1,314 @@
+SUBROUTINE FTIMPORT(MODE,REMOTE.FILE,HOST.FILE,ATTRS,HDR.SKIP,ID.PREFIX,ID.START,ITEM.COUNT,BYTE.COUNT,STAT)
+**************************************************************************
+*Copyright (c) 2007-2011 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTIMPORT
+* AUTHOR: PJS
+* VERSION: 7.0.1
+* CREATED: 04/18/2007
+* UPDATED: 03/11/2011
+*
+* MAINTENANCE RECORD:
+*
+* 7.0.1
+*  PJS 03/11/2011
+*   Added missing EQUate for TXT.FLG.PARAM variable.
+*
+* 5.4.2
+*  PJS 06/20/2007
+*   Added new MODE options: Y, Z to override configuration setting
+*   for OEM/ANSI charset conversion.
+*
+* 5.4.1
+*  PJS 04/18/2007
+*   Initial release
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM DATA TRANSFER - IMPORT DATA FROM PC
+*
+**************************************************************************
+**************************************************************************
+*
+* FTIMPORT() SUBROUTINE INTERFACE
+*
+*
+* INPUT:
+*
+*         MODE         = MODES SEPARATED BY COMMAS (FIRST LETTER IS SUFFICIENT):
+*
+*                          KERMIT - USES THE KERMIT FILE TRANSFER PROTOCOL (RECOMMENDED).
+*
+*                          ASCII - USES THE ASCII FILE TRANSFER PROTOCOL.
+*
+*                          OVERLAY - OVERWRITES EXISTING ITEMS (ENTIRE ITEM IS REPLACED)
+*
+*                          NO OVERLAY - SKIPS EXISTING ITEMS.
+*
+*                          MERGE - MERGES DATA WITH EXISTING ITEMS. ATTRIBUTES NOT
+*                            SPECIFIED IN THE ATTRS ARGUMENT ARE NOT UPDATED.
+*
+*                          DELIM=TAB - IMPORTS FROM TAB DELIMITED TEXT FILE.
+*                          DELIM=COMMA - IMPORTS FROM COMMA DELIMITED TEXT FILE (CSV).
+*                          DELIM=hex - IMPORTS FROM DELIMITED TEXT FILE WITH USER-DEFINED DELIMITER.
+*
+*                          HEADER - FIRST LINE OF TARGET FILE CONTAINS COLUMN HEADERS
+*                            WHICH ARE USED AS DICTIONARY NAMES. ATTRS ARGUMENT IS
+*                            IGNORED IF THIS OPTION IS SPECIFIED. IF FIRST LINE OF
+*                            SOURCE CONTAINS A SINGLE ASTERISK, THE IMPORTED ITEM
+*                            IS CREATED FROM ALL THE COLUMNS IN THE SOURCE. NO DATA
+*                            CONVERSIONS (DATE, MASK, ETC.) ARE PERFORMED.
+*
+*                          GENERATE - GENERATE SEQUENTIAL ITEM-IDS FOR IMPORTED ITEMS.
+*                            THE ITEM-ID IS FORMED BY CONCATENATING THE SPECIFIED
+*                            ID.PREFIX TO A SEQUENTIAL NUMBER STARTING WITH ID.START.
+*
+*                          Y - ANSI TO OEM CHARACTER SET TRANSLATION
+*
+*                          Z - NO CHARACTER SET TRANSLATION
+*
+*         REMOTE.FILE  = SOURCE FILE ON THE PC. SEE FTD DOCUMENTATION FOR SPECIAL
+*                        FILE SYNTAX FOR IMPORTING RANGES OF EXISTING WORKSHEETS,
+*                        OR SPECIFYING ACCESS DATABASE TABLES.
+*
+*         HOST.FILE    = TARGET FILE NAME ON THE HOST
+*
+*         ATTRS        = MULTIVALUED LIST OF ATTRIBUTES TO IMPORT. USE ATTRIBUTE
+*                        NUMBERS OR DICTIONARY NAMES, OR '*' (ASTERISK) FOR ALL
+*                        ATTRIBUTES. USE '-' (MINUS SIGN) TO SKIP A COLUMN IN THE
+*                        SOURCE. USE '0' (ZERO) FOR THE COLUMN THAT CONTAINS THE
+*                        THE ITEM-ID. IF NO COLUMNS CONTAIN THE ITEM-ID, USE THE
+*                        'GENERATE' OPTION IN THE MODE ARGUMENT TO AUTOMATICALLY
+*                        GENERATE SEQUENTIAL ITEM-IDS FOR IMPORTED DATA. THIS
+*                        ARGUMENT IS IGNORED IF THE 'HEADER' MODE OPTION IS PRESENT.
+*
+*         HDR.SKIP     = NUMBER OF HEADER LINES TO SKIP IN THE SOURCE DATA. THIS
+*                        ARGUMENT IS IGNORED IF THE 'HEADER' MODE OPTION IS PRESENT.
+*
+*         ID.PREFIX    = PREFIX FOR AUTOMATICICALLY GENERATED SEQUENTIAL ITEM-IDS.
+*                        THIS ARGUMENT IS IGNORED UNLESS THE 'GENERATE' MODE OPTION
+*                        IS PRESENT.
+*
+*         ID.START     = STARTING NUMBER FOR AUTOMATICICALLY GENERATED SEQUENTIAL
+*                        ITEM-IDS. THIS ARGUMENT IS IGNORED UNLESS THE 'GENERATE'
+*                        MODE OPTION IS PRESENT.
+*
+*
+* OUTPUT:
+*         ITEM.COUNT   = NUMBER OF ITEMS IMPORTED
+*         BYTE.COUNT   = NUMBER OF BYTES IMPORTED
+*         STAT         = NULL INDICATES SUCCESS, OTHERWISE ERROR MESSAGE
+*
+*                        NOTE: IT IS POSSIBLE TO HAVE PARTIAL SUCCESS, SUCH AS
+*                        WHEN AN EXISTING FILE/ITEM CANNOT BE UPDATED, OR
+*                        IF THE USER CLICKS THE 'ABORT' BUTTON WHILE A TRANSFER
+*                        IS IN PROGRESS. CHECK THE ITEM.COUNT & BYTE.COUNT
+*                        VARIABLES TO TEST IF PARTIAL SUCCESS.
+*
+**************************************************************************
+*
+EQU MODES TO 'KAONMTCEHGDYZ'
+EQU MODE.SET TO '25,25,15,15,15,18,18,-6,-5,-7,18,24,24'
+EQU MODE.VAL TO '1,0,1,0,2,0,1,1,1,1,0,1,0'
+*
+DIM PARAMS(30),VARS(26),CLIENV(10)
+*
+EQU TXT.FLG.PARAM TO PARAMS(13)
+EQU OVR.FLG.PARAM TO PARAMS(15)
+EQU OVR.FTD.PARAM TO PARAMS(16)
+EQU DCH.FLG.PARAM TO PARAMS(18)
+EQU DIR.FLG.PARAM TO PARAMS(21)
+EQU FIL.CNV.PARAM TO PARAMS(23)
+EQU OEM.CHR.PARAM TO PARAMS(24)
+EQU PRO.FLG.PARAM TO PARAMS(25)
+*
+EQU ICNT TO VARS(1)
+EQU BCNT TO VARS(2)
+EQU IDMODE TO VARS(3)
+EQU ALST TO VARS(4)
+EQU HDR TO VARS(5)
+EQU EXP TO VARS(6)
+EQU GEN TO VARS(7)
+EQU PFX TO VARS(8)
+EQU SID TO VARS(9)
+EQU SKP TO VARS(10)
+EQU FILE TO VARS(11)
+EQU FNAME TO VARS(12)
+EQU ID TO VARS(13)
+EQU IDLST TO VARS(14)
+EQU CLST TO VARS(15)
+EQU IDS TO VARS(16)
+EQU ISIZ TO VARS(17)
+EQU ISEQ TO VARS(18)
+EQU ITEM TO VARS(19)
+EQU XSIZ TO VARS(20)
+EQU PATH TO VARS(21)
+EQU FN TO VARS(22)
+EQU FNLST TO VARS(23)
+EQU DFILE TO VARS(24)
+EQU FNS TO VARS(25)
+EQU MD TO VARS(26)
+*
+EQU CLI.PLATFORM TO CLIENV(1)
+EQU CLI.PRODUCT TO CLIENV(2)
+EQU CLI.RELEASE TO CLIENV(3)
+EQU CLI.CAPAS TO CLIENV(4)
+EQU CLI.SVCS TO CLIENV(5)
+EQU CLI.SERIAL TO CLIENV(6)
+EQU CLI.LICENSE TO CLIENV(7)
+EQU CLI.USER TO CLIENV(8)
+EQU CLI.VERSION TO CLIENV(9)
+EQU CLI.CONFIG TO CLIENV(10)
+*
+NO.PAGE=@(0,0);* DISABLE PAGINATION (QM, ON)
+*
+**************************************************************************
+*
+* ENSURE FTCHK HAS BEEN RUN (OTHERWISE FTSELECT MIGHT PRINT ERROR MESASGE & STOP)
+*
+STAT='You must RUN FTBP FTCHK and select your host platform before FTIMPORT can be used!';RETURN;*#GENERIC#*
+*#DEFAULT#*STAT=''
+ITEM.COUNT=0
+BYTE.COUNT=0
+*
+**************************************************************************
+*
+* OPEN MD
+*
+MAT VARS=''
+OPEN 'MD' TO MD ELSE
+ OPEN 'VOC' TO MD ELSE
+  STAT='Unable to open MD or VOC file!'
+  RETURN
+ END
+END
+*
+**************************************************************************
+*
+* VALIDATE CONFIGURATION & INITIALIZE PARAMETERS
+*
+**************************************************************************
+*
+CALL FTINITEX('',MAT PARAMS,MAT CLIENV,FV,STAT)
+IF STAT NE '' THEN RETURN
+IF CLI.PLATFORM=0 THEN
+ STAT='FTIMPORT requires AccuTerm to run!'
+ RETURN
+END
+IF INDEX(CLI.CAPAS,'Z',1) THEN
+ STAT='Upper case / lower case inversion must be disabled to call FTIMPORT.'
+ RETURN
+END
+IF INDEX(CLI.CAPAS,'U',1) = 0 THEN
+ STAT='This version of AccuTerm does not support file transfers.'
+ RETURN
+END
+IF (DCH.FLG.PARAM EQ 2 AND LEN(DCH.FLG.PARAM) EQ 1) OR INDEX(OCONV(DCH.FLG.PARAM,'MCU'),'0D0A',1) OR INDEX(OCONV(DCH.FLG.PARAM,'MCU'),'FE',1) THEN
+ STAT='FTIMPORT field delimiter cannot contain CR/LF or attribute mark!'
+ RETURN
+END
+OVR.FLG.PARAM = OVR.FTD.PARAM; * USE COMMON OVERWRITE VARIABLE
+*
+**************************************************************************
+*
+* PARSE MODE ARGUMENT
+*
+**************************************************************************
+*
+P=''
+I=0
+LOOP
+ I=I+1
+ ITM=TRIM(FIELD(MODE,',',I))
+ Z=OCONV(ITM[1,1],'MCU')
+WHILE COL2() DO
+ K=INDEX(MODES,Z,1)
+ IF K THEN
+  J=FIELD(MODE.SET,',',K)
+  IF P<ABS(J)> NE '' THEN
+   READV TXT FROM FV,'FTPARAMS',ABS(J) ELSE TXT='*'
+   STAT='Cannot specify more than one setting for ':FIELD(TXT,',',1):'!'
+   RETURN
+  END
+  IF J>0 THEN
+   IF INDEX(ITM,'=',1) THEN
+    PARAMS(J)=FIELD(ITM,'=',2)
+   END ELSE
+    PARAMS(J)=FIELD(MODE.VAL,',',K)+0
+   END
+  END ELSE
+   VARS(-J)=FIELD(MODE.VAL,',',K)+0
+  END
+  P<ABS(J)>='1'
+ END
+REPEAT
+IF P<25> EQ '' THEN
+ STAT='Kermit or ASCII protocol must be specified to FTIMPORT subroutine!'
+ RETURN
+END
+IF HDR EQ 0 AND ATTRS EQ '' THEN
+ STAT='No attributes have been specified!'
+ RETURN
+END
+ALST=ATTRS
+* SETUP HOST FILE NAME & OPEN FILE
+FNAME = HOST.FILE
+IF FNAME[1,5] EQ 'DICT ' THEN
+ OPEN FNAME TO FILE ELSE
+  STAT="Unable to open file ":FNAME
+  RETURN
+ END
+ DFILE=MD
+ FNAME=FNAME[6,99]
+END ELSE
+ OPEN FNAME TO FILE ELSE
+  STAT="Unable to open file ":FNAME
+  RETURN
+ END
+ OPEN 'DICT',FNAME TO DFILE ELSE
+  STAT="Unable to open DICT ":FNAME
+  RETURN
+ END
+END
+* SETUP SOURCE PATH & FILE NAME
+PATH=REMOTE.FILE
+K=COUNT(PATH,'\')
+IF K THEN K=INDEX(PATH,'\',K); FNLST=PATH[K+1,999]; PATH=PATH[1,K] ELSE
+ K=COUNT(PATH,':')
+ IF K THEN K=INDEX(PATH,':',K); FNLST=PATH[K+1,999]; PATH=PATH[1,K] ELSE
+  FNLST=PATH; PATH=''
+ END
+END
+*
+**************************************************************************
+*
+* RECEIVE DATA
+*
+**************************************************************************
+*
+DIR.FLG.PARAM=0
+TXT.FLG.PARAM=1; * ALWAYS TEXT FORMAT
+FIL.CNV.PARAM=1; * ALLOW AUTOMATIC FILE FORMAT CONVERSIONS
+SUBNAME='FTWTDATA'
+* SETUP HEADER SKIP
+SKP=HDR.SKIP+0
+* SETUP AUTO ID GENERATION
+SID=ID.START
+PFX=ID.PREFIX
+* PERFORM TRANSFER
+CALL FTMODE(STAT,SUBNAME,MAT PARAMS,MAT VARS,MAT CLIENV)
+ITEM.COUNT=ICNT
+BYTE.COUNT=BCNT
+RETURN
+*
+**************************************************************************
+*
+END

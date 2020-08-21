@@ -1,0 +1,356 @@
+SUBROUTINE FTRDITMS(BUF,CNT,MAX,EOF,CAN,ERR,MAT PARAMS,MAT VARS)
+**************************************************************************
+*Copyright (c) 1993-2020 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTRDITMS
+* AUTHOR: PJS
+* VERSION: 8.0.1
+* CREATED: 01/01/1993
+* UPDATED: 02/11/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.1
+*  PJS 02/11/2020
+*   Cleaned up GOTO's that jump across CASE structures, converted
+*   to simple IF/THEN instead of CASE ... GOTO ... CASE for
+*   MVON# compatibility.
+*
+* 7.0.1
+*  PJS 04/26/2010
+*   Added 'MARK.MAPPING OFF' for QM platform when using binary mode
+*   to disable LF <-> AM mapping for DIRECTORY type files.
+*
+* 5.3.3
+*  PJS 09/19/2007
+*   Fixed bug in old "join" logic: ISIZ was not recomputed after reading
+*   continuation item before testing it in the UNTIL clause.
+*
+* 5.3.2
+*  PJS 04/10/2007
+*   Rewritten completely to better update stats based on CAN status
+*   returned by Kermit protocol. The change postpones the updating
+*   of item stats until the 2nd data request from the protocol. This
+*   is because the ACK for the first data packet might return a CAN
+*   status if the target file cannot be updated or created. This status
+*   is detected on the 2nd call to this routine after a new file name
+*   has been returned. This routine implements a "state machine"
+*   using the IDMODE variable as the state variable.
+*
+* 5.3.1
+*  PJS 07/24/2006
+*   Changed size of VARS() array from 25 to 26, defining VARS(26)
+*   as MD. Define previously unused VARS(24) as DFILE, the file
+*   variable for the dictionary. Added support for OI (OpenInsight
+*   CTO) platform.
+*
+* 5.0.3
+*  PJS 09/29/2004
+*   Changed max string length from 9999999 to 999999999
+*
+* 5.0.2
+*  PJS 09/19/2003
+*   Updated file name translation not to force upper case file names.
+*   Removed illegal file name character translation logic - the INDEX()
+*   function was originally coded incorrectly and the logic has never
+*   worked! No one has complained in 10 years, so it must not be important!
+*
+* 5.0.1
+*  PJS 09/10/2002
+*   Added column name list (CLST) to VARS() array as VARS(15).
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* READ ITEMS
+*
+**************************************************************************
+**************************************************************************
+*
+* FTRDITMS() SUBROUTINE INTERFACE
+*
+* INPUT:
+*         BUF   = VARIABLE TO RETURN DATA (APPEND)
+*         CNT   = LEN(BUF)
+*         MAX   = MAXIMUM LENGTH OF BUF
+*         CAN   = 1 TO DISCARD REST OF CURRENT ITEM,
+*                 2 IF TRANSACTION TERMINATED, ELSE 0
+*
+* OUTPUT:
+*         BUF   = UPDATED (NEW DATA APPENDED)
+*         CNT   = LEN(BUF)
+*         EOF   = 1 IF NO MORE DATA FOR THIS ITEM, 2 IF NO MORE ITEMS
+*         ERR   = ERROR STATUS (STRING)
+*
+* ACTION:
+*
+* THIS ROUTINE IS CALLED BY THE FILE TRANSFER PROTOCOL TO RETURN
+* DATA TO BE TRANSMITTED.  ON FIRST ENTRY, IDMODE MUST BE SET TO
+* ZERO, FILE MUST BE OPENED TO THE DESIRED FILE. THIS ROUTINE
+* RETURNS UP TO MAX BYTES TO THE PROTOCOL BY APPENDING THE NEXT
+* DATA CHUNK TO BUF AND RETURNING. WHEN THERE IS NO MORE DATA LEFT
+* IN THE ITEM, RETURNS WITH EOF=1.
+*
+* THE NEXT CALL TO THIS ROUTINE AFTER EOF WILL GET THE NEXT ITEM-ID
+* AND READ THE NEXT ITEM, IF ANY, ELSE RETURNS WITH EOF=2.
+*
+* UPON ENTRY AND EXIT, CNT REFLECTS THE SIZE OF BUF.
+*
+* IF UNL.FLG.PARAM IS SET TO ONE, SEQUENTIALLY NUMBERED ITEMS ARE
+* "CONCATENATED" TOGETHER TO MAKE ONE BIG ITEM FOR TRANSMISSION.
+*
+* IF TXT.FLG.PARAM IS SET, THEN AN EXTRA AM IS ADDED TO THE END
+* OF THE ACTUAL ITEM DATA (IF ITEM IS NOT EMPTY).
+*
+**************************************************************************
+*
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30),VARS(26)
+EQU TXT.FLG.PARAM TO PARAMS(13)
+EQU EXT.FLG.PARAM TO PARAMS(14)
+EQU UNL.FLG.PARAM TO PARAMS(17)
+EQU ICNT TO VARS(1)
+EQU BCNT TO VARS(2)
+EQU IDMODE TO VARS(3)
+EQU ALST TO VARS(4)
+EQU HDR TO VARS(5)
+EQU EXP TO VARS(6)
+EQU GEN TO VARS(7)
+EQU PFX TO VARS(8)
+EQU SID TO VARS(9)
+EQU SKP TO VARS(10)
+EQU FILE TO VARS(11)
+EQU FNAME TO VARS(12)
+EQU ID TO VARS(13)
+EQU IDLST TO VARS(14)
+EQU CLST TO VARS(15)
+EQU IDS TO VARS(16)
+EQU ISIZ TO VARS(17)
+EQU ISEQ TO VARS(18)
+EQU ITEM TO VARS(19)
+EQU XSIZ TO VARS(20)
+EQU PATH TO VARS(21)
+EQU FN TO VARS(22)
+EQU FNLST TO VARS(23)
+EQU DFILE TO VARS(24)
+EQU FNS TO VARS(25)
+EQU MD TO VARS(26)
+*
+**************************************************************************
+*
+* CANCEL CURRENT ITEM?
+*
+**************************************************************************
+*
+IF CAN THEN
+ ITEM=''
+ ISEQ=0
+ ISIZ=0
+ XSIZ=0
+ IF CAN>1 THEN
+  IDMODE=9 ;* FINAL STATE (END OF TRANSACTION)
+ END ELSE
+  IDMODE=1 ;* GET NEXT ID & FILE NAME ON NEXT INVOCATION
+ END
+ EOF=CAN
+ RETURN
+END
+*
+**************************************************************************
+*
+* DECODE STATE, READ ITEM & ADD DATA TO BUFFER, SET NEXT STATE
+*
+**************************************************************************
+*
+IDMODE=IDMODE+0
+BCNT=BCNT+XSIZ
+XSIZ=0
+EOF=0
+IF IDMODE EQ 0 THEN
+ * INITIAL STATE
+ ICNT=0
+ BCNT=0
+ CALL FTSELECT(MAT VARS)
+*#QM#*  IF TXT.FLG.PARAM=0 THEN
+*#QM#*   MARK.MAPPING FILE,OFF
+*#QM#*  END
+ IDMODE = 1
+END
+IF IDMODE EQ 1 THEN
+ * GET NEXT ID & FILE NAME
+ LOOP
+  READNEXT ID FROM IDLST ELSE;*#GENERIC#*
+*#DEFAULT#*  READNEXT ID FROM IDLST ELSE
+*#OI#*  READNEXT ID USING IDLST ELSE
+*#QM#*  READNEXT ID FROM IDLST ELSE
+   IDMODE=9 ;* FINAL STATE
+   EOF=2    ;* INDICATE END OF TRANSACTION
+   RETURN
+  END
+  * GET TARGET FILE NAME
+  IF FNLST EQ '' THEN
+   FN=ID
+  END ELSE
+   FN=FNLST<1>
+   FNLST=DELETE(FNLST,1,0,0)
+  END
+  * READ ITEM
+  EXIST=1
+  READ ITEM FROM FILE,ID ELSE EXIST=0
+ UNTIL EXIST DO NULL REPEAT
+ ISIZ=LEN(ITEM)
+ ISEQ=0
+ IDMODE=2
+ IF MAX<=0 THEN RETURN
+END
+IF IDMODE EQ 2 THEN
+ * EXTRACT FIRST CHUNK OF DATA FROM CURRENT ITEM
+ * REMAIN IN STATE 2 UNTIL FIRST DATA EXTRACTED (MAX>0)
+ IF MAX>0 THEN
+  IF ISIZ=0 AND UNL.FLG.PARAM NE 1 THEN
+   * EMPTY ITEM = EMPTY FILE
+   IDMODE=6
+  END ELSE
+   GOSUB 200
+   IF RC THEN
+    IF RC=1 THEN IDMODE=6 ELSE IDMODE=7
+   END ELSE
+    IDMODE=3
+   END
+  END
+ END
+ RETURN
+END
+BEGIN CASE
+ CASE IDMODE EQ 3
+  * EXTRACT 2ND CHUNK OF DATA FROM CURRENT ITEM & UPDATE ITEM STATS
+  ICNT=ICNT+1
+  IDS<-1>=ID
+  FNS<-1>=FN
+  GOSUB 200
+  IF RC THEN
+   IF RC=1 THEN IDMODE=8 ELSE IDMODE=5
+  END ELSE
+   IDMODE=4
+  END
+  IF IDMODE=3 THEN IDMODE=4
+ CASE IDMODE EQ 4
+  * EXTRACT NEXT CHUNK OF DATA FROM CURRENT ITEM
+  GOSUB 200
+  IF RC THEN
+   IF RC=1 THEN IDMODE=8 ELSE IDMODE=5
+  END
+ CASE IDMODE EQ 5
+  * FINAL AM FOR TEXT FILES
+  GOSUB 100
+  IF ISIZ=0 THEN IDMODE=8
+ CASE IDMODE EQ 6
+  * RETURN EOF & UPDATE ITEM STATS
+  ICNT=ICNT+1
+  IDS<-1>=ID
+  FNS<-1>=FN
+  EOF=1
+  IDMODE=1
+ CASE IDMODE EQ 7
+  * RETURN FINAL AM FOR TEXT FILES & UPDATE ITEM STATS
+  ICNT=ICNT+1
+  IDS<-1>=ID
+  FNS<-1>=FN
+  GOSUB 100
+  IF ISIZ=0 THEN IDMODE=8 ELSE IDMODE=5
+ CASE IDMODE EQ 8
+  * RETURN EOF & SET NEXT STATE TO GET NEXT ITEM
+  EOF=1    ;* INDICATE EOF REACHED
+  IDMODE=1 ;* GET NEXT ID & FILE NAME ON NEXT INVOCATION
+ CASE IDMODE EQ 9
+  * FINAL STATE
+  EOF=2    ;* INDICATE END OF TRANSACTION
+END CASE
+RETURN
+*
+**************************************************************************
+*
+100 * EXTRACT DATA FROM CURRENT ITEM AND ADD TO BUFFER
+*
+**************************************************************************
+*
+* EXTRACT NEXT CHUNK OF DATA FROM CURRENT ITEM AND APPEND
+* TO BUF, UPDATING CNT & ISIZ. IF EOF REACHED, ISIZ
+* WILL BE ZERO.
+*
+N=MAX-CNT
+IF N<=0 THEN RETURN
+IF N>ISIZ THEN N=ISIZ
+BUF=BUF:ITEM[1,N]
+ITEM=ITEM[N+1,999999999]
+CNT=CNT+N
+ISIZ=ISIZ-N
+XSIZ=XSIZ+N
+RETURN
+*
+**************************************************************************
+*
+200 * EXTRACT NEXT CHUNK & SET NEXT EOF INDICATOR:
+*     RC=0=NOT EOF, RC=1=EOF, RC=2=EOF AFTER FINAL AM
+*
+**************************************************************************
+*
+GOSUB 100
+RC=0 ;* ASSUME NOT EOF
+IF ISIZ=0 THEN
+ * END OF CURRENT ITEM
+ IF UNL.FLG.PARAM EQ 1 THEN
+  * READ NEXT CONTINUATION ITEM
+  LOOP
+   ISEQ=ISEQ+1
+   XID=ID:'_':((1000+ISEQ)[2,3])
+   EXIST=1
+   READ ITEM FROM FILE,XID ELSE EXIST=0
+   IF EXIST THEN ISIZ=LEN(ITEM)
+  UNTIL NOT(EXIST) OR ISIZ>0 DO
+   * EMPTY CONTINUATION ITEM
+   ICNT=ICNT+1
+   IDS<-1>=XID
+   FNS<-1>=FN
+  REPEAT
+  IF EXIST THEN
+   * SETUP TO PROCESS CONTINUATION ITEM
+   ICNT=ICNT+1
+   IDS<-1>=XID
+   FNS<-1>=FN
+  END ELSE
+   * END OF CONTINUATION ITEMS
+   IF TXT.FLG.PARAM THEN
+    ITEM=AM
+    ISIZ=1
+    RC=2 ;* EOF AFTER FINAL AM
+   END ELSE
+    RC=1 ;* EOF
+   END
+  END
+ END ELSE
+  * END OF ITEM
+  IF TXT.FLG.PARAM THEN
+   * ADD FINAL AM IF NON-EMPTY TEXT FILE
+   ITEM=AM
+   ISIZ=1
+   RC=2 ;* EOF AFTER FINAL AM
+  END ELSE
+   RC=1 ;* EOF
+  END
+ END
+END
+RETURN
+*
+END

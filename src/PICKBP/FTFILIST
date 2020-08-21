@@ -1,0 +1,168 @@
+SUBROUTINE FTFILIST(STAT,PATH,FNLST,MAT PARAMS,MAT CLIENV)
+**************************************************************************
+*Copyright (c) 2000-2006 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTFILIST
+* AUTHOR: PJS
+* VERSION: 5.3.1
+* CREATED: 09/15/2000
+* UPDATED: 07/24/2006
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.1
+*  PJS 07/24/2006
+*   Changed size of VARS() array from 25 to 26.
+*
+* 5.0.2
+*  PJS 09/11/2003
+*   Modified PRINT expressions for UniVerse because concatenated
+*   expressions are sent in separate packets in NT version of
+*   UniVerse causing TCP "delayed ack" performance issues.
+*
+* 5.0.1
+*  PJS 02/17/2002
+*  Added new element to CLIENV() array for FTBP library version number.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM FILE TRANSFER - EXPAND FILE LIST FOR UPLOAD
+*
+* INPUT:  PATH  = DIRECTORY TO GET FILE LIST FROM
+*         FNLST = LIST OF INPUT FILES WHICH MAY INCLUDE WILD CARDS (AM)
+*         PARAMS  = CURRENT FILE TRANSFER PARAMETER SETTINGS & FLAGS
+*         CLIENV  = CLIENT (ACCUTERM) INFORMATION & CAPABILITIES
+*
+* OUTPUT: STAT  = STATUS OF ASCII UPLOAD OF DIRECTORY LISTING (NULL IF SUCCESSFUL)
+*         FNLST = EXPANDED LIST OF FILES
+*
+**************************************************************************
+**************************************************************************
+*
+DIM PARAMS(30), VARS(26), CLIENV(10)
+*
+EQU ITEM TO VARS(19)
+*
+EQU CLI.PLATFORM TO CLIENV(1)
+EQU CLI.PRODUCT TO CLIENV(2)
+EQU CLI.RELEASE TO CLIENV(3)
+EQU CLI.CAPAS TO CLIENV(4)
+EQU CLI.SVCS TO CLIENV(5)
+EQU CLI.SERIAL TO CLIENV(6)
+EQU CLI.LICENSE TO CLIENV(7)
+EQU CLI.USER TO CLIENV(8)
+EQU CLI.VERSION TO CLIENV(9)
+EQU CLI.CONFIG TO CLIENV(10)
+*
+**************************************************************************
+*
+EQU AM TO CHAR(254)
+EQU CR TO CHAR(13), ESC TO CHAR(27), STX TO CHAR(2), SUB TO CHAR(26)
+*
+**************************************************************************
+*
+* CHECK PATH
+*
+**************************************************************************
+*
+X=PATH[LEN(PATH),1]
+IF X NE '' AND X NE ':' AND X NE '\' THEN PATH=PATH:'\'
+*
+**************************************************************************
+*
+STAT = ''
+LST = ''
+Y = DCOUNT(FNLST,AM)
+FOR X = 1 TO Y
+ FN = FNLST<X>
+ IF INDEX(FN,'*',1) + INDEX(FN,'?',1) THEN
+  IF CLI.RELEASE < 4 THEN
+   * GET EXPANDED FILE LIST USING DOS DIR COMMAND...
+   IF CLI.PLATFORM >= 2 THEN
+    PRINT '':(ESC:STX:'>DIR ':PATH:FN:' > \ACCUTERM.TMP':CR):
+   END ELSE
+    PRINT '':(ESC:STX:'<DIR ':PATH:FN:' > \ACCUTERM.TMP':CR):
+   END
+   PROMPT '?'; ECHO OFF; PRINT '':(ESC:STX:'I'):; INPUT ANS:; ECHO ON; PROMPT '?'; * SYNC
+   * USE ASCII UPLOAD TO RETRIEVE DIRECTORY LIST FILE...
+   MAT VARS=''
+   PRINT '':(ESC:STX:'UAT;\ACCUTERM.TMP':CR):
+   CALL FTASCII(STAT,'FTWTBUFF',1,MAT PARAMS,MAT VARS)
+   * REMOVE DIRECTORY LIST FILE...
+   IF CLI.PLATFORM >= 2 THEN
+    PRINT '':(ESC:STX:'>DEL \ACCUTERM.TMP':CR):
+   END ELSE
+    PRINT '':(ESC:STX:'<DEL \ACCUTERM.TMP':CR):
+   END
+   PROMPT ''; ECHO OFF; PRINT '':(ESC:STX:'I'):; INPUT ANS:; ECHO ON; PROMPT '?'; * SYNC
+   * GET TRANSFER STATUS
+   CALL FTSTATUS(STAT,FATAL,MAT PARAMS,MAT VARS,MAT CLIENV)
+   IF STAT EQ '' THEN
+    * EXTRACT FILE NAMES FROM DIRECTORY LIST...
+    N=DCOUNT(ITEM,AM)
+    FOR I=1 TO N
+     Z=ITEM<I>
+     IF Z[1,1] NE ' ' THEN
+      Z=TRIM(Z)
+      Z1=FIELD(Z,' ',1)
+      Z2=FIELD(Z,' ',2)
+      Z3=FIELD(Z,' ',3)
+      Z4=FIELD(Z,' ',4)
+      Z5=FIELD(Z,' ',5)
+      * FIND DATE/TIME STAMP
+      BEGIN CASE
+       CASE Z3:'*':Z4 MATCHES '2N1X2N1X2N*1N1X2N0X' OR Z3:'*':Z4 MATCHES '2N1X2N1X2N*2N1X2N0X'
+        ZN=Z1
+        ZT=Z2
+       CASE Z4:'*':Z5 MATCHES '2N1X2N1X2N*1N1X2N0X' OR Z4:'*':Z5 MATCHES '2N1X2N1X2N*2N1X2N0X'
+        ZN=Z1:'.':Z2
+        ZT=Z3
+       CASE Z1:'*':Z2 MATCHES '2N1X2N1X2N*1N1X2N0X' OR Z1:'*':Z2 MATCHES '2N1X2N1X2N*2N1X2N0X'
+        ZN=Z[INDEX(Z,' ',3)+1,999]
+        ZT=Z3
+       CASE 1
+        ZN=''
+        ZT=''
+      END CASE
+      LOOP K = INDEX(ZT,',',1) WHILE K DO ZT=ZT[1,K-1]:ZT[K+1,99] REPEAT
+      IF ZT MATCHES '1N0N' THEN
+       LST<-1> = ZN
+      END
+     END
+    NEXT I
+   END
+   ITEM=''
+  END ELSE
+   * RELEASE 4+ USE SCRIPT TO GET FILE LIST
+   PROMPT ''
+   ECHO OFF
+   PRINT '':(ESC:STX:'PCHAIN "FTFILIST.SCR ""':PATH:FN:'"""':CR):
+   LOOP
+    INPUT ANS:
+   UNTIL ANS EQ '' OR ANS EQ '*EOF*' DO
+    LST<-1> = ANS
+   REPEAT
+   ECHO ON
+   PROMPT '?'
+  END
+ END ELSE
+  LST<-1> = FN; * NO WILD CARDS IN FILE NAME
+ END
+NEXT X
+*
+FNLST = LST
+RETURN
+*
+END

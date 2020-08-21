@@ -1,0 +1,152 @@
+SUBROUTINE ATGUIINIT2(APPVER, SVRVER, ERRORS, STATE)
+**************************************************************************
+*Copyright (c) 2004-2010 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUIINIT2
+* AUTHOR: PJS
+* VERSION: 7.0.1
+* CREATED: 10/27/2004
+* UPDATED: 08/09/2010
+*
+* MAINTENANCE RECORD:
+*
+* 7.0.1
+*  PJS 08/09/2010
+*   Include version numbers in grInvVer error message.
+*
+* 5.3.4
+*  PJS 02/25/2008
+*   Check if "case inversion" is in effect and return error if it is.
+*
+* 5.3.3
+*  PJS 12/13/2006
+*   Fix Unassigned SVRVER variable when GUI system returns an error.
+*
+* 5.3.2
+*  PJS 06/12/2006
+*   Updated to use new version of FTOBJREQ, which requires that the
+*   FTCONF & CLIENV arrays be completely initialized (no more cheating!)
+*
+* 5.3.1
+*  PJS 05/08/2006
+*   Updated for 5.3a release. Combined old calls to FTINIT and
+*   FTCLIENV to call new FTINITEX subroutine.
+*
+* 5.1.2
+*  PJS 10/27/2004
+*   New subroutine introduced with GUI version 1.2 initializes the
+*   GUI runtime engine. Includes additional arguments not available
+*   in the deprecated ATGUIINIT subroutine to exchange application
+*   and runtime engine GUI version numbers.
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI MANAGER - INITIALIZE
+*
+* ALL PROGRAMS WHICH CALL ACCUTERM GUI SUBROUTINES MUST CALL
+* THIS SUBROUTINE FIRST AND MAINTAIN THE STATE VARIABLE!
+*
+* PASS THE VERSION NUMBER OF THE MAIN GUI APPLICATION IN THE
+* APPVER ARGUMENT AND RETURN THE GUI ENGINE VERSION NUMBER IN
+* THE SVRVER ARGUMENT. ALONG WITH THE APP VERSION, THE VERSION
+* NUMBER OF THE GUI HOST PROGRAMS IS SENT TO THE GUI ENGINE.
+*
+* INPUT:
+*  APPVER:    GUI application version number
+*
+* OUTPUT:
+*  SVRVER:    GUI runtime version number
+*  ERRORS     ERRORS<1> is non-zero if errors have occurred
+*
+* OTHER:
+*  STATE      internal use only - do not modify
+*
+**************************************************************************
+**************************************************************************
+*
+$INCLUDE ATGUIEQUATES
+EQU THISPGM TO 'ATGUIINIT2'
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+EQU ESC TO CHAR(27), STX TO CHAR(2), CR TO CHAR(13)
+*
+DIM FTCONF(30), CLIENV(10)
+*
+EQU CLI.PLATFORM TO CLIENV(1)
+EQU CLI.PRODUCT TO CLIENV(2)
+EQU CLI.RELEASE TO CLIENV(3)
+EQU CLI.CAPAS TO CLIENV(4)
+EQU CLI.SVCS TO CLIENV(5)
+EQU CLI.SERIAL TO CLIENV(6)
+EQU CLI.LICENSE TO CLIENV(7)
+EQU CLI.USER TO CLIENV(8)
+EQU CLI.VERSION TO CLIENV(9)
+EQU CLI.CONFIG TO CLIENV(10)
+*
+* STATE variable structure:
+*  STATE<1> = 1 if GUI initialized, else 0
+*  STATE<2> = 1 if recording a macro, else 0
+*  STATE<3> = current scale mode
+*  STATE<4> =
+*  STATE<5> = queued event count (queued events are stored beginning at STATE<51>)
+*  STATE<13> = GUI server version number
+*  STATE<14> = GUI app version number
+*  STATE<20,1...30> = saved copy of FTCONF(1...30)
+*  STATE<21...30> = saved copy of CLIENV(1...10)
+*  STATE<51...> = queued events followed by recorded macro instructions
+*
+SVRVER = '1.0'; * ASSUME RUNTIME ENGINE VERSION < 1.2 (DOES NOT RETURN VERSION NUMBER)
+ERRORS = GRSUCCESS
+STATE = ''
+PROMPT ''
+* CHECK APP & HOST VERSION NUMBERS
+IF APPVER > ATGUIVERSION THEN
+ CALL ATGUIERROR(3, THISPGM, '', APPVER:'||':ATGUIVERSION, GRINVVER, '', ERRORS)
+ RETURN
+END
+* CHECK IF ACCUTERM RUNNING AND IF GUI SUPPORTED
+CALL FTINITEX('',MAT FTCONF,MAT CLIENV,FV,STAT)
+IF STAT NE '' THEN
+ CALL ATGUIERROR(3, THISPGM, '', '', GRFATAL, STAT, ERRORS)
+ RETURN
+END
+IF INDEX(CLI.CAPAS,'Z',1) THEN
+ CALL ATGUIERROR(3, THISPGM, '', '', GRFATAL, 'Case inversion must be disabled to run GUI programs - try "PTERM CASE NOINVERT".', ERRORS)
+ RETURN
+END
+IF INDEX(CLI.SVCS,'g',1) = 0 THEN
+ CALL ATGUIERROR(3, THISPGM, '', '', GRFATAL, 'This version of AccuTerm does not support GUI programs.', ERRORS)
+ RETURN
+END
+* SEND INITIALIZE COMMAND WITH HOST & APP VERSIONS
+REC = GCINITIALIZE : VM : APPVER : VM : ATGUIVERSION
+CALL FTOBJREQ('g', REC, RSP, 0, MAT FTCONF, MAT CLIENV)
+CALL ATGUIERRORS(RSP, ERRORS)
+SVRVER = '1.0'; * ASSUME RUNTIME VERSION IS 1.0 (COULD ACTUALLY BE 1.1 - LATER VERSIONS RETURN VERSION IN RSP)
+IF ERRORS<1> = 0 THEN
+ IF RSP NE '' THEN
+  SVRVER = RSP<1,1>; * RETURN GUI RUNTIME ENGINE VERSION
+ END ELSE
+  SVRVER = APPVER; * NO ERROR, SO RUNTIME VERSION IS NOT LOWER THAN APP VERSION
+ END
+END
+* SAVE CONFIGURATION
+STATE<1> = 1; * GUI initialized
+FOR I = 1 TO 30
+ STATE<20,I> = FTCONF(I)
+NEXT I
+FOR I = 1 TO 10
+ STATE<I+20> = CLIENV(I)
+NEXT I
+STATE<13> = SVRVER; * GUI ENGINE VERSION NUMBER
+STATE<14> = APPVER; * GUI APP VERSION NUMBER
+RETURN
+*
+END

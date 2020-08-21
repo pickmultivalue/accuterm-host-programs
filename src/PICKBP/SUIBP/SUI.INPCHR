@@ -1,0 +1,43 @@
+*INCLUDE
+*
+* SMART USER INTERFACE Single Character Input
+*
+*   This INCLUDE item is platform-dependant!
+* 
+*   Perform single character (non-echoed) input.
+*   Returns character in Q and ASCII value in SQ.
+*
+* Default:
+INPUT Q,0; SQ = SEQ(Q);*#DEFAULT#*
+*
+* D3/AP/mvBASE:
+*#AP#*IN SQ; Q=CHAR(SQ)
+*#MVBASE#*IN SQ; Q=CHAR(SQ)
+*#PICK#*IN SQ; Q=CHAR(SQ)
+*
+* Cache:
+*#CACHE#*Q = KEYIN(); SQ = SEQ(Q)
+*
+* jBase:
+*#JB#*IN SQ; Q = CHAR(SQ)
+*
+* MVON#:
+*#MVON#*Q = KEYIN(); SQ = SEQ(Q)
+*
+* Northgate Reality
+*#NR#*IN SQ; Q=CHAR(SQ)
+*
+* OASYS:
+*#OAS#*Q = IN(); SQ = SEQ(Q)
+*
+* ONWare:
+*#ON#*Q = IN(); SQ = SEQ(Q)
+*
+* QM:
+*#QM#*Q = KEYIN(); SQ = SEQ(Q)
+*
+* UniData:
+*#UD#*Q = IN(); SQ = SEQ(Q)
+*
+* UniVerse:
+*#UV#*Q = KEYIN(); SQ = SEQ(Q)

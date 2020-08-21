@@ -1,0 +1,153 @@
+SUBROUTINE SUI.DISPLAY.LABEL(Left, Top, Width, Just, State, Caption, RtnCom, MAT TermDef)
+**************************************************************************
+*Copyright (c) 2004 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: SUI.DISPLAY.LABEL
+* AUTHOR: PJS
+* VERSION: 1.0.0
+* CREATED: 06/01/2004
+* UPDATED: 
+*
+* MAINTENANCE RECORD:
+*
+*************************************************************************
+*************************************************************************
+*
+* SMART USER INTERFACE: Display Label (all ordinary text)
+*
+*************************************************************************
+*************************************************************************
+*
+*   Input Interface:
+*
+*    Left, Top: upper-left corner of label (relative to current window)
+*
+*    Width:    optional label width, or zero for actual width
+*
+*    Just:     justification (L, R, C, T) (T is same as L, but cursor
+*              is left after last character)
+*
+*    State:    0 or 1 if label display state is normal, 2 for disabled
+*
+*    Caption:  label text
+*
+*    TermDef:  terminal definitions as set up by SUI.GET.TERM
+*
+*
+*   Output Interface:
+*
+*    RtnCom:   zero if success, else error code
+*
+*************************************************************************
+*
+$INCLUDE SUI.TERMDEF
+$INCLUDE SUI.WINDEF
+$INCLUDE SUI.CONFIG
+*
+EQU ESC TO CHAR(27), STX TO CHAR(2), CR TO CHAR(13)
+*
+* Format label text
+IF Width > 0 THEN
+ LblSize = Width
+ IF Just = 'R' THEN
+  Mask = 'R#':Width
+  Text = Caption Mask
+ END ELSE
+  IF Just = 'C' THEN
+   Spc = LblSize - LEN(Caption)
+   IF Spc < 0 THEN
+    Spc = 0
+    LblSize = LEN(Caption)
+    Text = Caption
+   END ELSE
+    Spc1 = INT(Spc / 2)
+    Spc2 = Spc - Spc1
+    Text = SPACE(Spc1):Caption:SPACE(Spc2)
+   END
+  END ELSE
+   Mask = 'L#':Width
+   Text = Caption Mask
+  END
+ END
+END ELSE
+ LblSize = LEN(Caption)
+ Text = Caption
+END
+*
+* Adjust screen positions based on current window
+DspCol = Left ;* Screen column
+DspRow = Top ;* Screen row
+WinInf = TERM.WINDOW<1,2>
+IF WinInf EQ '' THEN
+ WinWd = TERM.WIDTH
+ WinHt = TERM.HEIGHT
+END ELSE
+ DspCol = DspCol + WinInf<1,1,SUI.WINLEFT$> + WinInf<1,1,SUI.CLILEFT$>
+ DspRow = DspRow + WinInf<1,1,SUI.WINTOP$> + WinInf<1,1,SUI.CLITOP$>
+ WinWd = WinInf<1,1,SUI.CLIWIDTH$>
+ WinHt = WinInf<1,1,SUI.CLIHEIGHT$>
+END
+IF Top < 0 OR Top >= WinHt THEN
+ RtnCom = SUI.ERROR.INVPOS$ ;* Invalid position
+ RETURN
+END
+IF Left + LblSize > WinWd THEN
+ LblSize = WinWd - Left
+ IF LblSize <= 0 THEN
+  RtnCom = SUI.ERROR.INVSIZE$ ;* Invalid size
+  RETURN
+ END
+ Text = Text[1,LblSize]
+END
+IF Left < 0 THEN
+ DspCol = WinInf<1,1,SUI.WINLEFT$> + WinInf<1,1,SUI.CLILEFT$>
+ LblSize = LblSize + Left
+ IF LblSize <= 0 THEN
+  RtnCom = SUI.ERROR.INVSIZE$ ;* Invalid position/size
+  RETURN
+ END
+ Text = Text[-Left,LblSize]
+END
+EndCol = DspCol + LblSize - 1  ;* Ending screen column
+*
+* Display the label
+IF State = 2 THEN Attr = SUICFG.LABEL.DISABLED ELSE Attr = SUICFG.LABEL.NORMAL
+Dsp = ''
+IF SUICFG.LABEL.BORDER AND INDEX(TERM.SPECIAL,'B',1) THEN
+ * Draw label border using AccuTerm Visual Styles
+ Dsp = Dsp:ESC:STX:'r':DspCol:',':DspRow:',':EndCol:',':DspRow:',N,':'NIRB'[SUICFG.LABEL.BORDER+1,1]:CR
+END
+IF TERM.ATTRTYPE = 1 THEN
+ IF Attr NE SUICFG.DISPLAY.NORMAL THEN
+  IF EndCol >= TERM.WIDTH - 1 THEN
+   IF DspRow < TERM.HEIGHT - 1 THEN Dsp = Dsp:@(0,DspRow+1):TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+  END ELSE
+   Dsp = Dsp:@(EndCol+1,DspRow):TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+  END
+  IF DspCol = 0 THEN
+   IF DspRow > 0 THEN Dsp = Dsp:@(TERM.WIDTH-1,DspRow-1):TermDef(TERM.ATT$+Attr)
+  END ELSE
+   Dsp = Dsp:@(DspCol-1,DspRow):TermDef(TERM.ATT$+Attr)
+  END
+ END
+ Dsp = Dsp:@(DspCol,DspRow)
+END ELSE
+ Dsp = Dsp:@(DspCol,DspRow):TermDef(TERM.ATT$+Attr)
+END
+Dsp = Dsp:Text
+IF Attr NE SUICFG.DISPLAY.NORMAL AND TERM.ATTRTYPE NE 1 THEN
+ Dsp = Dsp:TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+END
+IF Just = 'T' THEN
+ Ln = LEN(Caption)
+ IF Width > Ln THEN Dsp = Dsp:@(DspCol+Ln,DspRow)
+END
+PRINT Dsp:
+RtnCom = 0
+RETURN
+END

@@ -1,0 +1,325 @@
+SUBROUTINE FTPARSE(FNAME,ALST,STAT,DFILE,MD)
+**************************************************************************
+*Copyright (c) 1996-2020 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTPARSE
+* AUTHOR: PJS
+* VERSION: 8.0.1
+* CREATED: 01/01/1993
+* UPDATED: 02/11/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.1
+*  PJS 02/11/2020
+*   Added support for MVON# platform (MVON).
+*
+* 7.2.3
+*  PJS 05/16/2016
+*   Fixed jBASE bug when using SELECT to process A/F conversions.
+*   In JB, the SELECT statement processes both conversions &
+*   correlatives. This is diffrent from R83/D3 SELECT, which only
+*   processes correlatives.
+*
+* 7.2.2
+*  PJS 11/07/2015
+*   Modified code for column heading from dictionary attribute 3 so that
+*   VMs in the heading are converted to blanks instead of SVMs.
+*
+* 7.2.1
+*  PJS 07/10/2015
+*   Fixed Northgate Reality bug when using BSELECT to process A/F
+*   conversions. In NR, the BSELECT statement processes both conversions
+*   & correlatives. This is diffrent from R83/D3 SELECT, which only
+*   processes correlatives.
+*
+* 7.1.1
+*  PJS 03/19/2014
+*   Added support for OASYS platform.
+*
+* 7.0.1
+*  PJS 03/25/2010
+*   Added column header to ALST<9> to support new "C" option in FTD.
+*
+* 5.4.3
+*  PJS 12/20/2007
+*   Added support for CACHE platform.
+*
+* 5.4.2
+*  PJS 05/02/2007
+*   Fixed problem with ITYPE() using current copy of ITEM as @RECORD,
+*   instead of original item. Current copy is updated as each ITYPE()
+*   field is evaluated, which might cause subsequent ITYPE()s to return
+*   invalid results. This subroutine now sets ALST<8> to indicate if a
+*   field uses ITYPE(), or null if no ITYPE()s used.
+*
+* 5.3.2
+*  PJS 03/29/2007
+*   Added check for valid Translate conversion file name.
+*
+* 5.3.1
+*  PJS 07/24/2006
+*   Added DFILE and MD file variables to subroutine argument
+*   list, as these files are now opened up front by FTD. Added
+*   support for OI (OpenInsight CTO) platform.
+*
+* 4.0.4
+*  PJS 06/22/2001
+*   Added support for UniData "V" (virtual) attribute definitions
+*   (same as "I" descriptors)
+*
+* 4.0.3
+*  PJS 12/14/2000
+*   Added missing RETURN statement for GENERIC platform
+*
+* 4.0.2
+*  PJS 11/03/2000
+*   Return error on A/F/B/C unless customized for platform since
+*   SELECT/EXECUTE/PERFORM is platform specific
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* PARSE DESIRED DICTIONARY ATTRIBUTES FOR DATA TRANSFER
+*
+**************************************************************************
+**************************************************************************
+*
+* FTPARSE() SUBROUTINE INTERFACE
+*
+* INPUT:   FNAME = FILE NAME
+*          ALST<1> = ATTRIBUTE NAMES
+*
+* OUTPUT:  ALST<1> = ATTRIBUTE NAMES
+*          ALST<2> = ATTRIBUTE NUMBERS
+*          ALST<3> = CORRELATIVES
+*          ALST<4> = CONVERSIONS
+*          ALST<5> = TYPE (L/R/T)
+*          ALST<6> = WIDTH
+*          ALST<7> = A/F/B/CALL CORRELATIVES
+*          ALST<8> = 1=USE ITYPE() FUNCTION (NULL IF NO ITYPES)
+*          ALST<9> = COLUMN HEADING
+*          STAT    = NULL IF OK, ELSE ERROR MESSAGE
+*
+**************************************************************************
+*
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+*
+STAT=''
+ANMS=ALST<1>
+ALST=''
+IF ANMS<1,1> EQ '*' OR ANMS<1,1> EQ '+' THEN ALST=ANMS<1,1>; RETURN
+AMAX=0
+NATT=DCOUNT(ANMS,VM)
+FOR EACH.ATT=1 TO NATT
+ ANM=ANMS<1,EACH.ATT>
+ BEGIN CASE
+  CASE ANM MATCHES '1N0N'; DINFO='A':AM:ANM:AM:AM:AM:AM:AM:AM:AM:'L':AM:'80'
+  CASE ANM EQ '-'; DINFO='A':AM:'-1'
+  CASE 1
+   READ DINFO FROM DFILE,ANM ELSE
+    READ DINFO FROM MD,ANM ELSE
+     STAT="Attribute defining item '":ANM:"' not on file"
+     RETURN
+    END
+   END
+ END CASE
+ GOSUB 100; * CONVERT D/I/V/F DICT ITEMS TO PICK FORMAT
+ IF CD NE 'A' AND CD NE 'S' THEN
+  STAT="Illegal type in attribute defining item '":ANM:"'"
+  RETURN
+ END
+ ALST<1,EACH.ATT>=ANM
+ ANUM=DINFO<2>
+ IF ANUM>AMAX THEN AMAX=ANUM
+ ALST<2,EACH.ATT>=ANUM
+ CONVS=DINFO<8>; GOSUB 200; ACORR=AFBC; ALST<3,EACH.ATT>=XCONVS;*#GENERIC#*
+*#DEFAULT#* CONVS=DINFO<8>; GOSUB 200; ACORR=AFBC; ALST<3,EACH.ATT>=XCONVS
+*#CACHE#* CONVS=DINFO<8>; GOSUB 200; ACORR=AFBC; ALST<3,EACH.ATT>=XCONVS
+*#JB#* CONVS=DINFO<8>; GOSUB 200; ACORR=AFBC; ALST<3,EACH.ATT>=XCONVS
+*#MVON#* CONVS=DINFO<8>; GOSUB 200; ACORR=AFBC; ALST<3,EACH.ATT>=XCONVS
+*#NR#* CONVS=DINFO<8>; GOSUB 200; ACORR=AFBC; ALST<3,EACH.ATT>=XCONVS
+*#OAS#* CONVS=DINFO<8>; GOSUB 200; ACORR=AFBC; ALST<3,EACH.ATT>=XCONVS
+*#OI#* CONVS=DINFO<8>; GOSUB 200; ACORR=AFBC; ALST<3,EACH.ATT>=XCONVS; IF XCONVS<>'' THEN ACORR=1
+*#ON#* CONVS=DINFO<8>; GOSUB 200; ACORR=AFBC; ALST<3,EACH.ATT>=XCONVS
+*#QM#* CONVS=DINFO<8>; GOSUB 200; ACORR=AFBC; ALST<3,EACH.ATT>=XCONVS
+*#UD#* CONVS=DINFO<8>; GOSUB 200; ACORR=AFBC; ALST<3,EACH.ATT>=XCONVS
+*#UV#* CONVS=DINFO<8>; GOSUB 200; ACORR=AFBC; ALST<3,EACH.ATT>=XCONVS
+ IF STAT NE '' THEN RETURN
+ CONVS=DINFO<7>; GOSUB 200; ACONV=AFBC; ALST<4,EACH.ATT>=XCONVS
+ IF STAT NE '' THEN RETURN
+ IF ACORR OR ACONV THEN;*#GENERIC#*
+  STAT="Invalid conversion or correlative in attribute defining item '":ANM:"'";*#GENERIC#*
+  RETURN;*#GENERIC#*
+ END;*#GENERIC#*
+*#JB#* IF ACORR OR ACONV THEN
+*#JB#*  * jBASE SELECT processes corr & conv, so set
+*#JB#*  * "SELECT" flag & clear both conv & corr fields.
+*#JB#*  ALST<3,EACH.ATT> = ''
+*#JB#*  ALST<4,EACH.ATT> = ''
+*#JB#*  ALST<7,EACH.ATT> = '*'
+*#JB#*  ACORR = 0
+*#JB#*  ACONV = 0
+*#JB#* END
+*#NR#* IF ACORR OR ACONV THEN
+*#NR#*  * Northgate Reality BSELECT processes corr & conv, so
+*#NR#*  *  set "SELECT" flag & clear both conv & corr fields.
+*#NR#*  ALST<3,EACH.ATT> = ''
+*#NR#*  ALST<4,EACH.ATT> = ''
+*#NR#*  ALST<7,EACH.ATT> = '*'
+*#NR#*  ACORR = 0
+*#NR#*  ACONV = 0
+*#NR#* END
+ BEGIN CASE
+  CASE ACORR AND ACONV
+   * USE DUMMY DICT ITEM WITH COMBINED CORRELATIVE AND CONVERSION
+   ALST<7,EACH.ATT>=ALST<3,EACH.ATT>:SVM:ALST<4,EACH.ATT>
+   ALST<3,EACH.ATT>=''
+   ALST<4,EACH.ATT>=''
+  CASE ACONV
+   * USE DUMMY DICT ITEM TO PROCESS CONVERSION AS CORRELATIVE
+   ALST<7,EACH.ATT>=ALST<4,EACH.ATT>
+   ALST<4,EACH.ATT>=''
+  CASE ACORR
+   * USE SELECT STATEMENT TO PROCESS CORRELATIVE
+   ALST<7,EACH.ATT>='*'
+   ALST<3,EACH.ATT>=''
+ END CASE
+ ALST<5,EACH.ATT>=DINFO<9>
+ ALST<6,EACH.ATT>=DINFO<10>
+ * SET ITYPE() FLAG IF USING ITYPE() FUNCTION TO EVALUATE ATTRIBUTE
+*#CACHE#* IF (ACORR OR ACONV) AND (CDX EQ 'I') THEN ALST<8,EACH.ATT>=1
+*#JB#* IF (ACORR OR ACONV) AND (CDX EQ 'I' OR CDX EQ 'V') THEN ALST<8,EACH.ATT>=1
+*#MVON#* IF (ACORR OR ACONV) AND (CDX EQ 'I') THEN ALST<8,EACH.ATT>=1
+*#OAS#* IF ACORR OR ACONV THEN ALST<8,EACH.ATT>=1
+*#OI#* IF ACORR OR ACONV THEN ALST<8,EACH.ATT>=1
+*#ON#* IF ACORR OR ACONV THEN ALST<8,EACH.ATT>=1
+*#QM#* IF ACORR OR ACONV THEN ALST<8,EACH.ATT>=1
+*#UD#* IF ACORR OR ACONV THEN ALST<8,EACH.ATT>=1
+*#UV#* IF (ACORR OR ACONV) AND (CDX EQ 'I') THEN ALST<8,EACH.ATT>=1
+ * STASH COLUMN HEADING IN ALST<9>
+ COLHD=DINFO<3>
+*PJS 11-07-15* LOOP K=INDEX(COLHD,VM,1) WHILE K DO COLHD=COLHD[1,K-1]:SVM:COLHD[K+1,9999] REPEAT
+ LOOP K=INDEX(COLHD,VM,1) WHILE K DO
+  COLHD=COLHD[1,K-1]:' ':COLHD[K+1,9999] ;*PJS 11-07-15 CONVERT VM TO BLANK INSTEAD OF SVM
+ REPEAT
+ ALST<9,EACH.ATT>=COLHD
+NEXT EACH.ATT
+IF ALST<7> NE '' THEN
+ * UPDATE DUMMY ATTRIBUTE NUMBER FOR A/F/B/C ATTRIBUTES
+ FOR EACH.ATT=1 TO NATT
+  IF ALST<7,EACH.ATT> NE '' THEN
+   AMAX=AMAX+1 ;* NEW DUMMY ATTRIBUTE
+   ALST<2,EACH.ATT>=AMAX
+  END
+ NEXT EACH.ATT
+END
+RETURN
+*
+**************************************************************************
+*
+100 * CONVERT D/I/V/F DICTIONARY ITEMS TO PICK FORMAT
+*
+**************************************************************************
+*
+CDX = OCONV(DINFO<1>[1,1],'MCU')
+CD = CDX
+IF CD = 'A' OR CD = 'S' THEN RETURN
+*#OI#*IF CD = 'F' THEN DINFO<1> = 'A'; RETURN
+Z='A'
+Z<3>=DINFO<4>
+IF CD EQ 'I' OR CD EQ 'V' THEN Z<2>='0'; Z<8>='A;':DINFO<2> ELSE Z<2>=DINFO<2>
+Fmt=DINFO<5>
+WID=''; LOOP C=Fmt[1,1] WHILE C NE '' AND C MATCHES '1N' DO WID=WID:C; Fmt = Fmt[2,9999] REPEAT
+IF INDEX('LRTQ',C,1) THEN PAD='' ELSE
+ IF C EQ '"' THEN
+  PAD=Fmt[2,1]
+  Fmt=Fmt[4,9999]
+ END ELSE
+  PAD=C
+  Fmt=Fmt[2,9999]
+ END
+END
+JST=Fmt[1,1]; Fmt=Fmt[2,9999]
+IF JST EQ 'T' THEN CNV='ML' ELSE CNV='M':JST
+IF JST EQ 'Q' THEN
+ C=Fmt[1,1]
+ IF C EQ 'L' OR C EQ 'R' THEN JST=C; Fmt=Fmt[2,9999] ELSE JST='R'
+END
+LOOP C=Fmt[1,1] WHILE C NE '' AND INDEX('(#%*',C,1) EQ 0 DO CNV=CNV:C; Fmt=Fmt[2,9999] REPEAT
+I=LEN(Fmt)
+IF C EQ '(' THEN I=I-2
+IF I > WID THEN WID=I
+CNV=CNV:Fmt
+IF LEN(CNV) > 2 THEN
+ IF DINFO<3> EQ '' THEN Z<7>=CNV ELSE Z<7>=DINFO<3>:VM:CNV
+END ELSE
+ Z<7>=DINFO<3>
+END
+Z<9>=JST
+Z<10>=WID
+DINFO=Z
+CD='A'
+RETURN
+*
+200 * CHECK A, F, B, CALL, CONCAT
+*
+* IF A/F/B/CALL CORRELATIVE, THEN RETURN WITH AFBC=1 ELSE AFBC=0
+*
+AFBC=0
+NCONV=DCOUNT(CONVS,VM); XCONVS=''
+FOR EACH.CONV=1 TO NCONV
+ CC=OCONV(CONVS<1,EACH.CONV>,'MCU')
+ CC1=CC[1,1]
+ CC4=CC[1,4]
+ BEGIN CASE
+  CASE CC1 EQ 'A' OR CC1 EQ 'F' OR CC1 EQ 'B' OR CC4 EQ 'CALL'
+   * SET FLAG TO INDICATE A, F, B OR CALL CONVERSION
+   AFBC=1
+  CASE CC1 EQ 'C'
+   * SCAN CONCATENATION CONVERSION FOR MAX ATTRIBUTE NUMBER
+   IF CC[2,1]=';' THEN CC=CC[2,9999]
+   CC.LN=LEN(CC)
+   FOR EACH.CC=2 TO CC.LN
+    C=CC[EACH.CC,1]
+    BEGIN CASE
+     CASE C='*'
+     CASE C MATCHES '1N'
+      N = C
+      LOOP EACH.CC=EACH.CC+1; C=CC[EACH.CC,1] WHILE C MATCHES '1N' DO N=N:C REPEAT
+      IF N>AMAX THEN AMAX=N
+      EACH.CC=EACH.CC-1
+     CASE 1
+      K=INDEX(CC[EACH.CC+1,CC.LN],C,1)
+      IF K=0 THEN K=CC.LN-EACH.CC+1
+      EACH.CC=EACH.CC+K
+    END CASE
+    EACH.CC=EACH.CC+1
+   NEXT EACH.CC
+  CASE CC1 EQ 'T'
+   * CHECK FOR VALID TRANSLATE FILE NAME
+   IF NOT(CC[2,1] MATCHES '1N') THEN
+    TARGET=FIELD(CONVS<1,EACH.CONV>,';',1)[2,9999]
+    OPEN TARGET TO DUMMY.FILE ELSE
+     STAT="Invalid translate file ":TARGET:" in attribute defining item '":ANM:"'"
+     RETURN
+    END
+   END
+ END CASE
+ * UPDATE SVM DELIMITED LIST OF CONVERSIONS
+ XCONVS<1,1,-1>=CONVS<1,EACH.CONV>
+NEXT EACH.CONV
+RETURN
+*
+END

@@ -1,0 +1,127 @@
+*
+**************************************************************************
+*Copyright (c) 2006 Zumasys,Inc. as an unpublished work. All rights      *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: LOAD-ACCUTERM-SUIBP
+* AUTHOR: PJS
+* VERSION: 5.3.1
+* CREATED: 11/08/2006
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.1
+*  PJS 11/08/2006
+*   Added NO.PAGE=@(0,0) to disable pagination for QM, ON, etc.
+*
+* 5.3.0
+*  PJS 03/01/2006
+*   Initial relese
+*
+**************************************************************************
+**************************************************************************
+*
+* LOAD ACCUTERM SMART USER INTERFACE PROGRAM LIBRARY (SUIBP)
+*
+**************************************************************************
+**************************************************************************
+*
+* CHECK IF FTCHK HAS BEEN RUN SINCE THIS PROGRAM WAS INSTALLED
+*
+PRINT 'You must RUN FTBP FTCHK and select your host platform';*#GENERIC#*
+PRINT 'before you run this program!';*#GENERIC#*
+STOP;*#GENERIC#*
+*
+NO.PAGE=@(0,0);* DISABLE PAGINATION (QM, ON)
+*
+**************************************************************************
+*
+PRINT
+PRINT 'AccuTerm 2K2 Smart User Interface Library Installation'
+PRINT
+PRINT 'AccuSoft suggests that you use SUIBP as the file name for'
+PRINT 'the Smart User Interface Library programs. Create the file'
+PRINT 'with a modulo of 3 (some platforms require that this be a'
+PRINT 'type 1 or DIR file).'
+PRINT
+PRINT
+PRINT 'Do you want to load (re-load) the Smart User Interface Library':
+INPUT ANS
+ANS=OCONV(ANS[1,1],'MCU')
+IF ANS NE 'Y' THEN GOTO 999
+*
+PRINT
+PGM.FILE='SUIBP'
+PRINT 'Enter host file to load Smart User Interface Library into (':PGM.FILE:') ':
+INPUT ANS
+IF ANS NE '' THEN PGM.FILE=ANS
+OPEN PGM.FILE TO PFL ELSE
+ PRINT 'Unable to open ':PGM.FILE:'.'
+ PRINT
+ PRINT 'If you want to install the SUI Library, please create the program'
+ PRINT 'file, then type "RUN FTBP LOAD-ACCUTERM-SUIBP" from TCL.'
+ GOTO 999
+END
+*
+CALL FTVSINF(PLATFORM,'','',CAPABILITIES,SERVICES,'','','')
+IF PLATFORM < 3 THEN
+ PRINT 'You need AccuTerm 97 or later to load these programs.'
+ STOP
+END
+IF INDEX(CAPABILITIES,'U',1) EQ 0 THEN
+ PRINT 'Your workstation does not support file uploading.'
+ STOP
+END
+*
+CALL FTPGMDIR(PATH)
+PRINT
+SUIBP.PATH=PATH:'PickBP\SUIBP'
+PRINT 'Enter directory where the Smart User Interface Library'
+PRINT 'program files are to be loaded from (':SUIBP.PATH:') ':
+INPUT ANS
+IF ANS NE '' THEN SUIBP.PATH=ANS
+*
+PRINT
+*
+* LOAD SUIBP USING FT...
+DATA 'O'
+DATA '1=T'
+DATA '3=Y'
+DATA ''
+DATA 'R'
+DATA 'K'
+DATA SUIBP.PATH
+DATA '*.'
+DATA PGM.FILE
+DATA ''
+*#DEFAULT#*EXECUTE 'FT'
+*#MD#*PERFORM 'FT'
+*#NR#*PERFORM 'FT'
+*
+* CUSTOMIZE PROGRAMS FOR PLATFORM, COMPILE & CATALOG
+DATA PGM.FILE
+DATA ''
+DATA 'Y'
+*#DEFAULT#*EXECUTE 'RUN FTBP FTCHK'
+*#MD#*PERFORM 'RUN FTBP FTCHK'
+* DONE
+PRINT 'Smart User Interface Library programs loaded'
+PRINT
+STOP
+999 *
+PRINT
+PRINT 'You can load (reload) the SUI Library programs'
+PRINT 'by typing "RUN FTBP LOAD-ACCUTERM-SUIBP" from TCL.'
+PRINT
+PROMPT ''
+PRINT 'Press <Enter> to continue':
+INPUT ANS
+STOP
+*
+END

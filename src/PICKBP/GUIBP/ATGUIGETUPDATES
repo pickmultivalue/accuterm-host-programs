@@ -1,0 +1,89 @@
+SUBROUTINE ATGUIGETUPDATES(APPID, FORMID, CTLIDS, VALUES, ERRORS, STATE)
+**************************************************************************
+*Copyright (c) 1999-2006 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUIGETUPDATES
+* AUTHOR: PJS
+* VERSION: 5.3.1
+* CREATED: 11/01/1999
+* UPDATED: 06/12/2006
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.1
+*  PJS 06/12/2006
+*   Updated to use new version of FTOBJREQ, which requires that
+*   the PARAMS and CLIENV arrays be completely initialized.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI MANAGER - GET CHANGED VALUES
+*
+* CALL THIS SUBROUTINE TO GET THE UPDATED VALUES OF ALL CONTROLS.
+*
+* INPUT:
+*  APPID      application identifier (use same ID when deleting app)
+*  FORMID     form identifier of form being created
+*
+* OUTPUT:
+*  CTLIDS     control identifiers whose values have been updated separated by AM
+*  VALUES     corresponding values separated by AM
+*  ERRORS     ERRORS<1> is non-zero if errors have occurred
+*
+* OTHER:
+*  STATE      internal use only - do not modify
+*
+**************************************************************************
+*
+$INCLUDE ATGUIEQUATES
+EQU THISPGM TO 'ATGUIGETUPDATES'
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30), CLIENV(10)
+ERRORS = GRSUCCESS
+FOR I = 1 TO 30
+ PARAMS(I) = STATE<20,I>
+NEXT I
+FOR I = 1 TO 10
+ CLIENV(I) = STATE<20+I>
+NEXT I
+IF NOT(STATE<1>) THEN
+ CALL ATGUIERROR(3, THISPGM, '', 0, GRFATAL, '', ERRORS)
+ RETURN
+END
+ID = APPID
+IF FORMID NE '' THEN
+ ID = ID : '*' : FORMID
+END
+*
+* CHECK IF RECORDING MACRO
+*
+IF STATE<2> THEN
+ CALL ATGUIERROR(2, THISPGM, ID, 0, GRNOMAC, '', ERRORS)
+ RETURN
+END
+*
+* SEND COMMAND TO SERVER
+*
+REC = GCGETUPDS : VM : ID
+CALL FTOBJREQ('g', REC, RSP, 0, MAT PARAMS, MAT CLIENV)
+CALL ATGUIERRORS(RSP, ERRORS)
+CTLIDS = RSP<1>
+*CONVERT VM TO AM IN CTLIDS
+LOOP K=INDEX(CTLIDS,VM,1) WHILE K DO CTLIDS=CTLIDS[1,K-1]:AM:CTLIDS[K+1,999999] REPEAT
+RSP = DELETE(RSP, 1)
+VALUES = RSP
+RETURN
+*
+END

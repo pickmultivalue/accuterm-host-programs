@@ -1,0 +1,139 @@
+SUBROUTINE FTASCII(STAT,SUBNAME,ONESHOT,MAT PARAMS,MAT VARS)
+**************************************************************************
+*Copyright (c) 1993-2006 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTASCII
+* AUTHOR: PJS
+* VERSION: 5.3.1
+* CREATED: 01/01/1993
+* UPDATED: 07/24/2006
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.1
+*  PJS 07/24/2006
+*   Changed size of VARS() array from 25 to 26.
+*
+* 4.0.2
+*  PJS 09/29/2004
+*   Changed max string length from 9999999 to 999999999
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*   ADDED NEW ARGUEMNT: ONESHOT - UNUSED HERE, BUT KEEPS
+*   SUBROUTINE INTERFACE COMPATIBLE WITH FTKERMIT
+*
+**************************************************************************
+**************************************************************************
+*
+* ASCII FOR PICK - FILE TRANSFER PROTOCOL
+*
+**************************************************************************
+**************************************************************************
+*
+* FTASCII() SUBROUTINE INTERFACE
+*
+* INPUT:  PARAMS  = CURRENT FILE TRANSFER PARAMETER SETTINGS & FLAGS
+*         VARS    = VARIABLES USED BY I/O SUBROUTINES
+*         SUBNAME = NAME OF I/O SUBROUTINE
+*         ONESHOT = UNUSED - ASCII ALWAYS WORKS IN ONESHOT MODE
+*
+* OUTPUT: STAT    = UNCHANGED (DUMMY ARGUMENT)
+*         FNS     = LIST OF FILE-NAMES TRANSFERRED
+*         IDS     = LIST OF ITEM-IDS TRANSFERRED
+*         ICNT    = NUMBER OF ITEMS TRANSFERRED
+*         BCNT    = NUMBER OF BYTES TRANSFERRED
+*
+**************************************************************************
+*
+DIM PARAMS(30),VARS(26)
+EQU DIR.FLG.PARAM TO PARAMS(21)
+EQU AM TO CHAR(254)
+EQU CR TO CHAR(13), ESC TO CHAR(27), STX TO CHAR(2), SUB TO CHAR(26)
+*
+**************************************************************************
+*
+* INITIALIZE GLOBAL ELEMENTS
+*
+**************************************************************************
+*
+EOL.CH=CHAR(13)
+BUF=''
+MAX.BUF.LEN = 5000; * DEFAULT MAX BUFFER SIZE
+CNT=0
+*
+IF DIR.FLG.PARAM THEN
+*
+**************************************************************************
+*
+* ASCII SEND
+*
+**************************************************************************
+*
+ LOOP
+  CALL @SUBNAME(BUF,CNT,MAX.BUF.LEN,EOF,0,STAT,MAT PARAMS,MAT VARS)
+ UNTIL EOF DO
+  NL=COUNT(BUF,AM)
+  IF BUF NE '' THEN N=NL+1 ELSE N=0
+  FOR I=1 TO N
+   Z=BUF<I>
+   LOOP WHILE Z NE '' DO
+    PRINT Z[1,131]:
+    Z=Z[132,999999999]
+   REPEAT
+   IF I <= NL THEN PRINT CR:
+  NEXT I
+  BUF=''
+  CNT=0
+ REPEAT
+ PRINT SUB:
+*
+END ELSE
+*
+**************************************************************************
+*
+* ASCII RECEIVE
+*
+**************************************************************************
+*
+ PROMPT ''
+ ECHO OFF
+ CAN=0
+ LOOP
+  INPUT X,1
+ UNTIL X EQ SUB DO
+  IF X EQ '' THEN
+   Z=''
+   L=0
+  END ELSE
+   INPUT Z,131
+   L=LEN(Z)+1
+  END
+  IF NOT(CAN) THEN
+   IF CNT >= MAX.BUF.LEN THEN CALL @SUBNAME(BUF,CNT,MAX.BUF.LEN,0,CAN,STAT,MAT PARAMS,MAT VARS)
+   IF L<132 THEN
+    BUF=BUF:X:Z:AM
+    CNT=CNT+L+1
+   END ELSE
+    BUF=BUF:X:Z
+    CNT=CNT+L
+   END
+  END
+ REPEAT
+ IF CNT > 0 THEN
+  * IF NO DATA, DONT FLUSH YET - SOURCE FILE MAY NOT EXIST!
+  CALL @SUBNAME(BUF,CNT,MAX.BUF.LEN,1,CAN,STAT,MAT PARAMS,MAT VARS); * FLUSH ITEM
+ END
+ ECHO ON
+ PROMPT '?'
+END
+RETURN
+END

@@ -1,0 +1,56 @@
+*INCLUDE
+**************************************************************************
+*Copyright (c) 2004 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: SUI.WINDEF
+* AUTHOR: PJS
+* VERSION: 1.0.0
+* CREATED: 06/01/2004
+* UPDATED: 
+*
+* MAINTENANCE RECORD:
+*
+*************************************************************************
+*************************************************************************
+*
+* SMART USER INTERFACE Window Definition
+*
+* Window information is maintained in the TermDef array TERM.WINDOW
+* elememt. The window information is a dynamic array with one value
+* per window. Subvalues store info for each window. Currently, only
+* nested (modal) windows are supported. The first value in TERM.WINDOW
+* is the Window ID counter. The first window information is in value 2.
+* The window list is arranged from current in value 2 to oldest window
+* at end of list.
+*
+*  W<1,1,1> = Last Window ID used
+*
+*  W<1,x,1> = Window ID
+*  W<1,x,2> = Window Mode (0 = nested)
+*  W<1,x,3> = Window Left
+*  W<1,x,4> = Window Top
+*  W<1,x,5> = Window Width
+*  W<1,x,6> = Window Height
+*  W<1,x,7> = Client Left
+*  W<1,x,8> = Client Top
+*  W<1,x,9> = Client Width
+*  W<1,x,10> = Client Height
+*
+* Client position & size are adjusted to
+* account for the window frame, if any.
+*
+EQU SUI.WINID$ TO 1
+EQU SUI.WINMODE$ TO 2
+EQU SUI.WINLEFT$ TO 3
+EQU SUI.WINTOP$ TO 4
+EQU SUI.WINWIDTH$ TO 5
+EQU SUI.WINHEIGHT$ TO 6
+EQU SUI.CLILEFT$ TO 7
+EQU SUI.CLITOP$ TO 8
+EQU SUI.CLIWIDTH$ TO 9
+EQU SUI.CLIHEIGHT$ TO 10

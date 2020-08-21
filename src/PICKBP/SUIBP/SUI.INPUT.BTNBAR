@@ -1,0 +1,346 @@
+SUBROUTINE SUI.INPUT.BTNBAR(Left, Top, Width, Height, States, Captions, HotKeys, Opts, Btn, Chr, RtnCom, MAT TermDef)
+**************************************************************************
+*Copyright (c) 2004 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: SUI.INPUT.BTNBAR
+* AUTHOR: PJS
+* VERSION: 1.0.0
+* CREATED: 06/01/2004
+* UPDATED: 
+*
+* MAINTENANCE RECORD:
+*
+*************************************************************************
+*************************************************************************
+*
+* SMART USER INTERFACE: Button Bar Input
+*
+*************************************************************************
+*************************************************************************
+*
+*   Input Interface:
+*
+*    Left, Top: upper-left corner of button bar (relative to current window)
+*
+*    Width, Height: size of button bar
+*
+*    States:   multi-valued list of button states (0 or 1 = enabled,
+*              2 = disabled). If this list is null, all buttons are
+*              enabled.
+*
+*    Captions: multi-valued list of button captions. Multi-line captions
+*              are OK - separate lines with sub-value-marks.
+*
+*    HotKeys:  multi-valued list of unique single letter HotKeys. If the
+*              HotKey letter for a button is pressed, that button will
+*              become the "active" button.
+*
+*    Opts:     L = left aligned
+*              R = right aligned
+*              C = centered horizontally
+*              T = top aligned
+*              B = bottom aligned
+*              M = centered vertically
+*
+*    Btn:      number of button which is currently active. If zero, then
+*              the first button is the active button.
+*
+*    TermDef:  terminal definitions as set up by SUI.GET.TERM
+*
+*
+*   Output Interface:
+*
+*    Btn:     active button number when routine exits.
+*
+*    Chr:     if RtnCom is TERM.HOTKEY$, this is the letter or digit
+*             key pressed. Note: for this to occur, the key is NOT in
+*             the HotKeys list.
+*
+*    RtnCom:  command code that caused this routine to return. This
+*             is normally TERM.ENTER$, TERM.TAB$, TERM.STAB$,
+*             TERM.PGUP$, TERM.PGDN, TERM.HOME$, TERM.END$,
+*             TERM.F1$ ... TERM.SF12$, TERM.HOTKEY$. TERM.SENTER$ is
+*             internally translated and returned as TERM.ENTER$.
+*
+*************************************************************************
+*
+$INCLUDE SUI.TERMDEF
+$INCLUDE SUI.WINDEF
+$INCLUDE SUI.CONFIG
+*
+EQU VM TO CHAR(253), SVM TO CHAR(252)
+EQU BEL TO CHAR(7), ESC TO CHAR(27), STX TO CHAR(2), CR TO CHAR(13)
+*
+BtnCnt = DCOUNT(Captions,VM)
+IF BtnCnt < 1 THEN
+ RtnCom = SUI.ERROR$ ;* fail!
+ RETURN
+END
+*
+IF Width < ((BtnCnt * 2) - 1) OR Height < 1 THEN
+ RtnCom = SUI.ERROR.INVSIZE$
+ RETURN
+END
+*
+* Adjust screen positions based on current window
+BarWd = Width
+BarHt = Height
+BegCol = Left ;* Screen beginning column
+BegRow = Top ;* Screen beginning row
+WinInf = TERM.WINDOW<1,2>
+IF WinInf EQ '' THEN
+ WinWd = TERM.WIDTH
+ WinHt = TERM.HEIGHT
+END ELSE
+ WinWd = WinInf<1,1,SUI.CLIWIDTH$>
+ WinHt = WinInf<1,1,SUI.CLIHEIGHT$>
+END
+IF Left < 0 THEN
+ RtnCom = SUI.ERROR.INVPOS$
+ RETURN
+END
+IF Left + BarWd > WinWd THEN
+ BarWd = WinWd - Left
+ IF BarWd <= 0 OR (BarWd < 1 AND Width > 1) THEN
+  RtnCom = SUI.ERROR.INVSIZE$
+  RETURN
+ END 
+END
+IF Top < 0 THEN
+ RtnCom = SUI.ERROR.INVPOS$
+ RETURN
+END
+IF Top + BarHt > WinHt THEN
+ BarHt = WinHt - Top
+ IF BarHt <= 0 THEN
+  RtnCom = SUI.ERROR.INVSIZE$
+  RETURN
+ END
+END
+*
+* Format the button bar
+*
+* get maximum button height
+BtnHt = 1
+IF BarHt > 1 THEN
+ FOR I = 1 TO BtnCnt
+  N = DCOUNT(Captions<1,I>,SVM)
+  IF N > BtnHt THEN BtnHt = N
+ NEXT I
+END
+* get maximum caption width
+BtnWd = 1
+FOR I = 1 TO BtnCnt
+ IF BarHt > 1 THEN
+  N = DCOUNT(Captions<1,I>,SVM)
+  FOR J = 1 TO N
+   K = LEN(Captions<1,I,J>)
+   IF K > BtnWd THEN BtnWd = K
+  NEXT J
+ END ELSE
+  K = LEN(Captions<1,I>)
+  IF K > BtnWd THEN BtnWd = K
+ END
+NEXT I
+MaxRows = 1 + INT((BarHt - BtnHt) / (BtnHt + 1)) ;* maximum number of rows of buttons
+FOR I = 1 TO MaxRows
+ Rows = I ;* assume its a good fit
+ Cnt = INT((BtnCnt - 1) / I) + 1
+ GOSUB CALC.LAYOUT ;* calculate actual button size & space between buttons
+ IF Size >= BtnWd THEN I = MaxRows ;* layout is good, so exit loop
+NEXT I
+*
+* Build button bar layout
+*
+Layout = ''
+*
+* vertical alignment
+IF INDEX(Opts,'B',1) THEN
+ * bottom alignment
+ RowOfs = BarHt - (Rows * BtnHt) - (Rows - 1)
+END ELSE
+ IF INDEX(Opts,'M',1) THEN
+  * vertical center
+  RowOfs = INT((BarHt - (Rows * BtnHt) - (Rows - 1)) / 2)  
+ END ELSE
+  * top alignment
+  RowOfs = 0
+ END
+END
+Idx = 0
+FOR Row = 1 TO Rows
+ Y = BegRow + RowOfs + ((Row - 1) * (BtnHt + 1))
+ IF BtnCnt - Idx < Cnt THEN Cnt = BtnCnt - Idx
+ * horizontal alignment
+ IF INDEX(Opts,'R',1) THEN
+  * right alignment
+  ColOfs = BarWd - (Cnt * Size) - ((Cnt - 1) * Spc)
+ END ELSE
+  IF INDEX(Opts,'C',1) THEN
+   * horizontal center
+   ColOfs = INT((BarWd - (Cnt * Size) - ((Cnt - 1) * Spc)) / 2)
+  END ELSE
+   * left alignment
+   ColOfs = 0
+  END
+ END
+ FOR Col = 1 TO Cnt
+  Idx = Idx + 1
+  X = BegCol + ColOfs + ((Col - 1) * (Size + Spc))
+  Layout<Idx> = X:VM:Y
+ NEXT Col
+NEXT Row
+*
+* Adjust for window position
+BegCol = BegCol + WinInf<1,1,SUI.WINLEFT$> + WinInf<1,1,SUI.CLILEFT$>
+BegRow = BegRow + WinInf<1,1,SUI.WINTOP$> + WinInf<1,1,SUI.CLITOP$>
+EndCol = BegCol + BarWd - 1 ;* Ending screen column
+EndRow = BegRow + BarHt - 1 ;* Ending screen row
+*
+* Display button bar
+IF Btn < 0 OR Btn > BtnCnt THEN Btn = 0
+BtnX = 0
+Click = 0
+FOR I = 1 TO BtnCnt
+ State = States<1,I>
+ IF State EQ 1 THEN State = 0
+ IF State NE 2 THEN
+  IF BtnX = 0 THEN BtnX = I ;* find first enabled button
+  IF TERM.MOUSEADDR NE '' THEN
+   * Check if button bar activated because of mouse click on a button
+   CALL SUI.MOUSE.HIT(Layout<I,1>, Layout<I,2>, Size, BtnHt, 0, Click, MAT TermDef)
+   IF Click THEN
+    Btn = I
+    State = 1
+    TERM.MOUSEADDR = ''
+   END
+  END
+ END ELSE
+  IF Btn = I THEN Btn = 0 ;* cannot activate a disabled button!
+ END
+ CALL SUI.DISPLAY.BUTTON(Layout<I,1>, Layout<I,2>, Size, BtnHt, State, Captions<1,I>, RtnCom, MAT TermDef)
+NEXT I
+IF Btn EQ 0 THEN Btn = BtnX
+IF Btn EQ 0 THEN
+ RtnCom = SUI.ERROR$
+ RETURN ;* nothing to input if all buttons are disabled!
+END
+*
+* Check if mouse click on button activate button bar
+IF Click THEN
+ CALL SUI.DISPLAY.BUTTON(Layout<Btn,1>, Layout<Btn,2>, Size, BtnHt, 0, Captions<1,Btn>, RtnCom, MAT TermDef)
+ RtnCom = TERM.ENTER$
+ RETURN
+END 
+*
+* Input Loop
+LOOP
+ CALL SUI.INPUT.BUTTON(Layout<Btn,1>, Layout<Btn,2>, Size, BtnHt, Captions<1,Btn>, Chr, RtnCom, MAT TermDef)
+ BEGIN CASE
+  CASE RtnCom >= TERM.LEFTBUTTON$ AND RtnCom <= TERM.MIDBUTTON$; GOSUB GETADDR
+  CASE RtnCom = TERM.LEFT$; GOSUB PREVBTN
+  CASE RtnCom = TERM.UP$; GOSUB PREVBTN
+  CASE RtnCom = TERM.RIGHT$; GOSUB NEXTBTN
+  CASE RtnCom = TERM.DOWN$; GOSUB NEXTBTN
+  CASE RtnCom = TERM.TAB$; IF Btn < BtnCnt THEN GOSUB NEXTBTN
+  CASE RtnCom = TERM.STAB$; IF Btn > 1 THEN GOSUB PREVBTN
+  CASE RtnCom = TERM.SENTER$; RtnCom = TERM.ENTER$ ;* Shift+Enter -> Enter
+  CASE RtnCom = TERM.HOTKEY$; GOSUB CHKHOTKEYS
+ END CASE
+UNTIL RtnCom DO
+REPEAT
+RETURN
+!
+PREVBTN: * activate the previous button
+*
+RtnCom = 0
+FOR I = Btn - 1 TO 1 STEP -1
+ IF States<1,I> NE 2 THEN
+  Btn = I
+  RETURN
+ END
+NEXT I
+RETURN
+!
+NEXTBTN: * activate the next button
+*
+RtnCom = 0
+FOR I = Btn + 1 TO BtnCnt
+ IF States<1,I> NE 2 THEN
+  Btn = I
+  RETURN
+ END
+NEXT I
+RETURN
+!
+GETADDR: * check mouse address
+*
+MouseCol = FIELD(TERM.MOUSEADDR,'.',1)
+MouseRow = FIELD(TERM.MOUSEADDR,'.',2)
+IF MouseRow >= BegRow AND MouseRow <= EndRow THEN
+ IF MouseCol >= BegCol AND MouseCol <= EndCol THEN
+  FOR I = 1 TO BtnCnt
+   IF States<1,I> NE 2 THEN
+    CALL SUI.MOUSE.HIT(Layout<I,1>, Layout<I,2>, Size, BtnHt, 0, Click, MAT TermDef)
+    IF Click THEN
+     Btn = I
+     * flash the button
+     CALL SUI.DISPLAY.BUTTON(Layout<I,1>, Layout<I,2>, Size, BtnHt, 1, Captions<1,I>, RtnCom, MAT TermDef)  
+     CALL SUI.DISPLAY.BUTTON(Layout<I,1>, Layout<I,2>, Size, BtnHt, 0, Captions<1,I>, RtnCom, MAT TermDef)  
+     RtnCom = TERM.ENTER$ ;* mouse click same as enter
+     RETURN
+    END
+   END
+  NEXT I
+  RtnCom = 0 ;* click in bar, but not on button, so eat the click
+ END
+END
+RETURN
+!
+CHKHOTKEYS: *
+*
+BtnX = Btn
+FOR I = 1 TO BtnCnt
+ BtnX = BtnX + 1
+ IF BtnX > BtnCnt THEN BtnX = 1
+ IF OCONV(Chr,'MCU') = OCONV(HotKeys<1,BtnX>,'MCU') THEN
+  IF States<1,I> NE 2 THEN Btn = BtnX
+  RtnCom = 0
+  RETURN
+ END
+NEXT I
+RETURN
+!
+CALC.LAYOUT: *
+*
+* Cnt = number of buttons (input)
+* BtnWd = maximum width of button captions (input)
+*
+* Size = actual size each button (output)
+* Spc = space between buttons (output)
+*
+MinSpc = 1 + (TERM.ATTRTYPE = 1) ;* Minimum space between buttons
+MaxSize = INT((BarWd - ((Cnt - 1) * MinSpc)) / Cnt)
+IF BtnWd < MaxSize THEN
+ MaxWd = INT(BtnWd * 1.5)
+ IF MaxWd < MaxSize THEN
+  Size = MaxWd
+ END ELSE
+  Size = MaxSize
+ END
+END ELSE
+ Size = MaxSize
+END
+IF Cnt > 1 THEN
+ Spc = INT((BarWd - (Cnt * Size)) / (Cnt - 1))
+ IF Spc > INT(Size / 2) THEN Spc = INT(Size / 2)
+END ELSE
+ Spc = 0
+END
+RETURN
+END

@@ -1,0 +1,551 @@
+* AccuTerm Smart User Interface Utility
+*
+* Utility to setup AccuTerm colors for use with user interface routines
+*
+EQU ESC TO CHAR(27), STX TO CHAR(2), EM TO CHAR(25), CR TO CHAR(13)
+*
+CALL FTVSINF('',Prod,Rls,Caps,'','','','')
+IF Prod = 5 AND INDEX(Caps,'S',1) = 0 THEN Caps = Caps : 'S'
+IF Caps EQ '' THEN PRINT 'Must be running AccuTerm for this utility!'; STOP
+IF INDEX(Caps,'S',1) = 0 THEN PRINT 'This utility not supported on Lite version of AccuTerm!'; STOP
+*
+PROMPT ''
+STKINP = SYSTEM(10)
+IF NOT(STKINP) THEN
+ PRINT
+ PRINT 'This utility will reset all of your AccuTerm palette colors'
+ PRINT 'and visual attribute color assignment and border effects.'
+ PRINT
+ PRINT
+ PRINT '1. Setup Visual Styles using attributes - thin border'
+ PRINT
+ PRINT '2. Setup Visual Styles using attributes - thick border'
+ PRINT
+ PRINT '3. Setup Visual Styles for Smart User Interface - thin border'
+ PRINT
+ PRINT '4. Setup Visual Styles for Smart User Interface - thick border'
+ PRINT
+ PRINT '5. Set AccuTerm Colors to legacy colors'
+ PRINT
+ PRINT '6. Set AccuTerm Colors to monochrome colors'
+ PRINT
+ PRINT '7. Set AccuTerm Colors to default colors'
+ PRINT
+ PRINT 'R. Restore previous colors'
+ PRINT
+ PRINT
+END
+LOOP
+ IF NOT(SYSTEM(10)) THEN PRINT 'Enter selection (1-7,R) or press ENTER for no change:' :
+ INPUT ANS
+UNTIL ANS EQ '' OR (ANS >= 1 AND ANS <= 7) OR (INDEX('Rr',ANS[1,1],1) > 0) DO
+ PRINT 'Invalid response!'
+ PRINT
+REPEAT
+*
+IF ANS EQ '' THEN STOP
+*
+BEGIN CASE
+ CASE ANS EQ 1; MSK = '104A'
+ CASE ANS EQ 2; MSK = '108A'
+ CASE ANS EQ 3; MSK = '104A'
+ CASE ANS EQ 4; MSK = '108A'
+ CASE ANS EQ 5; MSK = 'A'
+ CASE ANS EQ 6; MSK = 'A'
+ CASE ANS EQ 7; MSK = 'A'
+ CASE 1; MSK = ''; ANS = ANS[1,1]
+END CASE
+*
+* BUILD SCRIPT
+*
+Scr = ''
+Scr = Scr : 'On Error Resume Next' : EM
+Scr = Scr : 'Dim s As String' : EM
+Scr = Scr : 'Dim x As String' : EM
+Scr = Scr : 'Dim i As Integer' : EM
+Scr = Scr : 'With InitSession.Settings' : EM
+IF ANS EQ 'R' OR ANS EQ 'r' THEN
+ * RESTORE SAVED COLORS
+ Scr = Scr : 's = Common("SavedColors_" & Hex$(InitSession.hWnd))' : EM
+ Scr = Scr : 'If s <> "" And ItemCount(s,",") >= 87 Then' : EM
+ Scr = Scr : 'x = Item(s,1,1,",")' : EM
+ Scr = Scr : '.AttributeMask = Val(x)' : EM
+ Scr = Scr : 'For i = 0 To 21' : EM
+ Scr = Scr : 'x = Item(s,2+i,2+i,",")' : EM
+ Scr = Scr : '.Palette(i) = Val(x)' : EM
+ Scr = Scr : 'Next i' : EM
+ Scr = Scr : 'For i = 0 To 63' : EM
+ Scr = Scr : 'x = Item(s,24+i,24+i,",")' : EM
+ Scr = Scr : '.Colors(i) = Val(x)' : EM
+ Scr = Scr : 'Next i' : EM
+ Scr = Scr : 'End If' : EM
+END ELSE
+ * SAVE CURRENT COLORS
+ Scr = Scr : 's = CStr(.AttributeMask)' : EM
+ Scr = Scr : 'For i = 0 To 21' : EM
+ Scr = Scr : 's = s & "," & CStr(.Palette(i))' : EM
+ Scr = Scr : 'Next i' : EM
+ Scr = Scr : 'For i = 0 To 63' : EM
+ Scr = Scr : 's = s & "," & CStr(.Colors(i))' : EM
+ Scr = Scr : 'Next i' : EM
+ Scr = Scr : 'Common("SavedColors_" & Hex$(InitSession.hWnd)) = s' : EM
+ * ADJUST BORDER SIZE
+ Scr = Scr : '.AttributeMask = &H' : MSK : EM
+ * ASSIGN NEW COLORS
+ BEGIN CASE
+  CASE ANS EQ 7
+   * ACCUTERM 7 DEFAULT COLORS
+   Scr = Scr : '.Palette(0) = &H0' : EM
+   Scr = Scr : '.Palette(1) = &H620F0F' : EM
+   Scr = Scr : '.Palette(2) = &HF620F' : EM
+   Scr = Scr : '.Palette(3) = &H62620F' : EM
+   Scr = Scr : '.Palette(4) = &HF0F62' : EM
+   Scr = Scr : '.Palette(5) = &H620F62' : EM
+   Scr = Scr : '.Palette(6) = &HF6262' : EM
+   Scr = Scr : '.Palette(7) = &HE6E6E6' : EM
+   Scr = Scr : '.Palette(8) = &H686868' : EM
+   Scr = Scr : '.Palette(9) = &HE86C6C' : EM
+   Scr = Scr : '.Palette(10) = &H6CE86C' : EM
+   Scr = Scr : '.Palette(11) = &HE8E86C' : EM
+   Scr = Scr : '.Palette(12) = &H6C6CE8' : EM
+   Scr = Scr : '.Palette(13) = &HE86CE8' : EM
+   Scr = Scr : '.Palette(14) = &H6CE8E8' : EM
+   Scr = Scr : '.Palette(15) = &HFFFFFF' : EM
+   Scr = Scr : '.Palette(16) = &H80000006' : EM
+   Scr = Scr : '.Palette(17) = &H80000006' : EM
+   Scr = Scr : '.Palette(18) = &H80000010' : EM
+   Scr = Scr : '.Palette(19) = &H80000015' : EM
+   Scr = Scr : '.Palette(20) = &H80000014' : EM
+   Scr = Scr : '.Palette(21) = &H80000016' : EM
+   Scr = Scr : '.Colors(0) = 112' : EM
+   Scr = Scr : '.Colors(1) = 119' : EM
+   Scr = Scr : '.Colors(2) = 116' : EM
+   Scr = Scr : '.Colors(3) = 119' : EM
+   Scr = Scr : '.Colors(4) = 240' : EM
+   Scr = Scr : '.Colors(5) = 255' : EM
+   Scr = Scr : '.Colors(6) = 244' : EM
+   Scr = Scr : '.Colors(7) = 255' : EM
+   Scr = Scr : '.Colors(8) = 224' : EM
+   Scr = Scr : '.Colors(9) = 238' : EM
+   Scr = Scr : '.Colors(10) = 228' : EM
+   Scr = Scr : '.Colors(11) = 238' : EM
+   Scr = Scr : '.Colors(12) = 30' : EM
+   Scr = Scr : '.Colors(13) = 17' : EM
+   Scr = Scr : '.Colors(14) = 28' : EM
+   Scr = Scr : '.Colors(15) = 17' : EM
+   Scr = Scr : '.Colors(16) = 120' : EM
+   Scr = Scr : '.Colors(17) = 119' : EM
+   Scr = Scr : '.Colors(18) = 124' : EM
+   Scr = Scr : '.Colors(19) = 119' : EM
+   Scr = Scr : '.Colors(20) = 248' : EM
+   Scr = Scr : '.Colors(21) = 255' : EM
+   Scr = Scr : '.Colors(22) = 200' : EM
+   Scr = Scr : '.Colors(23) = 204' : EM
+   Scr = Scr : '.Colors(24) = 232' : EM
+   Scr = Scr : '.Colors(25) = 238' : EM
+   Scr = Scr : '.Colors(26) = 236' : EM
+   Scr = Scr : '.Colors(27) = 238' : EM
+   Scr = Scr : '.Colors(28) = 158' : EM
+   Scr = Scr : '.Colors(29) = 153' : EM
+   Scr = Scr : '.Colors(30) = 148' : EM
+   Scr = Scr : '.Colors(31) = 153' : EM
+   Scr = Scr : '.Colors(32) = 113' : EM
+   Scr = Scr : '.Colors(33) = 119' : EM
+   Scr = Scr : '.Colors(34) = 117' : EM
+   Scr = Scr : '.Colors(35) = 119' : EM
+   Scr = Scr : '.Colors(36) = 15' : EM
+   Scr = Scr : '.Colors(38) = 79' : EM
+   Scr = Scr : '.Colors(39) = 68' : EM
+   Scr = Scr : '.Colors(40) = 175' : EM
+   Scr = Scr : '.Colors(41) = 170' : EM
+   Scr = Scr : '.Colors(42) = 172' : EM
+   Scr = Scr : '.Colors(43) = 170' : EM
+   Scr = Scr : '.Colors(44) = 242' : EM
+   Scr = Scr : '.Colors(45) = 255' : EM
+   Scr = Scr : '.Colors(46) = 245' : EM
+   Scr = Scr : '.Colors(47) = 255' : EM
+   Scr = Scr : '.Colors(48) = 112' : EM
+   Scr = Scr : '.Colors(49) = 119' : EM
+   Scr = Scr : '.Colors(50) = 116' : EM
+   Scr = Scr : '.Colors(51) = 119' : EM
+   Scr = Scr : '.Colors(52) = 240' : EM
+   Scr = Scr : '.Colors(53) = 255' : EM
+   Scr = Scr : '.Colors(54) = 244' : EM
+   Scr = Scr : '.Colors(55) = 255' : EM
+   Scr = Scr : '.Colors(56) = 224' : EM
+   Scr = Scr : '.Colors(57) = 238' : EM
+   Scr = Scr : '.Colors(58) = 228' : EM
+   Scr = Scr : '.Colors(59) = 238' : EM
+   Scr = Scr : '.Colors(60) = 30' : EM
+   Scr = Scr : '.Colors(61) = 17' : EM
+   Scr = Scr : '.Colors(62) = 28' : EM
+   Scr = Scr : '.Colors(63) = 17' : EM
+  CASE ANS EQ 5
+   * ACCUTERM 2K2 DEFAULT COLORS
+   Scr = Scr : '.Palette(0) = &H0' : EM
+   Scr = Scr : '.Palette(1) = &H800000' : EM
+   Scr = Scr : '.Palette(2) = &H8000&' : EM
+   Scr = Scr : '.Palette(3) = &H808000' : EM
+   Scr = Scr : '.Palette(4) = &H80' : EM
+   Scr = Scr : '.Palette(5) = &H800080' : EM
+   Scr = Scr : '.Palette(6) = &H8080&' : EM
+   Scr = Scr : '.Palette(7) = &HC0C0C0' : EM
+   Scr = Scr : '.Palette(8) = &H9F9F9F' : EM
+   Scr = Scr : '.Palette(9) = &HFF0000' : EM
+   Scr = Scr : '.Palette(10) = &HFF00&' : EM
+   Scr = Scr : '.Palette(11) = &HFFFF00' : EM
+   Scr = Scr : '.Palette(12) = &HFF' : EM
+   Scr = Scr : '.Palette(13) = &HFF00FF' : EM
+   Scr = Scr : '.Palette(14) = &HFFFF&' : EM
+   Scr = Scr : '.Palette(15) = &HFFFFFF' : EM
+   Scr = Scr : '.Palette(16) = &H80000006' : EM
+   Scr = Scr : '.Palette(17) = &H80000006' : EM
+   Scr = Scr : '.Palette(18) = &H80000010' : EM
+   Scr = Scr : '.Palette(19) = &H80000015' : EM
+   Scr = Scr : '.Palette(20) = &H80000014' : EM
+   Scr = Scr : '.Palette(21) = &H80000016' : EM
+   Scr = Scr : '.Colors(0) = 30' : EM
+   Scr = Scr : '.Colors(1) = 17' : EM
+   Scr = Scr : '.Colors(2) = 29' : EM
+   Scr = Scr : '.Colors(3) = 17' : EM
+   Scr = Scr : '.Colors(4) = 142' : EM
+   Scr = Scr : '.Colors(5) = 136' : EM
+   Scr = Scr : '.Colors(6) = 141' : EM
+   Scr = Scr : '.Colors(7) = 136' : EM
+   Scr = Scr : '.Colors(8) = 28' : EM
+   Scr = Scr : '.Colors(9) = 17' : EM
+   Scr = Scr : '.Colors(10) = 27' : EM
+   Scr = Scr : '.Colors(11) = 17' : EM
+   Scr = Scr : '.Colors(12) = 132' : EM
+   Scr = Scr : '.Colors(13) = 136' : EM
+   Scr = Scr : '.Colors(14) = 133' : EM
+   Scr = Scr : '.Colors(15) = 136' : EM
+   Scr = Scr : '.Colors(16) = 27' : EM
+   Scr = Scr : '.Colors(17) = 17' : EM
+   Scr = Scr : '.Colors(18) = 26' : EM
+   Scr = Scr : '.Colors(19) = 17' : EM
+   Scr = Scr : '.Colors(20) = 139' : EM
+   Scr = Scr : '.Colors(21) = 136' : EM
+   Scr = Scr : '.Colors(22) = 132' : EM
+   Scr = Scr : '.Colors(23) = 136' : EM
+   Scr = Scr : '.Colors(24) = 28' : EM
+   Scr = Scr : '.Colors(25) = 17' : EM
+   Scr = Scr : '.Colors(26) = 23' : EM
+   Scr = Scr : '.Colors(27) = 17' : EM
+   Scr = Scr : '.Colors(28) = 139' : EM
+   Scr = Scr : '.Colors(29) = 136' : EM
+   Scr = Scr : '.Colors(30) = 129' : EM
+   Scr = Scr : '.Colors(31) = 136' : EM
+   Scr = Scr : '.Colors(32) = 155' : EM
+   Scr = Scr : '.Colors(33) = 153' : EM
+   Scr = Scr : '.Colors(34) = 157' : EM
+   Scr = Scr : '.Colors(35) = 153' : EM
+   Scr = Scr : '.Colors(36) = 127' : EM
+   Scr = Scr : '.Colors(37) = 119' : EM
+   Scr = Scr : '.Colors(38) = 126' : EM
+   Scr = Scr : '.Colors(39) = 119' : EM
+   Scr = Scr : '.Colors(40) = 156' : EM
+   Scr = Scr : '.Colors(41) = 153' : EM
+   Scr = Scr : '.Colors(42) = 157' : EM
+   Scr = Scr : '.Colors(43) = 153' : EM
+   Scr = Scr : '.Colors(44) = 116' : EM
+   Scr = Scr : '.Colors(45) = 119' : EM
+   Scr = Scr : '.Colors(46) = 117' : EM
+   Scr = Scr : '.Colors(47) = 119' : EM
+   Scr = Scr : '.Colors(48) = 30' : EM
+   Scr = Scr : '.Colors(49) = 17' : EM
+   Scr = Scr : '.Colors(50) = 29' : EM
+   Scr = Scr : '.Colors(51) = 17' : EM
+   Scr = Scr : '.Colors(52) = 142' : EM
+   Scr = Scr : '.Colors(53) = 136' : EM
+   Scr = Scr : '.Colors(54) = 141' : EM
+   Scr = Scr : '.Colors(55) = 136' : EM
+   Scr = Scr : '.Colors(56) = 28' : EM
+   Scr = Scr : '.Colors(57) = 17' : EM
+   Scr = Scr : '.Colors(58) = 27' : EM
+   Scr = Scr : '.Colors(59) = 17' : EM
+   Scr = Scr : '.Colors(60) = 132' : EM
+   Scr = Scr : '.Colors(61) = 136' : EM
+   Scr = Scr : '.Colors(62) = 133' : EM
+   Scr = Scr : '.Colors(63) = 136' : EM
+  CASE ANS EQ 1 OR ANS EQ 2
+   * CLASSIC WINDOWS COLORS / ATTRIBUTES
+   Scr = Scr : '.Palette(0) = &H80000008' : EM
+   Scr = Scr : '.Palette(1) = &H8000000D' : EM
+   Scr = Scr : '.Palette(2) = &H8000&' : EM
+   Scr = Scr : '.Palette(3) = &H808000' : EM
+   Scr = Scr : '.Palette(4) = &H80' : EM
+   Scr = Scr : '.Palette(5) = &H800080' : EM
+   Scr = Scr : '.Palette(6) = &H8000000E' : EM
+   Scr = Scr : '.Palette(7) = &H8000000F' : EM
+   Scr = Scr : '.Palette(8) = &H80000010' : EM
+   Scr = Scr : '.Palette(9) = &HFF0000' : EM
+   Scr = Scr : '.Palette(10) = &HFF00&' : EM
+   Scr = Scr : '.Palette(11) = &HFFFF00' : EM
+   Scr = Scr : '.Palette(12) = &HFF' : EM
+   Scr = Scr : '.Palette(13) = &HFF00FF' : EM
+   Scr = Scr : '.Palette(14) = &HFFFF&' : EM
+   Scr = Scr : '.Palette(15) = &H80000005' : EM
+   Scr = Scr : '.Palette(16) = &H80000006' : EM
+   Scr = Scr : '.Palette(17) = &H80000006' : EM
+   Scr = Scr : '.Palette(18) = &H80000010' : EM
+   Scr = Scr : '.Palette(19) = &H80000015' : EM
+   Scr = Scr : '.Palette(20) = &H80000014' : EM
+   Scr = Scr : '.Palette(21) = &H80000016' : EM
+   Scr = Scr : '.Colors(0) = 112' : EM
+   Scr = Scr : '.Colors(1) = 119' : EM
+   Scr = Scr : '.Colors(2) = 112' : EM
+   Scr = Scr : '.Colors(3) = 119' : EM
+   Scr = Scr : '.Colors(4) = 16624' : EM
+   Scr = Scr : '.Colors(5) = 255' : EM
+   Scr = Scr : '.Colors(6) = 240' : EM
+   Scr = Scr : '.Colors(7) = 255' : EM
+   Scr = Scr : '.Colors(8) = -32656' : EM
+   Scr = Scr : '.Colors(9) = 119' : EM
+   Scr = Scr : '.Colors(10) = 112' : EM
+   Scr = Scr : '.Colors(11) = 119' : EM
+   Scr = Scr : '.Colors(12) = 16406' : EM
+   Scr = Scr : '.Colors(13) = 17' : EM
+   Scr = Scr : '.Colors(14) = 22' : EM
+   Scr = Scr : '.Colors(15) = 17' : EM
+   Scr = Scr : '.Colors(16) = 120' : EM
+   Scr = Scr : '.Colors(17) = 119' : EM
+   Scr = Scr : '.Colors(18) = 120' : EM
+   Scr = Scr : '.Colors(19) = 119' : EM
+   Scr = Scr : '.Colors(20) = 16496' : EM
+   Scr = Scr : '.Colors(21) = 119' : EM
+   Scr = Scr : '.Colors(22) = 112' : EM
+   Scr = Scr : '.Colors(23) = 119' : EM
+   Scr = Scr : '.Colors(24) = -32648' : EM
+   Scr = Scr : '.Colors(25) = 119' : EM
+   Scr = Scr : '.Colors(26) = 120' : EM
+   Scr = Scr : '.Colors(27) = 119' : EM
+   Scr = Scr : '.Colors(28) = 16504' : EM
+   Scr = Scr : '.Colors(29) = 119' : EM
+   Scr = Scr : '.Colors(30) = 120' : EM
+   Scr = Scr : '.Colors(31) = 119' : EM
+   Scr = Scr : '.Colors(32) = 120' : EM
+   Scr = Scr : '.Colors(33) = 119' : EM
+   Scr = Scr : '.Colors(34) = 120' : EM
+   Scr = Scr : '.Colors(35) = 119' : EM
+   Scr = Scr : '.Colors(36) = 16496' : EM
+   Scr = Scr : '.Colors(37) = 119' : EM
+   Scr = Scr : '.Colors(38) = 112' : EM
+   Scr = Scr : '.Colors(39) = 119' : EM
+   Scr = Scr : '.Colors(40) = -32640' : EM
+   Scr = Scr : '.Colors(41) = 136' : EM
+   Scr = Scr : '.Colors(42) = 128' : EM
+   Scr = Scr : '.Colors(43) = 136' : EM
+   Scr = Scr : '.Colors(44) = 16504' : EM
+   Scr = Scr : '.Colors(45) = 119' : EM
+   Scr = Scr : '.Colors(46) = 120' : EM
+   Scr = Scr : '.Colors(47) = 119' : EM
+   Scr = Scr : '.Colors(48) = 120' : EM
+   Scr = Scr : '.Colors(49) = 119' : EM
+   Scr = Scr : '.Colors(50) = 120' : EM
+   Scr = Scr : '.Colors(51) = 119' : EM
+   Scr = Scr : '.Colors(52) = 16496' : EM
+   Scr = Scr : '.Colors(53) = 119' : EM
+   Scr = Scr : '.Colors(54) = 112' : EM
+   Scr = Scr : '.Colors(55) = 119' : EM
+   Scr = Scr : '.Colors(56) = -32640' : EM
+   Scr = Scr : '.Colors(57) = 136' : EM
+   Scr = Scr : '.Colors(58) = 128' : EM
+   Scr = Scr : '.Colors(59) = 136' : EM
+   Scr = Scr : '.Colors(60) = 16504' : EM
+   Scr = Scr : '.Colors(61) = 119' : EM
+   Scr = Scr : '.Colors(62) = 120' : EM
+   Scr = Scr : '.Colors(63) = 119' : EM
+  CASE ANS EQ 3 OR ANS EQ 4
+   * CLASSIC WINDOWS COLORS / SUI
+   Scr = Scr : '.Palette(0) = &H80000008' : EM
+   Scr = Scr : '.Palette(1) = &H8000000D' : EM
+   Scr = Scr : '.Palette(2) = &H8000&' : EM
+   Scr = Scr : '.Palette(3) = &H808000' : EM
+   Scr = Scr : '.Palette(4) = &H80&' : EM
+   Scr = Scr : '.Palette(5) = &H800080' : EM
+   Scr = Scr : '.Palette(6) = &H8000000E' : EM
+   Scr = Scr : '.Palette(7) = &H8000000F' : EM
+   Scr = Scr : '.Palette(8) = &H80000010' :EM
+   Scr = Scr : '.Palette(9) = &HFF0000' : EM
+   Scr = Scr : '.Palette(10) = &HFF00&' : EM
+   Scr = Scr : '.Palette(11) = &HFFFF00' : EM
+   Scr = Scr : '.Palette(12) = &HFF&' : EM
+   Scr = Scr : '.Palette(13) = &HFF00FF' : EM
+   Scr = Scr : '.Palette(14) = &HFFFF&' : EM
+   Scr = Scr : '.Palette(15) = &H80000005' : EM
+   Scr = Scr : '.Palette(16) = &H80000006' : EM
+   Scr = Scr : '.Palette(17) = &H80000006' : EM
+   Scr = Scr : '.Palette(18) = &H80000010' : EM
+   Scr = Scr : '.Palette(19) = &H80000015' : EM
+   Scr = Scr : '.Palette(20) = &H80000014' : EM
+   Scr = Scr : '.Palette(21) = &H80000016' : EM
+   Scr = Scr : '.Colors(0) = 112' : EM
+   Scr = Scr : '.Colors(1) = 119' : EM
+   Scr = Scr : '.Colors(2) = 112' : EM
+   Scr = Scr : '.Colors(3) = 119' : EM
+   Scr = Scr : '.Colors(4) = 240' : EM
+   Scr = Scr : '.Colors(5) = 255' : EM
+   Scr = Scr : '.Colors(6) = 240' : EM
+   Scr = Scr : '.Colors(7) = 255' : EM
+   Scr = Scr : '.Colors(8) = 112' : EM
+   Scr = Scr : '.Colors(9) = 119' : EM
+   Scr = Scr : '.Colors(10) = 112' : EM
+   Scr = Scr : '.Colors(11) = 119' : EM
+   Scr = Scr : '.Colors(12) = 96' : EM
+   Scr = Scr : '.Colors(13) = 111' : EM
+   Scr = Scr : '.Colors(14) = 96' : EM
+   Scr = Scr : '.Colors(15) = 111' : EM
+   Scr = Scr : '.Colors(16) = 120' : EM
+   Scr = Scr : '.Colors(17) = 119' : EM
+   Scr = Scr : '.Colors(18) = 120' : EM
+   Scr = Scr : '.Colors(19) = 119' : EM
+   Scr = Scr : '.Colors(20) = 31' : EM
+   Scr = Scr : '.Colors(21) = 17' : EM
+   Scr = Scr : '.Colors(22) = 31' : EM
+   Scr = Scr : '.Colors(23) = 17' : EM
+   Scr = Scr : '.Colors(24) = 120' : EM
+   Scr = Scr : '.Colors(25) = 119' : EM
+   Scr = Scr : '.Colors(26) = 120' : EM
+   Scr = Scr : '.Colors(27) = 119' : EM
+   Scr = Scr : '.Colors(28) = 31' : EM
+   Scr = Scr : '.Colors(29) = 17' : EM
+   Scr = Scr : '.Colors(30) = 31' : EM
+   Scr = Scr : '.Colors(31) = 17' : EM
+   Scr = Scr : '.Colors(32) = 120' : EM
+   Scr = Scr : '.Colors(33) = 119' : EM
+   Scr = Scr : '.Colors(34) = 120' : EM
+   Scr = Scr : '.Colors(35) = 119' : EM
+   Scr = Scr : '.Colors(36) = 31' : EM
+   Scr = Scr : '.Colors(37) = 119' : EM
+   Scr = Scr : '.Colors(38) = 31' : EM
+   Scr = Scr : '.Colors(39) = 119' : EM
+   Scr = Scr : '.Colors(40) = 120' : EM
+   Scr = Scr : '.Colors(41) = 136' : EM
+   Scr = Scr : '.Colors(42) = 120' : EM
+   Scr = Scr : '.Colors(43) = 136' : EM
+   Scr = Scr : '.Colors(44) = 31' : EM
+   Scr = Scr : '.Colors(45) = 119' : EM
+   Scr = Scr : '.Colors(46) = 31' : EM
+   Scr = Scr : '.Colors(47) = 119' : EM
+   Scr = Scr : '.Colors(48) = 120' : EM
+   Scr = Scr : '.Colors(49) = 119' : EM
+   Scr = Scr : '.Colors(50) = 120' : EM
+   Scr = Scr : '.Colors(51) = 119' : EM
+   Scr = Scr : '.Colors(52) = 112' : EM
+   Scr = Scr : '.Colors(53) = 119' : EM
+   Scr = Scr : '.Colors(54) = 112' : EM
+   Scr = Scr : '.Colors(55) = 119' : EM
+   Scr = Scr : '.Colors(56) = 128' : EM
+   Scr = Scr : '.Colors(57) = 136' : EM
+   Scr = Scr : '.Colors(58) = 128' : EM
+   Scr = Scr : '.Colors(59) = 136' : EM
+   Scr = Scr : '.Colors(60) = 120' : EM
+   Scr = Scr : '.Colors(61) = 119' : EM
+   Scr = Scr : '.Colors(62) = 120' : EM
+   Scr = Scr : '.Colors(63) = 119' : EM
+  CASE ANS EQ 6
+   * MONOCHROME COLORS
+   Scr = Scr : '.Palette(0) = &H0' : EM
+   Scr = Scr : '.Palette(1) = &H800000' : EM
+   Scr = Scr : '.Palette(2) = &H8000&' : EM
+   Scr = Scr : '.Palette(3) = &H808000' : EM
+   Scr = Scr : '.Palette(4) = &H80' : EM
+   Scr = Scr : '.Palette(5) = &H800080' : EM
+   Scr = Scr : '.Palette(6) = &H8080&' : EM
+   Scr = Scr : '.Palette(7) = &HC0C0C0' : EM
+   Scr = Scr : '.Palette(8) = &H9F9F9F' : EM
+   Scr = Scr : '.Palette(9) = &HFF0000' : EM
+   Scr = Scr : '.Palette(10) = &HFF00&' : EM
+   Scr = Scr : '.Palette(11) = &HFFFF00' : EM
+   Scr = Scr : '.Palette(12) = &HFF' : EM
+   Scr = Scr : '.Palette(13) = &HFF00FF' : EM
+   Scr = Scr : '.Palette(14) = &HFFFF&' : EM
+   Scr = Scr : '.Palette(15) = &HFFFFFF' : EM
+   Scr = Scr : '.Palette(16) = &H80000006' : EM
+   Scr = Scr : '.Palette(17) = &H80000006' : EM
+   Scr = Scr : '.Palette(18) = &H80000010' : EM
+   Scr = Scr : '.Palette(19) = &H80000015' : EM
+   Scr = Scr : '.Palette(20) = &H80000014' : EM
+   Scr = Scr : '.Palette(21) = &H80000016' : EM
+   Scr = Scr : '.Colors(0) = 15' : EM
+   Scr = Scr : '.Colors(1) = 0' : EM
+   Scr = Scr : '.Colors(2) = 15' : EM
+   Scr = Scr : '.Colors(3) = 0' : EM
+   Scr = Scr : '.Colors(4) = 112' : EM
+   Scr = Scr : '.Colors(5) = 119' : EM
+   Scr = Scr : '.Colors(6) = 112' : EM
+   Scr = Scr : '.Colors(7) = 119' : EM
+   Scr = Scr : '.Colors(8) = 7' : EM
+   Scr = Scr : '.Colors(9) = 0' : EM
+   Scr = Scr : '.Colors(10) = 7' : EM
+   Scr = Scr : '.Colors(11) = 0' : EM
+   Scr = Scr : '.Colors(12) = 112' : EM
+   Scr = Scr : '.Colors(13) = 119' : EM
+   Scr = Scr : '.Colors(14) = 112' : EM
+   Scr = Scr : '.Colors(15) = 119' : EM
+   Scr = Scr : '.Colors(16) = 7' : EM
+   Scr = Scr : '.Colors(17) = 0' : EM
+   Scr = Scr : '.Colors(18) = 7' : EM
+   Scr = Scr : '.Colors(19) = 0' : EM
+   Scr = Scr : '.Colors(20) = 128' : EM
+   Scr = Scr : '.Colors(21) = 136' : EM
+   Scr = Scr : '.Colors(22) = 128' : EM
+   Scr = Scr : '.Colors(23) = 136' : EM
+   Scr = Scr : '.Colors(24) = 7' : EM
+   Scr = Scr : '.Colors(25) = 0' : EM
+   Scr = Scr : '.Colors(26) = 7' : EM
+   Scr = Scr : '.Colors(27) = 0' : EM
+   Scr = Scr : '.Colors(28) = 128' : EM
+   Scr = Scr : '.Colors(29) = 136' : EM
+   Scr = Scr : '.Colors(30) = 128' : EM
+   Scr = Scr : '.Colors(31) = 136' : EM
+   Scr = Scr : '.Colors(32) = 15' : EM
+   Scr = Scr : '.Colors(33) = 0' : EM
+   Scr = Scr : '.Colors(34) = 15' : EM
+   Scr = Scr : '.Colors(35) = 0' : EM
+   Scr = Scr : '.Colors(36) = 240' : EM
+   Scr = Scr : '.Colors(37) = 255' : EM
+   Scr = Scr : '.Colors(38) = 240' : EM
+   Scr = Scr : '.Colors(39) = 255' : EM
+   Scr = Scr : '.Colors(40) = 15' : EM
+   Scr = Scr : '.Colors(41) = 0' : EM
+   Scr = Scr : '.Colors(42) = 15' : EM
+   Scr = Scr : '.Colors(43) = 0' : EM
+   Scr = Scr : '.Colors(44) = 240' : EM
+   Scr = Scr : '.Colors(45) = 255' : EM
+   Scr = Scr : '.Colors(46) = 240' : EM
+   Scr = Scr : '.Colors(47) = 255' : EM
+   Scr = Scr : '.Colors(48) = 15' : EM
+   Scr = Scr : '.Colors(49) = 0' : EM
+   Scr = Scr : '.Colors(50) = 15' : EM
+   Scr = Scr : '.Colors(51) = 0' : EM
+   Scr = Scr : '.Colors(52) = 240' : EM
+   Scr = Scr : '.Colors(53) = 255' : EM
+   Scr = Scr : '.Colors(54) = 240' : EM
+   Scr = Scr : '.Colors(55) = 255' : EM
+   Scr = Scr : '.Colors(56) = 15' : EM
+   Scr = Scr : '.Colors(57) = 0' : EM
+   Scr = Scr : '.Colors(58) = 15' : EM
+   Scr = Scr : '.Colors(59) = 0' : EM
+   Scr = Scr : '.Colors(60) = 240' : EM
+   Scr = Scr : '.Colors(61) = 255' : EM
+   Scr = Scr : '.Colors(62) = 240' : EM
+   Scr = Scr : '.Colors(63) = 255' : EM
+ END CASE
+END
+*
+Scr = Scr : '.Apply' : EM
+Scr = Scr : 'End With' : EM
+*
+IF INDEX(Caps,'Y',1) THEN
+ PRINT ESC : STX : 'R' : Scr : CR :
+END ELSE
+ PRINT ESC : STX : 'P' : Scr : CR :
+ SLEEP 1
+END
+IF NOT(STKINP) THEN PRINT 'Done!'
+STOP
+*
+END
+

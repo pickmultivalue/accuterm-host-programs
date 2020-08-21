@@ -1,0 +1,92 @@
+SUBROUTINE ATGUIFILEDIALOG(CAPTION, DEFAULT, FILTER, STYLE, VALUE, ERRORS, STATE)
+**************************************************************************
+*Copyright (c) 2006 Zumasys,Inc. as an unpublished work. All rights      *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUIFILEDIALOG
+* AUTHOR: PJS
+* VERSION: 5.3.1
+* CREATED: 11/10/2004
+* UPDATED: 06/12/2006
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.1
+*  PJS 06/12/2006
+*   Updated to use new version of FTOBJREQ, which requires that
+*   the PARAMS and CLIENV arrays be completely initialized.
+*
+* 5.1.2
+*  PJS 11/10/2004
+*   New subroutine introduced with GUI version 1.2 includes a STYLE
+*   argument which selects type of file dialog to display: Save, Open
+*   (single file), Open (multiple files) or Directory. This routine
+*   replaces the ATGUIOPENDIALOG and ATGUISAVEDIALOG subroutines.
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI MANAGER - DISPLAY FILE DIALOG BOX
+*
+* CALL THIS SUBROUTINE TO DISPLAY A FILE DIALOG BOX.
+*
+* INPUT:
+*
+*  CAPTION    caption text
+*  DEFAULT    default file path to display initially
+*  FILTER     list of file types & extensions to display (unused if STYLE=3)
+*  STYLE      0 = display the Save file dialog
+*             1 = display the Open file dialog and return a single file path
+*             2 = display the Open file dialog and return a one or more files
+*             3 = display the Choose Folder dialog and return the selected directory
+*
+* OUTPUT:
+*
+*  VALUE      selected file path or null if user cancelled
+*             multiple file names are separated by value marks
+*             if MODe = 2.
+*  ERRORS     ERRORS<1> is non-zero if errors have occurred
+*
+* OTHER:
+*  STATE      internal use only - do not modify
+*
+**************************************************************************
+*
+$INCLUDE ATGUIEQUATES
+EQU THISPGM TO 'ATGUIFILEDIALOG'
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30), CLIENV(10)
+ERRORS = GRSUCCESS
+FOR I = 1 TO 30
+ PARAMS(I) = STATE<20,I>
+NEXT I
+FOR I = 1 TO 10
+ CLIENV(I) = STATE<20+I>
+NEXT I
+IF NOT(STATE<1>) THEN
+ CALL ATGUIERROR(3, THISPGM, '', 0, GRFATAL, '', ERRORS)
+ RETURN
+END
+*
+* CHECK IF RECORDING MACRO
+*
+IF STATE<2> THEN
+ CALL ATGUIERROR(2, THISPGM, '', 0, GRNOMAC, '', ERRORS)
+ RETURN
+END
+REC = GCFILEDIALOG : VM : DEFAULT : VM : CAPTION : VM : FILTER : VM : STYLE
+*
+* SEND COMMAND TO SERVER
+*
+CALL FTOBJREQ('g', REC, RSP, 0, MAT PARAMS, MAT CLIENV)
+CALL ATGUIERRORS(RSP, ERRORS)
+VALUE = RSP
+RETURN
+*
+END

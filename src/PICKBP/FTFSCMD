@@ -1,0 +1,218 @@
+SUBROUTINE FTFSCMD(FUNC,Data,ERRCD,ERRMSG)
+**************************************************************************
+*Copyright (c) 2020 Zumasys,Inc. as an unpublished work. All rights      *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTFSCMD
+* AUTHOR: PJS
+* VERSION: 8.0.2
+* CREATED: 02/06/2020
+* UPDATED: 04/21/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.2
+*  PJS 04/21/2020
+*   Added jBASE compile and catalog routines.
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM SERVER FILE SYSTEM COMMAND HANDLER
+*
+**************************************************************************
+**************************************************************************
+*
+**************************************************************************
+*
+* INITIALIZED & DECODE FUNCTION
+*
+**************************************************************************
+*
+STAT='Invalid function'
+FUNC=OCONV(FUNC, 'MCU')
+*
+BEGIN CASE
+ CASE FUNC='COMPILE'
+  GOSUB DO.COMPILE
+ CASE FUNC='CATALOG'
+  GOSUB DO.CATALOG
+END CASE
+IF STAT<>'' THEN
+ Data=''
+ ERRCD=10001; * ARBRITARY ERROR CODE
+ ERRMSG=STAT
+END
+RETURN
+*
+**************************************************************************
+*
+* COMPILE PROGRAM
+*
+**************************************************************************
+*
+DO.COMPILE: *
+*
+STAT = ''
+FILENAME = Data<1>
+ITEMID = Data<2>
+OPT.NAMES = OCONV(Data<3>,'MCU') : @VM
+OPT.VALS = Data<4>
+*
+* Generic version
+CMD = 'BASIC ' : FILENAME : ' ' : ITEMID;*#GENERIC#*
+* PERFORM THE COMPILE;*#GENERIC#*
+EXECUTE CMD CAPTURING RESULTS;*#GENERIC#*
+* PARSE THE RESULTS, LOOKING FOR ERRORS;*#GENERIC#*
+MESSAGE = '';*#GENERIC#*
+Data = '';*#GENERIC#*
+N = DCOUNT(RESULTS, @AM);*#GENERIC#*
+FOR I = 1 TO N;*#GENERIC#*
+ TEXT = RESULTS<I>;*#GENERIC#*
+ SZ = LEN(TEXT);*#GENERIC#*
+ LOOP WHILE ((SZ > 2) AND (TEXT[1,1] = TEXT[2,1]) AND (INDEX('*.!@#$%^&-_+=:;,/\|<>?', TEXT[1,1], 1) > 0)) DO;*#GENERIC#*
+  TEXT = TEXT[2,SZ] ;* REMOVE REPEATING CHARACTERS;*#GENERIC#*
+  SZ = SZ - 1;*#GENERIC#*
+ REPEAT;*#GENERIC#*
+ IF SZ > 0 THEN;*#GENERIC#*
+  TEXT.UC = OCONV(TEXT,'MCU');*#GENERIC#*
+  IF INDEX(TEXT.UC, 'SUCCESSFUL COMPILE', 1) THEN;*#GENERIC#*
+   MESSAGE = "'":ITEMID:"' compiled successfully.";*#GENERIC#*
+  END;*#GENERIC#*
+  IF INDEX(TEXT.UC, 'COMPILATION ABORTED', 1) THEN;*#GENERIC#*
+   MESSAGE = "'":ITEMID:"' compilation failed.";*#GENERIC#*
+  END;*#GENERIC#*
+  K = INDEX(TEXT.UC, 'LINE ', 1);*#GENERIC#*
+  IF K THEN;*#GENERIC#*
+   IF TEXT.UC[K, SZ] MATCHES "'LINE '1N0N':'0X" THEN;*#GENERIC#*
+    TEXT<1,2> = FIELD(TEXT.UC[K + 5, SZ], ':', 1) ;* EXTRACT ERROR LINE NUMBER;*#GENERIC#*
+   END;*#GENERIC#*
+  END;*#GENERIC#*
+  Data<-1> = TEXT;*#GENERIC#*
+ END;*#GENERIC#*
+NEXT I;*#GENERIC#*
+Data = INSERT(Data, 1; MESSAGE);*#GENERIC#*
+*
+* jBASE version
+*#JB#*IF INDEX(OPT.NAMES, 'DEBUG', 1) THEN DEBUG.MODE = 1 ELSE DEBUG.MODE = 0
+*#JB#*CMD = 'BASIC ' : FILENAME : ' ' : ITEMID : ' '
+*#JB#** PERFORM THE COMPILE
+*#JB#*EXECUTE CMD CAPTURING RESULTS
+*#JB#** PARSE THE RESULTS, LOOKING FOR ERRORS
+*#JB#*MESSAGE = ''
+*#JB#*Data = ''
+*#JB#*N = DCOUNT(RESULTS, @AM)
+*#JB#*FOR I = 1 TO N
+*#JB#* TEXT = RESULTS<I>
+*#JB#* IF INDEX(TEXT, ' compiled successfully', 1) THEN
+*#JB#*  MESSAGE = "'":ITEMID:"' compiled successfully."
+*#JB#* END
+*#JB#* IF INDEX(TEXT, 'Unable to compile', 1) THEN
+*#JB#*  MESSAGE = "'":ITEMID:"' compilation failed."
+*#JB#* END
+*#JB#* IF INDEX(TEXT,"(offset",1) THEN
+*#JB#*  LINE.NO = FIELD(TEXT,",",2)
+*#JB#*  LINE.NO = FIELD(LINE.NO,' ',2)
+*#JB#*  RESULTS<I,2> = LINE.NO ;* append the line number of error lines for source code linking
+*#JB#* END
+*#JB#*NEXT I
+*#JB#*Data = MESSAGE : @AM : RESULTS ;* return information message as first attribute, followed by command output
+*
+* QM version
+*#QM#*IF INDEX(OPT.NAMES, 'DEBUG', 1) THEN DEBUG.MODE = 1 ELSE DEBUG.MODE = 0
+*#QM#*CMD = 'BASIC ' : FILENAME : ' ' : ITEMID : ' NO.PAGE NO.QUERY'
+*#QM#*IF DEBUG.MODE THEN CMD = CMD : ' DEBUGGING'
+*#QM#** PERFORM THE COMPILE
+*#QM#*EXECUTE CMD CAPTURING RESULTS
+*#QM#** PARSE THE RESULTS, LOOKING FOR ERRORS
+*#QM#*MESSAGE = ''
+*#QM#*Data = ''
+*#QM#*N = DCOUNT(RESULTS, @AM)
+*#QM#*FOR I = 1 TO N
+*#QM#* TEXT = RESULTS<I>
+*#QM#* IF INDEX(TEXT, ' with no errors', 1) THEN
+*#QM#*  MESSAGE = "'":ITEMID:"' compiled successfully."
+*#QM#*END
+*#QM#* IF INDEX(TEXT, ' with errors', 1) THEN
+*#QM#*  MESSAGE = "'":ITEMID:"' compilation failed."
+*#QM#* END
+*#QM#* IF TEXT MATCHES '1N0N: 0X' THEN
+*#QM#*  LINE.NO = FIELD(TEXT, ':', 1)
+*#QM#*  RESULTS<I,2> = LINE.NO ;* append the line number of error lines for source code linking
+*#QM#* END
+*#QM#*NEXT I
+*#QM#*Data = MESSAGE : @AM : RESULTS ;* return information message as first attribute, followed by command output
+*
+RETURN
+*
+**************************************************************************
+*
+* CATALOG PROGRAM
+*
+**************************************************************************
+*
+DO.CATALOG: *
+*
+STAT = ''
+FILENAME = Data<1>
+ITEMID = Data<2>
+OPT.NAMES = OCONV(Data<3>,'MCU') : @VM
+OPT.VALS = Data<4>
+*
+* Generic version
+CMD = 'CATALOG ' : FILENAME : ' ' : ITEMID;*#GENERIC#*
+* PERFORM THE CATALOG;*#GENERIC#*
+EXECUTE CMD CAPTURING RESULTS;*#GENERIC#*
+* PARSE THE RESULTS;*#GENERIC#*
+MESSAGE = '';*#GENERIC#*
+N = DCOUNT(RESULTS, @AM);*#GENERIC#*
+FOR I = N TO 1 STEP -1;*#GENERIC#*
+ TEXT = RESULTS<I>;*#GENERIC#*
+ IF TEXT <> '' THEN;*#GENERIC#*
+  MESSAGE = TEXT;*#GENERIC#*
+  I = 0;*#GENERIC#*
+ END;*#GENERIC#*
+NEXT I;*#GENERIC#*
+Data = INSERT(RESULTS, 1; MESSAGE) ;* return information message as first attribute, followed by command output;*#GENERIC#*
+*
+* jBASE version
+*#JB#*CMD = 'CATALOG ' : FILENAME : ' ' : ITEMID : ' (O)'
+*#JB#** PERFORM THE CATALOG
+*#JB#*EXECUTE CMD CAPTURING RESULTS
+*#JB#** PARSE THE RESULTS
+*#JB#*MESSAGE = ''
+*#JB#*N = DCOUNT(RESULTS, @AM)
+*#JB#*FOR I = N TO 1 STEP -1
+*#JB#* TEXT = RESULTS<I>
+*#JB#* IF TEXT <> '' THEN
+*#JB#*  MESSAGE = TEXT
+*#JB#*  I = 0
+*#JB#* END
+*#JB#*NEXT I
+*#JB#*Data = INSERT(RESULTS, 1; MESSAGE) ;* return information message as first attribute, followed by command output
+*
+* QM version
+*#QM#*CMD = 'CATALOG ' : FILENAME : ' ' : ITEMID : ' NO.PAGE NO.QUERY'
+*#QM#** PERFORM THE CATALOG
+*#QM#*EXECUTE CMD CAPTURING RESULTS
+*#QM#** PARSE THE RESULTS
+*#QM#*MESSAGE = ''
+*#QM#*N = DCOUNT(RESULTS, @AM)
+*#QM#*FOR I = N TO 1 STEP -1
+*#QM#* TEXT = RESULTS<I>
+*#QM#* IF TEXT <> '' THEN
+*#QM#*  MESSAGE = TEXT
+*#QM#*  I = 0
+*#QM#* END
+*#QM#*NEXT I
+*#QM#*Data = INSERT(RESULTS, 1; MESSAGE) ;* return information message as first attribute, followed by command output
+*
+RETURN
+*
+END

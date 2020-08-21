@@ -1,0 +1,257 @@
+SUBROUTINE FTINITEX(FLAGS, MAT FTCONF, MAT CLIENV, FV, STAT)
+**************************************************************************
+*Copyright (c) 2006-2015 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTINITEX
+* AUTHOR: PJS
+* VERSION: 7.2.2
+* CREATED: 05/08/2006
+* UPDATED: 03/18/2015
+*
+* MAINTENANCE RECORD:
+*
+* 7.2.2
+*  PJS 03/18/2015
+*   Added UTF8HACK flag as CFG<63>, configurable in KMTCFG, or
+*   or modified programmatically at runtime. When this flag is
+*   set, the checksum & packet length functions in FTCLISVR are
+*   modified to convert UTF-8 sequences to Unicode values when
+*   performing calculations. This allows non-Unicode-aware host
+*   environments to send & receive UTF-8 as normal byte streams,
+*   but process the contents as Unicode on the Windows side.
+*
+* 7.2.1
+*  PJS 10/09/2013
+*   Added comment documenting use of CFG<62> for exit string.
+*
+* 5.4.2
+*  PJS 01/23/2008
+*   Added support for ATCLIENT connections (QM), identified as
+*   product code 8. Use ATCLIENT configuration item to override
+*   default KMTCFG configuration settings for ATCLIENT connections.
+*   Bump max input buffer size from 9999 to 99999999, in support of
+*   incoming Q & R packets. Indicate support for ATCLIENT using
+*   'Y' HOSTCAPS code, and unlimited message input size using
+*   'R' HOSTCAPS code.
+*
+* 5.4.1
+*  PJS 04/18/2007
+*   Added support for custom settings in hex.
+*   
+* 5.3.2
+*  PJS 06/12/2006
+*   Defined CLIENV(10) as CLI.CONFIG, which contains the host
+*   configuration record, KMTCFG, with AM's converted to VM's
+*
+**************************************************************************
+**************************************************************************
+*
+* INITIALIZE ACCUTERM CLIENT & FILE TRANSFER CONFIGURATION
+*
+**************************************************************************
+**************************************************************************
+*
+* FTINITEX() SUBROUTINE INTERFACE
+*
+* INPUT:  FLAGS  = NULL (RESERVED FOR FUTURE USE)
+*
+* OUTPUT: CLIENV = ACCUTERM CLIENT CONFIGURATION
+*         FTCONF = FILE TRANSFER CONFIGURATION SETTINGS
+*         FV     = FILE VARIABLE FOR CONFIG FILE (ACCUTERMCTRL)
+*         STAT   = NULL IF SUCCESSFULL, OTHERWISE ERROR MESSAGE
+*
+* NOTE: THIS SUBROUTINE COMBINES & SUPERCEDES THE OLD FTINIT & FTCLIENV SUBROUTINES
+*
+********************************************************************
+*
+EQU ESC TO CHAR(27), STX TO CHAR(2), CR TO CHAR(13)
+EQU AM TO CHAR(254)
+*
+DIM CLIENV(10)                  ;* initialized with values returned from FTVSINF
+EQU CLI.PLATFORM TO CLIENV(1)   ;* 0=not AccuTerm, 1=DOS, 2=Win16, 3=Win32
+EQU CLI.PRODUCT TO CLIENV(2)    ;* 0=unknown, 1=AccuTerm, 2=AccuTerm/PLUS, 3=AccuTerm/Win16, 4=AccuTerm/Standard, 5=AccuTerm/Internet, 6=AccuTerm/Control, 7=AccuTerm/Lite, 8=AccuTerm Client
+EQU CLI.RELEASE TO CLIENV(3)    ;* AccuTerm release (format is 5.301, where letter suffix is converted to numeric 01 to 26)
+EQU CLI.CAPAS TO CLIENV(4)      ;* client CAPABILITIES string (documented below)
+EQU CLI.SVCS TO CLIENV(5)       ;* client SERVICES string (documented below)
+EQU CLI.SERIAL TO CLIENV(6)     ;* AccuTerm serial number
+EQU CLI.LICENSE TO CLIENV(7)    ;* AccuTerm license type (1=single, 2=small business, 3=enterprise, 4=personal, 5=developer, 6=bundled, 7=internet client, 8=component, 9=evaluation)
+EQU CLI.USER TO CLIENV(8)       ;* Registered user, company, location
+EQU CLI.VERSION TO CLIENV(9)    ;* Host program version
+EQU CLI.CONFIG TO CLIENV(10)    ;* Host configuration record (KMTCFG)
+*
+* CAPABILITIES: string of letters representing capabilities available
+*          A = ASCII file transfer protocol supported
+*          B = border effects (visual styles) are enabled
+*          C = data capture supported
+*          D = file download supported
+*          E = execute DOS/Windows commands
+*          F = character set translation supported during file transfer
+*          G = GUI supported
+*          H = server mode supported
+*          I = image display supported
+*          J = screen save/restore supported
+*          K = Kermit file transfer protocol supported
+*          L = background image supported
+*          M = query settings (ATWIN.INI) supported (ESC STX '&')
+*          O = Object Bridge supported
+*          P = packetized messages supported
+*          Q = message checksum & length checks supported
+*          R = reliable connection (enables streaming client/server protocol)
+*          S = VBA scripting supported
+*          T = file transfer error info available
+*          U = file upload supported
+*          V = host capabilities (ESC STX '=') supported (implies tagged delimiter support)
+*          W = synchronous scripts supported (ESC STX 'R')
+*          X = file conversion supported
+*          Y = query status supported (ESC STX 'y')
+*          Z = case inversion is in effect
+*          ! = use tagged delimiters in FTENCODE/FTDECODE
+*
+* SERVICES: string of letters representing services available
+*          0 = server mode supported (same as H in CAPABILITIES above)
+*          a = Object Bridge (same as O in CAPABILITIES above)
+*          b = File format conversion (same as X in capabilities above)
+*          g = GUI (same as G in capabilities above)
+*
+*
+* CLI.CONFIG: host configuration record (KMTCFG) - first 30 values same as FTCONF (delimiters shifted one level)
+*       <1,51> = host platform type
+*       <1,52> = optional input buffer size (80 to 9999, default = 80; must be less than the auto-CR threshhold for INPUT statement)
+*       <1,53> = optional output buffer size (80 to 9999, default = 2000)
+*       <1,54> = optional maximum number of attempts to send or get error-free packet (1 to 20, default = 3)
+*       <1,55> = disable client/server streaming protocol
+*       <1,56> = disable client/server message length check
+*       <1,57> = disable client/server message checksum check
+*       <1,58> = disable strict item locking in FTSERVER
+*       <1,59> = disable tagged delimiters in client/server protocol
+*       <1,60> = enable ATCLIENT access
+*       <1,61> = enable message input
+*       <1,62> = exit string for command-line utilities (FT, FTD, FTPICK)
+*       <1,63> = UTF-8 Hack flag (see comments above for details)
+*
+* Note: to enable ATCLIENT access, you must have an ATCLIENT item in the ACCUTERMCTRL file.
+* All non-null lines in ATCLIENT override the corresponding lines from KMTCFG. Line 60 must
+* be 1 to enable ATCLIENT!
+*
+DIM FTCONF(30)                   ;* Initialized from first 30 attributes of KMTCFG in ACCUTERMCTRL file
+EQU MAX.POS.PARAM TO FTCONF(1)   ;* Output buffer reconfigure threshhold (also limits Kermit outbound max packet size) (default = 250)
+EQU MAX.LEN.PARAM TO FTCONF(2)   ;* Kermit inbound maximum packet size (35 to 2000, default = 94)
+EQU RETRY.PARAM TO FTCONF(3)     ;* Kermit retry attempts before failure (1 to 30, default = 10)
+EQU TIMEOUT.PARAM TO FTCONF(4)   ;* Kermit timeout (0 to 60 seconds, default = 8)
+EQU PADDING.PARAM TO FTCONF(5)   ;* Kermit number of pad characters (0 to 250, default = 0)
+EQU EOL.CD.PARAM TO FTCONF(6)    ;* Kermit end-of-line char (1 to 31, default = 13)
+EQU CTL.CD.PARAM TO FTCONF(7)    ;* Kermit control char prefix char (33 to 126, default = 35)
+EQU EBP.CD.PARAM TO FTCONF(8)    ;* Kermit eighth bit prefix char (33 to 126, default = 38)
+EQU RLE.CD.PARAM TO FTCONF(9)    ;* Kermit run-length prefix char (33 to 126, default = 126)
+EQU MCP.FLG.PARAM TO FTCONF(10)  ;* Kermit use MCP conversion (0 = no, 1 = yes, determined during installation)
+EQU EBP.FLG.PARAM TO FTCONF(11)  ;* Kermit use eighth bit prefixing (0 = no, 1 = yes, default = yes)
+EQU RLE.FLG.PARAM TO FTCONF(12)  ;* Kermit use run-length encoding (0 = no, 1 = yes, default = no)
+EQU TXT.FLG.PARAM TO FTCONF(13)  ;* File transfer mode (0 = binary, 1 = text, default = text)
+EQU EXT.FLG.PARAM TO FTCONF(14)  ;* Preserve file extension (0 = no, 1 = yes, default = yes)
+EQU OVR.FLG.PARAM TO FTCONF(15)  ;* FT overwrite existing item (0 = no, 1 = yes, default = yes)
+EQU OVR.FTD.PARAM TO FTCONF(16)  ;* FTD overwrite existing item (0 = no, 1 = yes, 2 = merge, default = yes)
+EQU UNL.FLG.PARAM TO FTCONF(17)  ;* Large item treatment (0 = truncate, 1 = split, 2 = no action, default = no action)
+EQU DCH.FLG.PARAM TO FTCONF(18)  ;* FTD field delimiter (0 = tab, 1 = comma, default = tab)
+EQU OVR.PCK.PARAM TO FTCONF(19)  ;* FTPICK overwrite existing item (0 = no, 1 = yes, default = yes)
+EQU EXTRA.AM.PARAM TO FTCONF(20) ;* Add extra AM to items that end with null attribute (0 = no, 1 = yes, determined during installation)
+EQU DIR.FLG.PARAM TO FTCONF(21)  ;* Transfer direction (0 = receive, 1 = transmit)
+EQU FIL.FLG.PARAM TO FTCONF(22)  ;* File flag (0 = no file, 1 = file)
+EQU FIL.CNV.PARAM TO FTCONF(23)  ;* File conversion mode (0 = none, 1 = post-download, 2 = pre-upload)
+EQU OEM.CHR.PARAM TO FTCONF(24)  ;* Convert OEM char set to ANSI (0 = no, 1 = yes, default = no)
+EQU PRO.FLG.PARAM TO FTCONF(25)  ;* Protocol (0 = ASCII, 1 = Kermit)
+EQU SVRNAME TO FTCONF(26)        ;* FTSERVER Host server name
+EQU READ.OK TO FTCONF(27)        ;* FTSERVER allow READ/READNEXT/RELEASE (0 = no, 1 = yes)
+EQU WRITE.OK TO FTCONF(28)       ;* FTSERVER allow WRITE/ADD/DELETE (0 = no, 1 = yes)
+EQU CONV.OK TO FTCONF(29)        ;* FTSERVER allow OCONV/ICONV (0 = no, 1 = yes)
+EQU EXEC.OK TO FTCONF(30)        ;* FTSERVER allow EXECUTE/CALL (0 = no, 1 = yes)
+*
+STAT = ''
+MAT FTCONF = ''
+MAT CLIENV = ''
+*
+CALL FTVSINF(CLI.PLATFORM, CLI.PRODUCT, CLI.RELEASE, CLI.CAPAS, CLI.SVCS, CLI.SERIAL, CLI.LICENSE, CLI.USER)
+CALL FTVERSN(VERSN)
+CLI.VERSION = VERSN
+*
+OPEN 'ACCUTERMCTRL' TO FV ELSE
+ OPEN 'FTBP' TO FV ELSE
+  STAT = 'Unable to open ACCUTERMCTRL file!'
+  RETURN
+ END
+END
+*
+READ DEFAULTS FROM FV,'FTPARAMS' ELSE
+ STAT = 'Unable to read FTPARAMS from ACCUTERMCTRL file!'
+ RETURN
+END
+*
+READ CFG FROM FV,'KMTCFG' ELSE CFG = ''
+FOR I = 1 TO 30
+ FTCONF(I) = CFG<I>
+ DEF = FIELD(DEFAULTS<I>,',',2)
+ CD = FIELD(DEFAULTS<I>,',',9)
+ IF DEF MATCHES '1N0N' AND CD EQ '' THEN
+  IF FTCONF(I) MATCHES '1N0N' AND FTCONF(I) >= FIELD(DEFAULTS<I>,',',3) AND FTCONF(I) <= FIELD(DEFAULTS<I>,',',4) THEN
+   FTCONF(I) = FTCONF(I) + 0
+  END ELSE
+   FTCONF(I) = DEF + 0
+  END
+ END
+NEXT I
+*
+* Check for special ATCLIENT configuration file
+IF CLI.PRODUCT = 8 THEN
+ READ CLICFG FROM FV,'ATCLIENT' THEN
+  IF CLICFG<52> = '' THEN CLICFG<52> = 99999999 ;* unlimited input buffer size
+  IF CLICFG<53> = '' THEN CLICFG<53> = 0 ;* default output buffer size
+  IF CLICFG<54> = '' THEN CLICFG<54> = 1 ;* no error retries
+  IF CLICFG<55> = '' THEN CLICFG<55> = 0 ;* enable streaming protocol
+  IF CLICFG<56> = '' THEN CLICFG<56> = 1 ;* disable message length check
+  IF CLICFG<57> = '' THEN CLICFG<57> = 1 ;* disable message checksum check
+  IF CLICFG<60> = '' THEN CLICFG<60> = 0 ;* disable ATCLIENT access
+  FOR I = 1 TO DCOUNT(CLICFG,AM)
+   IF CLICFG<I> <> '' THEN CFG<I> = CLICFG<I>
+  NEXT I
+ END
+END
+*
+* Exchange host capabilties with client
+IF INDEX(CLI.CAPAS,'V',1) THEN
+ HOSTCAPS = ''
+ IF NOT(CFG<59>) THEN
+  HOSTCAPS = HOSTCAPS : 'D'  ;* FTENCODE/FTDECODE support tagged delimiters
+  CLI.CAPAS = CLI.CAPAS : '!';* add tagged delimite indicator to CLI.CAPAS
+ END
+ *TODO: what if unreliable connection?
+ IF INDEX(CLI.CAPAS,'R',1) THEN
+  IF CFG<60> THEN
+   HOSTCAPS = HOSTCAPS : 'Y'  ;* ATCLIENT enabled
+   HOSTCAPS = HOSTCAPS : 'R'  ;* send message to host as a single line (no packetizing)
+  END
+ END
+ IF INDEX(CLI.CAPAS,'Q',1) THEN
+  IF NOT(CFG<56>) THEN HOSTCAPS = HOSTCAPS : 'M' ;* use message length in client/server protocol
+  IF NOT(CFG<57>) THEN HOSTCAPS = HOSTCAPS : 'C' ;* use checksum in client/server protocol
+  INPBUFSIZ = CFG<52>
+  IF INPBUFSIZ MATCHES '1N0N' AND INPBUFSIZ >= 80 AND INPBUFSIZ <= 99999999 THEN
+   HOSTCAPS = HOSTCAPS : '*' : INPBUFSIZ
+  END
+ END
+ PRINT ESC:STX:'=':HOSTCAPS:CR:
+END
+*
+* Store host configuration in CLIENV (CLI.CONFIG) using VM between elements
+N = DCOUNT(CFG,AM)
+FOR I = 1 TO N
+ CLI.CONFIG<1,I> = CFG<I>
+NEXT I
+*
+RETURN
+END

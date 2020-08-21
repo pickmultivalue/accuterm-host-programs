@@ -1,0 +1,42 @@
+SUBROUTINE ATGUISHUTDOWN
+**************************************************************************
+*Copyright (c) 1999-2000 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUISHUTDOWN
+* AUTHOR: PJS
+* VERSION: 4.0.1
+* CREATED: 11/01/1999
+* UPDATED: 09/25/2000
+*
+* MAINTENANCE RECORD:
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI MANAGER - SHUTDOWN
+*
+* WHEN AN APP TERMINATES ABNORMALLY, CALL THIS ROUTINE
+* TO SHUTDOWN THE GUI ENVIRONEMT. ALL FORMS WILL BE CLOSED.
+*
+**************************************************************************
+**************************************************************************
+*
+$INCLUDE ATGUIEQUATES
+DIM PARAMS(30), CLIENV(10)
+MAT PARAMS = ''; PARAMS(1) = 250; PARAMS(10) = 0
+MAT CLIENV = ''; CLIENV(5) = 'g'
+CALL FTOBJREQ('g', GCSHUTDOWN, TMP, 0 ,MAT PARAMS, MAT CLIENV)
+RETURN
+*
+END

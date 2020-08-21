@@ -1,0 +1,181 @@
+*
+**************************************************************************
+*Copyright (c) 1993-2020 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: KERMIT
+* AUTHOR: PJS
+* VERSION: 8.0.1
+* CREATED: 01/01/1993
+* UPDATED: 02/11/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.1
+*  PJS 02/11/2020
+*   Minor modification to LOOP/UNTIL/REPEAT for MVON# compatibility.
+*
+* 7.0.1
+*  PJS 05/16/2016
+*   Fixed wrong variable name used to open file dictionary.
+*
+* 5.3.3
+*  PJS 11/08/2006
+*   Added NO.PAGE=@(0,0) to disable pagination for QM, ON, etc.
+*
+* 5.3.2
+*  PJS 08/29/2006
+*   Changed DICT file open syntax to accomodate funky D3 & Ehnanced
+*   R83 path syntax.
+*
+* 5.3.1
+*  PJS 07/24/2006
+*   Changed size of VARS() array from 25 to 26, defining VARS(26)
+*   as MD. Define previously unused VARS(24) as DFILE, the file
+*   variable for the dictionary. Open these files in this routine.
+*   Use new FTINITEX routine instead of FTINIT.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* KERMIT FOR PICK - FRONT END
+*
+**************************************************************************
+**************************************************************************
+*
+DIM PARAMS(30),VARS(26),CLIENV(10)
+EQU DIR.FLG.PARAM TO PARAMS(21)
+EQU FILE.FLG.PARAM TO PARAMS(22)
+EQU ICNT TO VARS(1)
+EQU BCNT TO VARS(2)
+EQU FILE TO VARS(11)
+EQU FNAME TO VARS(12)
+EQU IDLST TO VARS(14)
+EQU DFILE TO VARS(24)
+EQU MD TO VARS(26)
+*
+NO.PAGE=@(0,0);* DISABLE PAGINATION (QM, ON)
+*
+**************************************************************************
+*
+* VALIDATE CONFIGURATION & INITIALIZE PARAMETERS
+*
+**************************************************************************
+*
+CALL FTINITEX('',MAT PARAMS,MAT CLIENV,FV,STAT)
+IF STAT NE '' THEN
+ PRINT STAT
+ STOP
+END
+MAT VARS=''
+OPEN 'MD' TO MD ELSE
+ OPEN 'VOC' TO MD ELSE STOP 201,'MD'
+END
+*
+**************************************************************************
+*
+* PROMPT FOR DESIRED ACTION
+*
+**************************************************************************
+*
+PRINT
+PRINT 'KERMIT File Transfer Utility'
+PRINT
+PROMPT ''
+LOOP
+ PRINT
+ PRINT '(S)end, (R)eceive, (C)onfigure, (O)ptions, (H)elp or (E)xit ? ':; INPUT MODE
+ MODE=OCONV(MODE[1,1],'MCU')
+UNTIL MODE EQ 'S' OR MODE EQ 'R' DO
+ BEGIN CASE
+  CASE MODE EQ '' OR MODE EQ 'X' OR MODE EQ 'E'; STOP
+  CASE MODE EQ 'C'; CALL FTCONFIG('1-15,17', MAT PARAMS, FV)
+  CASE MODE EQ 'O'; CALL FTOPTION('14-15,17', 0, MAT PARAMS, FV)
+  CASE MODE EQ 'H' OR MODE EQ '?'; CALL FTHELP(1, FV)
+ END CASE
+REPEAT
+LOOP
+ PRINT
+ PRINT 'Enter file name: ':; INPUT FNAME
+WHILE FNAME EQ '?' DO
+ CALL FTHELP(2, FV)
+REPEAT
+IF FNAME[1,5] EQ 'DICT ' THEN
+ OPEN FNAME TO FILE ELSE STOP 201,FNAME
+ DFILE = MD
+END ELSE
+ OPEN FNAME TO FILE ELSE STOP 201,FNAME
+ OPEN 'DICT',FNAME TO DFILE ELSE STOP 201,'DICT ':FNAME
+END
+IF MODE EQ 'S' THEN
+*
+**************************************************************************
+*
+* SEND ITEMS
+*
+**************************************************************************
+*
+ DIR.FLG.PARAM = 1
+ SUBNAME = 'FTRDITMS'
+ LOOP
+  PRINT
+  PRINT 'Item list: ':; INPUT IDLIST
+ WHILE IDLIST EQ '?' DO
+  CALL FTHELP(3, FV)
+ REPEAT
+ IDLST=''
+ LOOP
+  LOOP C=IDLIST[1,1] WHILE C EQ ' ' DO IDLIST=IDLIST[2,9999] REPEAT
+ UNTIL C EQ '' DO
+  IF C EQ '"' OR C EQ "'" OR C EQ '\' THEN IDLIST=IDLIST[2,9999]; SMD=0 ELSE C=' '
+  K=INDEX(IDLIST,C,1)
+  IF NOT(K) THEN K=LEN(IDLIST)+1
+  IDLST<-1>=IDLIST[1,K-1]
+  IDLIST=IDLIST[K+1,9999]
+ REPEAT
+ PRINT
+ PRINT 'Transfer will begin in 10 seconds...'
+ T=TIME(); D=DATE()
+ LOOP UNTIL D<>DATE() OR TIME()-T>10 DO
+  RQM
+ REPEAT
+END ELSE
+*
+**************************************************************************
+*
+* RECEIVE ITEMS
+*
+**************************************************************************
+*
+ DIR.FLG.PARAM=0
+ SUBNAME='FTWTITMS'
+ IDLST=''
+ PRINT
+ PRINT 'Begin transfer...'
+END
+*
+**************************************************************************
+*
+* PERFORM TRANSFER
+*
+**************************************************************************
+*
+FILE.FLG.PARAM=1
+STAT=''
+CALL FTKERMIT(STAT,SUBNAME,0,MAT PARAMS,MAT VARS)
+IF STAT EQ '' THEN STAT='Successful transfer.'
+PRINT
+PRINT 'Transfer status: ':STAT
+IF ICNT THEN PRINT 'Transferred ':ICNT:' items, ':BCNT:' bytes.'
+STOP
+END

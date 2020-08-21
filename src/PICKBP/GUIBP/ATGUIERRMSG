@@ -1,0 +1,234 @@
+SUBROUTINE ATGUIERRMSG(MSGTYP, MSGNUM, MSGTXT)
+**************************************************************************
+*Copyright (c) 2010 Zumasys,Inc. as an unpublished work. All rights      *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUIERRMSG
+* AUTHOR: PJS
+* VERSION: 7.0.2
+* CREATED: 11/15/2009
+* UPDATED: 03/25/2010
+*
+* MAINTENANCE RECORD:
+*
+* 7.0.2
+*  PJS 03/25/2010
+*   Updated descriptions for new properties.
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI - TRANSLATE ERROR NUMBER TO MESSAGE TEXT
+*
+* THIS IS AN INTERNAL SUBROUTINE USED TO TRANSLATE RUNTIME ERROR,
+* PROPERTY, METHOD & COMMAND CODES INTO MESSAGE TEXT OR DESCRIPTION
+*
+**************************************************************************
+*
+$INCLUDE ATGUIEQUATES
+*
+MSGTXT = ''
+BEGIN CASE
+ CASE MSGTYP = 'ERROR'
+  * ERROR MESSAGE
+  IF MSGNUM >= GRFATAL AND MSGNUM <= GRLAST THEN
+   ON MSGNUM - GRFATAL + 1 GOSUB 5001,5002,5003,5004,5005,5006,5007,5008,5009,5010,5011,5012,5013,5014,5015,5016,5017,5018,5019,5020,5021,5022,5023,5024,5025,5026,5027,5028,5029
+  END
+ CASE MSGTYP = 'PROPERTY'
+  * PROPERTY DESCRIPTION
+  BEGIN CASE
+   CASE MSGNUM >= GPDEFVAL AND MSGNUM <= GPEXTENSION
+    ON MSGNUM - GPDEFVAL + 1 GOSUB 10000,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50
+   CASE MSGNUM >= GPMAXLEN AND MSGNUM <= GPPASTEMODE
+    ON MSGNUM - GPMAXLEN + 1 GOSUB 51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79
+   CASE MSGNUM >= GPEVENTMASK AND MSGNUM <= GPCUSTOM
+    ON MSGNUM - GPEVENTMASK + 1 GOSUB 99,100
+   CASE MSGNUM >= GPPRINTERNAME AND MSGNUM <= GPPRINTCOLORMODE
+    ON MSGNUM - GPPRINTERNAME + 1 GOSUB 201,202,203,204,205,206,207,208
+  END CASE
+ CASE MSGTYP = 'METHOD'
+  * METHOD DESCRIPTION
+  IF MSGNUM >= GMRESET AND MSGNUM <= GMPASTE THEN
+   ON MSGNUM - GMRESET + 1 GOSUB 1000,1001,1002,1003,1004,1005,1006,1007,1008,1009,1010,1011,1012,1013,1014,1015
+  END  
+ CASE MSGTYP = 'COMMAND'
+  * COMMAND DESCRIPTION
+  BEGIN CASE
+   CASE MSGNUM >= GCCONTEXT AND MSGNUM <= GCCOLORDIALOG
+    ON MSGNUM - GCCONTEXT + 1 GOSUB 2000,2001,2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018
+   CASE MSGNUM = GCSHUTDOWN
+    GOSUB 2099
+  END CASE
+END CASE
+RETURN
+*
+*ERROR MESSAGE TABLE
+5001 MSGTXT='GUI environment not initialized'; RETURN
+5002 MSGTXT='Invalid property value'; RETURN
+5003 MSGTXT='Invalid argument value'; RETURN
+5004 MSGTXT='Object ID is missing or invalid'; RETURN
+5005 MSGTXT='Project or macro specifies an invalid version or is corrupt or invalid'; RETURN
+5006 MSGTXT='Function cannot be recorded in macro'; RETURN
+5007 MSGTXT='No forms exist (or all forms are disabled)'; RETURN
+5008 MSGTXT='Obsolete message 1'; RETURN
+5009 MSGTXT='Error accessing macro cache'; RETURN
+5010 MSGTXT='The specified item must be a form'; RETURN
+5011 MSGTXT='Obsolete message 2'; RETURN
+5012 MSGTXT='Invalid form or parent ID'; RETURN
+5013 MSGTXT='Failed to create object'; RETURN
+5014 MSGTXT='Invalid menu - level is not sequential'; RETURN
+5015 MSGTXT='Cannot post event while recording macro'; RETURN
+5016 MSGTXT='Invalid function'; RETURN
+5017 MSGTXT='Cannot delete master app while shared apps are loaded'; RETURN
+5018 MSGTXT='Command not permitted while GUI is suspended'; RETURN
+5019 MSGTXT='Action cancelled by user'; RETURN
+5020 MSGTXT='New command invalid until previous command has responded'; RETURN
+5021 MSGTXT='Cannot activate hidden or disabled object (disabled/hidden ancestor may cause this error)'; RETURN
+5022 MSGTXT='ID is not valid for the object being created'; RETURN
+5023 MSGTXT='An object of the specified ID already exists'; RETURN
+5024 MSGTXT='An object of the specified ID does not exist'; RETURN
+5025 MSGTXT='The object type being created cannot designate a parent'; RETURN
+5026 MSGTXT='Unable to disable a visible dialog form'; RETURN
+5027 MSGTXT='Unable to show a disabled dialog form'; RETURN
+5028 MSGTXT='Unable to show dialog form when containing app is hidden'; RETURN
+5029 MSGTXT='Property or function does not support optional Item ID'; RETURN
+*
+*PROPERTY DESCRIPTION TABLE
+10000 MSGTXT='DefVal'; RETURN
+1 MSGTXT='Value'; RETURN
+2 MSGTXT='Left'; RETURN
+3 MSGTXT='Top'; RETURN
+4 MSGTXT='Width'; RETURN
+5 MSGTXT='Height'; RETURN
+6 MSGTXT='Changed'; RETURN
+7 MSGTXT='Scale'; RETURN
+8 MSGTXT='Enabled'; RETURN
+9 MSGTXT='Visible'; RETURN
+10 MSGTXT='Style'; RETURN
+11 MSGTXT='Border'; RETURN
+12 MSGTXT='ReadOnly'; RETURN
+13 MSGTXT='TabStop'; RETURN
+14 MSGTXT='BackColor'; RETURN
+15 MSGTXT='ForeColor'; RETURN
+16 MSGTXT='FontName'; RETURN
+17 MSGTXT='FontSize'; RETURN
+18 MSGTXT='FontBold'; RETURN
+19 MSGTXT='FontItalic'; RETURN
+20 MSGTXT='HelpFile'; RETURN
+21 MSGTXT='HelpID'; RETURN
+22 MSGTXT='Caption'; RETURN
+23 MSGTXT='Picture'; RETURN
+24 MSGTXT='RtNEQTab'; RETURN
+25 MSGTXT='Align'; RETURN
+26 MSGTXT='Items'; RETURN
+27 MSGTXT='Columns'; RETURN
+28 MSGTXT='Rows'; RETURN
+29 MSGTXT='DataType'; RETURN
+30 MSGTXT='Column'; RETURN
+31 MSGTXT='Row'; RETURN
+32 MSGTXT='ColHeading'; RETURN
+33 MSGTXT='GridLines'; RETURN
+34 MSGTXT='ColFieldType'; RETURN
+35 MSGTXT='ColDataType'; RETURN
+36 MSGTXT='ColItems'; RETURN
+37 MSGTXT='ColWidth'; RETURN
+38 MSGTXT='ColAlign'; RETURN
+39 MSGTXT='DataCol'; RETURN
+40 MSGTXT='Arrange'; RETURN
+41 MSGTXT='Description'; RETURN
+42 MSGTXT='Author'; RETURN
+43 MSGTXT='Copyright'; RETURN
+44 MSGTXT='Version'; RETURN
+45 MSGTXT='Logo'; RETURN
+46 MSGTXT='AutoSel'; RETURN
+47 MSGTXT='Status'; RETURN
+48 MSGTXT='WindowState'; RETURN
+49 MSGTXT='Hint'; RETURN
+50 MSGTXT='Extension'; RETURN
+51 MSGTXT='MaxLen'; RETURN
+52 MSGTXT='MaxLines'; RETURN
+53 MSGTXT='MaxDrop'; RETURN
+54 MSGTXT='Required'; RETURN
+55 MSGTXT='FixedCols'; RETURN
+56 MSGTXT='Icon'; RETURN
+57 MSGTXT='SelStart'; RETURN
+58 MSGTXT='SelLength'; RETURN
+59 MSGTXT='HelpType'; RETURN
+60 MSGTXT='Timeout'; RETURN
+61 MSGTXT='MsgText'; RETURN
+62 MSGTXT='State'; RETURN
+63 MSGTXT='ColSizable'; RETURN
+64 MSGTXT='ColHint'; RETURN
+65 MSGTXT='AltColor'; RETURN
+66 MSGTXT='NoAutoTips'; RETURN
+67 MSGTXT='Transparent'; RETURN
+68 MSGTXT='FontUnderline'; RETURN
+69 MSGTXT='IconAlign'; RETURN
+70 MSGTXT='IconSize'; RETURN
+71 MSGTXT='WordWrap'; RETURN
+72 MSGTXT='Content'; RETURN
+73 MSGTXT='DragID'; RETURN
+74 MSGTXT='DropIDs'; RETURN
+75 MSGTXT='DragMode'; RETURN
+76 MSGTXT='SelRange'; RETURN
+77 MSGTXT='ColTabStop'; RETURN
+78 MSGTXT='FocusStyle'; RETURN
+79 MSGTXT='PasteMode'; RETURN
+99 MSGTXT='EventMask'; RETURN
+100 MSGTXT='Custom'; RETURN
+201 MSGTXT='PrinterName'; RETURN
+202 MSGTXT='Orientation'; RETURN
+203 MSGTXT='PaperSource'; RETURN
+204 MSGTXT='PaperSize'; RETURN
+205 MSGTXT='PrintQuality'; RETURN
+206 MSGTXT='PrintCopies'; RETURN
+207 MSGTXT='PrintDuplexMode'; RETURN
+208 MSGTXT='PrintColorMode'; RETURN
+*
+*METHOD DESCRIPTION TABLE
+1000 MSGTXT='Reset'; RETURN
+1001 MSGTXT='Clear'; RETURN
+1002 MSGTXT='Show'; RETURN
+1003 MSGTXT='Hide'; RETURN
+1004 MSGTXT='Activate'; RETURN
+1005 MSGTXT='Insert'; RETURN
+1006 MSGTXT='Remove'; RETURN
+1007 MSGTXT='Enable'; RETURN
+1008 MSGTXT='Disable'; RETURN
+1009 MSGTXT='Move'; RETURN
+1010 MSGTXT='Print'; RETURN
+1011 MSGTXT='Help'; RETURN
+1012 MSGTXT='Sort'; RETURN
+1013 MSGTXT='Copy'; RETURN
+1014 MSGTXT='Cut'; RETURN
+1015 MSGTXT='Paste'; RETURN
+*
+*COMMAND DESCRIPTION TABLE
+2000 MSGTXT='Context'; RETURN
+2001 MSGTXT='Initialize'; RETURN
+2002 MSGTXT='Create'; RETURN
+2003 MSGTXT='Delete'; RETURN
+2004 MSGTXT='SetProp'; RETURN
+2005 MSGTXT='GetProp'; RETURN
+2006 MSGTXT='Method'; RETURN
+2007 MSGTXT='WaitEvent'; RETURN
+2008 MSGTXT='Control'; RETURN
+2009 MSGTXT='MsgBox'; RETURN
+2010 MSGTXT='InputBox'; RETURN
+2011 MSGTXT='RunMacro'; RETURN
+2012 MSGTXT='GetUpdates'; RETURN
+2013 MSGTXT='CheckEvent'; RETURN
+2014 MSGTXT='OpenDialog'; RETURN
+2015 MSGTXT='SaveDialog'; RETURN
+2016 MSGTXT='FileDialog'; RETURN
+2017 MSGTXT='FontDialog'; RETURN
+2018 MSGTXT='ColorDialog'; RETURN
+2099 MSGTXT='Shutdown'; RETURN
+*
+END

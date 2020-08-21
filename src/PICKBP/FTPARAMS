@@ -1,0 +1,62 @@
+Source buffer index,250,1,9999999,,,11,11
+Maximum packet size,94,35,2000,,,12,12
+Retry attempts before failure,10,1,30,,,13,13
+Timeout (seconds),8,0,60,,,14,14
+Number of pad characters,0,0,250,,,15,15
+End-of-line character,13,1,31,,,16,16
+Control character prefix,35,33,126,,,17,17
+Eighth bit prefix,38,33,126,,,18,18
+Run-length prefix,126,33,126,,,19,19
+Use MCP conversion,0,0,1,No;Yes,,20,20
+Use eighth bit prefixing,1,0,1,No;Yes,,21,21
+Use run-length encoding,0,0,1,No;Yes,,22,22
+Transfer mode,1,0,1,Binary;Text,,31,23
+Preserve file extension,1,0,1,No;Yes,,32,24
+Overwrite existing item,1,0,1,No;Yes,,33,25
+Overwrite existing item,1,0,2,No;Yes;Merge,,34,26
+Large item treatment,2,0,2,Truncate;Split;No action,,27,27
+Field delimiter,0,0,2,Tab;Comma;CR/LF,,36,28,X
+Overwrite existing item,1,0,1,No;Yes,,37,29
+Extra AM,,,,,0=no extra; 1=extra,0,0
+Transfer direction,,,,,0=receive; 1=transmit,0,0
+File flag,,,,,0=no file; 1=file,0,0
+File conversion mode,,,,,0=none; 1=post-download; 2=pre-upload,0,0
+Convert character set,0,0,1,No;Yes,,62,62
+Protocol,,,,,0=ascii; 1=kermit,0,0
+Host server name,,,,,,70,70
+Allow server READ/READNEXT/RELEASE,1,0,1,No;Yes,,71,71
+Allow server WRITE/ADD/DELETE,1,0,1,No;Yes,,72,72
+Allow server CONV,1,0,1,No;Yes,,73,73
+Allow server EXECUTE/CALL,1,0,1,No;Yes,,74,74
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Prompt exit string(s),,,,,80,80

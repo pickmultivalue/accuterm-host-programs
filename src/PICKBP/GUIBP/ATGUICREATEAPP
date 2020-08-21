@@ -1,0 +1,163 @@
+SUBROUTINE ATGUICREATEAPP(APPID, EVENTMASK, TYPE, CAPTION, HELP, RTNMODE, SCALE, Left, TOP, WIDTH, HEIGHT, ERRORS, STATE)
+**************************************************************************
+*Copyright (c) 1999-2006 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUICREATEAPP
+* AUTHOR: PJS
+* VERSION: 5.3.2
+* CREATED: 11/01/1999
+* UPDATED: 06/12/2006
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.1
+*  PJS 06/12/2006
+*   Updated to use new version of FTOBJREQ, which requires that
+*   the PARAMS and CLIENV arrays be completely initialized.
+*
+* 5.1.2
+*  PJS 11/15/2004
+*   Updated for GUI version 1.2. Modified meaning of HELPFILE argument
+*   so that it can be used to imply the HelpType (WinHelp, Help Event,
+*   or HTML Help URL).
+*
+* 4.0.2
+*  PJS 11/09/2001
+*   Fixed problem with dimensions with non-zero SCALE; also CAPTION
+*   and HELPFILE properties not being set.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI MANAGER - CREATE APPLICATION
+*
+* CALL THIS SUBROUTINE TO CREATE A GUI APPLICATION.
+*
+* INPUT:
+*  APPID      application identifier (use same ID when deleting app)
+*  EVENTMASK  all applications must specify GECLOSE (MDI main window
+*             close event)
+*  TYPE       type of application: GXSDI for SDI app, GXMDI for MDI app
+*  CAPTION    MDI application caption (ignored for SDI app)
+*  HELP       filename of Windows help file associated with app (file
+*               must end with .hlp or .chm). Implies HelpType = 0. If
+*               NULL, HelpType = 1 is implied (Help Event). Otherwise
+*               HelpType = 2 is implied, and HELP is used as the
+*               URL for the app help contents page.
+*  RTNMODE    non-zero if return key acts like tab key
+*  SCALE      coordinate scale for app:
+*               0 = default (characters)
+*               1 = twips
+*               2 = points
+*               3 = pixels
+*               4 = characters
+*               5 = inches
+*               6 = millimeters
+*               7 = centimeters
+*  Left       horizontal position of the MDI main window
+*  TOP        vertical position of the MDI main window
+*  WIDTH      width of the MDI main window
+*  HEIGHT     height of the MDI main window
+*
+* OUTPUT:
+*  ERRORS     ERRORS<1> is non-zero if errors have occurred
+*
+* OTHER:
+*  STATE      internal use only - do not modify
+*
+**************************************************************************
+*
+$INCLUDE ATGUIEQUATES
+EQU THISPGM TO 'ATGUICREATEAPP'
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30), CLIENV(10)
+ERRORS = GRSUCCESS
+FOR I = 1 TO 30
+ PARAMS(I) = STATE<20,I>
+NEXT I
+FOR I = 1 TO 10
+ CLIENV(I) = STATE<20+I>
+NEXT I
+IF NOT(STATE<1>) THEN
+ CALL ATGUIERROR(3, THISPGM, '', 0, GRFATAL, '', ERRORS)
+ RETURN
+END
+*
+* VALIDATE PARAMETERS
+*
+IF APPID EQ '' THEN
+ CALL ATGUIERROR(2, THISPGM, '', '', GRNOID, '', ERRORS)
+ RETURN
+END
+BEGIN CASE
+ CASE TYPE EQ 0
+  APPTYPE = GXSDI
+ CASE TYPE EQ 1
+  APPTYPE = GXMDI
+ CASE 1
+  CALL ATGUIERROR(2, THISPGM, APPID, 'TYPE', GRINVARG, '', ERRORS)
+  RETURN
+END CASE
+IF SCALE NE 0 THEN
+ REC = GCCREATE : VM : APPID : VM : VM : APPTYPE : VM : VM : VM : VM : VM : EVENTMASK
+END ELSE
+ REC = GCCREATE : VM : APPID : VM : VM : APPTYPE : VM : Left : VM : TOP : VM : WIDTH : VM : HEIGHT : VM : EVENTMASK
+END
+IF RTNMODE NE 0 THEN
+ REC = REC : AM : GCSETPROP : VM : VM : GPRTNEQTAB : VM : VM : VM : RTNMODE
+END
+IF SCALE NE 0 THEN
+ REC = REC : AM : GCSETPROP : VM : VM : GPSCALE : VM : VM : VM : SCALE
+ REC = REC : AM : GCMETHOD : VM : VM : GMMOVE : VM : Left : VM : TOP : VM : WIDTH : VM : HEIGHT
+END
+IF CAPTION NE '' THEN
+ REC = REC : AM : GCSETPROP : VM : VM : GPCAPTION : VM : VM : VM : CAPTION
+END
+IF HELP EQ '' THEN
+ IF STATE<13> >= 1.2 THEN
+  * HELP EVENT
+  REC = REC : AM : GCSETPROP : VM : VM : GPHELPTYPE : VM : VM : VM : '1'
+ END
+END ELSE
+ N = LEN(HELP) - 4; IF N <= 0 THEN N = 1
+ IF OCONV(HELP,'MCU')[N,4] = '.HLP' OR OCONV(HELP,'MCU')[N,4] = '.CHM' THEN
+  * WINHELP
+  IF STATE<13> >= 1.2 THEN
+   REC = REC : AM : GCSETPROP : VM : VM : GPHELPTYPE : VM : VM : VM : '0'
+  END
+  REC = REC : AM : GCSETPROP : VM : VM : GPHELPFILE : VM : VM : VM : HELP
+ END ELSE
+  * HTML HELP URL FOR CONTENTS PAGE
+  IF STATE<13> >= 1.2 THEN
+   REC = REC : AM : GCSETPROP : VM : VM : GPHELPTYPE : VM : VM : VM : '2'
+  END
+  REC = REC : AM : GCSETPROP : VM : VM : GPHELPID : VM : VM : VM : HELP
+ END  
+END
+STATE<3> = SCALE ;* SAVE CURRENT SCALE FOR MACRO RECORDING
+*
+* CHECK IF RECORDING MACRO
+*
+IF STATE<2> THEN
+ STATE = STATE : AM : REC ;* APPEND TO MACRO
+ RETURN
+END
+*
+* SEND COMMAND TO SERVER
+*
+CALL FTOBJREQ('g', REC, RSP, 0, MAT PARAMS, MAT CLIENV)
+CALL ATGUIERRORS(RSP, ERRORS)
+RETURN
+*
+END

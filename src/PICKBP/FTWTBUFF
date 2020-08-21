@@ -1,0 +1,134 @@
+SUBROUTINE FTWTBUFF(BUF,CNT,MAX,EOF,CAN,ERR,MAT PARAMS,MAT VARS)
+**************************************************************************
+*Copyright (c) 1993-2006 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTWTBUFF
+* AUTHOR: PJS
+* VERSION: 5.3.1
+* CREATED: 01/01/1993
+* UPDATED: 07/24/2006
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.1
+*  PJS 07/24/2006
+*   Changed size of VARS() array from 25 to 26, defining VARS(26)
+*   as MD. Define previously unused VARS(24) as DFILE, the file
+*   variable for the dictionary.
+*
+* 5.0.1
+*  PJS 09/10/2002
+*   Added column name list (CLST) to VARS() array as VARS(15).
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* WRITE BUFFER
+*
+**************************************************************************
+**************************************************************************
+*
+* FTWTBUFF() SUBROUTINE INTERFACE
+*
+* INPUT:
+*         BUF   = DATA TO WRITE
+*         CNT   = LEN(BUF)
+*         MAX   = UNUSED
+*         EOF   = 1 IF END OF FILE, 2 IF END OF TRANSACTION
+*         CAN   = 1 IF DISCARD CURRENT ITEM, ELSE 0
+*
+* OUTPUT:
+*         BUF   = UPDATED (WRITTEN DATA REMOVED)
+*         CNT   = LEN(BUF)
+*         CAN   = 1 IF CANNOT UPDATE ITEM, 2 TO CANCEL REST OF TRANSACTION
+*         ERR   = ERROR STATUS (STRING)
+*         ITEM  = RECEIVED ITEM
+*
+* ACTION:
+*
+* THIS ROUTINE IS CALLED BY THE FILE TRANSFER PROTOCOL TO UPDATE
+* ITEM WITH RECEIVED DATA.  ON FIRST ENTRY, IDMODE MUST BE SET TO ZERO.
+*
+* THIS ROUTINE REMOVES DATA FROM BUF AND APPENDS IT TO ITEM.
+* IF THIS ROUTINE IS CALLED WITH EOF SET, THERE IS NO MORE DATA TO
+* RECEIVE FOR THE CURRENT ITEM.
+*
+* UPON ENTRY AND EXIT, CNT REFLECTS THE LENGTH OF BUF
+*
+* WHEN EOF IS SET (NO MORE DATA FOR THIS ITEM), CAN WILL BE
+* SET TO 2 (TERMINATE TRANSACTION) BEFORE RETURNING.
+*
+* IF TXT.FLG.PARAM IS SET, THEN IF THE RECEIVED ITEM ENDS WITH AN
+* AM, THE TRAILING AM IS REMOVED FROM THE RECEIVED ITEM.
+*
+**************************************************************************
+*
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30),VARS(26)
+EQU TXT.FLG.PARAM TO PARAMS(13)
+EQU ICNT TO VARS(1)
+EQU BCNT TO VARS(2)
+EQU IDMODE TO VARS(3)
+EQU ALST TO VARS(4)
+EQU HDR TO VARS(5)
+EQU EXP TO VARS(6)
+EQU GEN TO VARS(7)
+EQU PFX TO VARS(8)
+EQU SID TO VARS(9)
+EQU SKP TO VARS(10)
+EQU FILE TO VARS(11)
+EQU FNAME TO VARS(12)
+EQU ID TO VARS(13)
+EQU IDLST TO VARS(14)
+EQU CLST TO VARS(15)
+EQU IDS TO VARS(16)
+EQU ISIZ TO VARS(17)
+EQU ISEQ TO VARS(18)
+EQU ITEM TO VARS(19)
+EQU XSIZ TO VARS(20)
+EQU PATH TO VARS(21)
+EQU FN TO VARS(22)
+EQU FNLST TO VARS(23)
+EQU DFILE TO VARS(24)
+EQU FNS TO VARS(25)
+EQU MD TO VARS(26)
+*
+**************************************************************************
+*
+* CHECK FOR ITEM-ID...
+*
+**************************************************************************
+*
+IDMODE=IDMODE+0
+IF CAN THEN
+ ITEM=''
+END ELSE
+ ITEM=ITEM:BUF
+ BCNT=BCNT+LEN(BUF)
+ IF ICNT=0 THEN ICNT=1
+END
+IF EOF OR IDMODE THEN
+ IF TXT.FLG.PARAM AND NOT(IDMODE) THEN
+  ISIZ=LEN(ITEM)
+  IF ITEM[1,ISIZ] EQ AM THEN
+   ITEM=ITEM[1,ISIZ-1]
+  END
+ END
+ IDMODE=1
+ CAN=2
+END
+BUF=''
+CNT=0
+RETURN
+END

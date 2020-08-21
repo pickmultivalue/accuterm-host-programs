@@ -1,0 +1,233 @@
+SUBROUTINE FTX(MODE,IDL,FNL,PATH,ITEM,FILE,IDS,FNS,XCNT,ICNT,BCNT,STAT)
+**************************************************************************
+*Copyright (c) 1993-2007 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTX
+* AUTHOR: PJS
+* VERSION: 5.3.3
+* CREATED: 01/01/1993
+* UPDATED: 01/26/2007
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.3
+*  PJS 01/26/2007
+*   Added missing RETURN statement after checking for download or
+*   upload support.
+*
+* 5.3.2
+*  PJS 07/24/2006
+*   Changed size of VARS() array from 25 to 26, defining VARS(26)
+*   as MD. Define previously unused VARS(24) as DFILE, the file
+*   variable for the dictionary.
+*
+* 5.3.1
+*  PJS 05/08/2006
+*   Updated for 5.3a release. Combined old calls to FTINIT and
+*   FTCLIENV to call new FTINITEX subroutine.
+*
+* 5.0.2
+*  PJS 09/10/2002
+*   Added column name list (CLST) to VARS() array as VARS(15).
+*
+* 5.0.1
+*  PJS 02/17/2002
+*  Added new element to CLIENV() array for FTBP library version number.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*   ADDED 'XLATE' MODE TO SUPPORT AUTOMATIC FILE FORMAT CONVERSIONS
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM FILE TRANSFER SUBROITINE
+*
+**************************************************************************
+**************************************************************************
+*
+* FTX() SUBROUTINE INTERFACE
+*
+* INPUT:  MODE   = MODES SEPARATED BY COMMAS (FIRST LETTER IS SUFFICIENT):
+*                  SEND, RECEIVE, OVERLAY, NO OVERLAY, TEXT, BINARY, FILE,
+*                  PRESERVE EXT, IGNORE EXT, KERMIT, ASCII, XLATE, CALL subname
+*         IDL    = LIST OF ITEM-IDS TO BE TRANSFERRED
+*         FNL    = LIST OF FILE-NAMES TO BE TRANSFERRED
+*         PATH   = DOS DIRECTORY
+*         ITEM   = BODY OF ITEM BEING SENT (IF NOT FILE MODE)
+*         FILE   = FILE VARIABLE TO READ/WRITE ITEMS (IF FILE MODE)
+*
+* OUTPUT:
+*         ITEM     = BODY OF RECEIVED ITEM
+*         IDS      = LIST OF ITEM-IDS TRANSFERRED
+*         FNS      = LIST OF FILE-NAMES TRANSFERRED
+*         XCNT     = NUMBER OF ID'S OR FN'S PROCESSED
+*         ICNT     = NUMBER OF ITEMS TRANSFERRED
+*         BCNT     = NUMBER OF BYTES TRANSFERRED
+*         STAT     = NULL INDICATES SUCCESS, OTHERWISE ERROR MESSAGE
+*
+* ACTION:
+*
+* THIS SUBROUTINE IS DECODES THE PASSED MODE INTO THE PARAMS ARRAY
+* AND CALLS THE FTMODE SUBROUTINE TO EXECUTE THE DESIRED FUNCTION.
+* MODE IS A STRING OF COMMA DELIMITED KEYWORDS (LISTED ABOVE).
+* IF THE "CALL" KEYWORD IS INCLUDED, IT MUST BE FOLLOWED BY THE
+* NAME OF A SUBROUTINE USED TO PERFORM I/O (SEPARATE KEYWORD AND
+* SUBROUTINE NAME WITH A BLANK). IF XLATE IS SPECIFIED, THE TARGET
+* FILE IS TRANSLATED TO THE NATIVE FILE FORMAT AFTER DOWNLOAD, AND
+* TRANSLATED FROM THE NATIVE FILE FORMAT BEFORE UPLOAD. THE NATIVE
+* FILE FORMAT IS DETERMINED BY THE FILE EXTENSION (SEE FTD DOCUMENTATION).
+*
+**************************************************************************
+*
+DIM PARAMS(30),VARS(26),CLIENV(10)
+EQU AM TO CHAR(254)
+EQU MODES TO 'RSONTBPIFKAXCV'
+EQU MODE.SET TO '21,21,15,15,13,13,14,14,22,25,25,23,-1,-2'
+EQU MODE.VAL TO '0,1,1,0,1,0,1,0,1,1,0,0'
+EQU TXT.FLG.PARAM TO PARAMS(13)
+EQU EXT.FLG.PARAM TO PARAMS(14)
+EQU OVR.FLG.PARAM TO PARAMS(15)
+EQU UNL.FLG.PARAM TO PARAMS(17)
+EQU DIR.FLG.PARAM TO PARAMS(21)
+EQU FIL.FLG.PARAM TO PARAMS(22)
+EQU FIL.CNV.PARAM TO PARAMS(23)
+EQU OEM.CHR.PARAM TO PARAMS(24)
+EQU PRO.FLG.PARAM TO PARAMS(25)
+EQU ICNT.VAR TO VARS(1)
+EQU BCNT.VAR TO VARS(2)
+EQU IDMODE TO VARS(3)
+EQU ALST TO VARS(4)
+EQU HDR TO VARS(5)
+EQU EXP TO VARS(6)
+EQU GEN TO VARS(7)
+EQU PFX TO VARS(8)
+EQU SID TO VARS(9)
+EQU SKP TO VARS(10)
+EQU FILE.VAR TO VARS(11)
+EQU FNAME TO VARS(12)
+EQU ID TO VARS(13)
+EQU IDLST TO VARS(14)
+EQU CLST TO VARS(15)
+EQU IDS.VAR TO VARS(16)
+EQU ISIZ TO VARS(17)
+EQU ISEQ TO VARS(18)
+EQU ITEM.VAR TO VARS(19)
+EQU XSIZ TO VARS(20)
+EQU PATH.VAR TO VARS(21)
+EQU FN TO VARS(22)
+EQU FNLST TO VARS(23)
+EQU DFILE TO VARS(24)
+EQU FNS.VAR TO VARS(25)
+EQU MD TO VARS(26)
+EQU CLI.PLATFORM TO CLIENV(1)
+EQU CLI.PRODUCT TO CLIENV(2)
+EQU CLI.RELEASE TO CLIENV(3)
+EQU CLI.CAPAS TO CLIENV(4)
+EQU CLI.SVCS TO CLIENV(5)
+EQU CLI.SERIAL TO CLIENV(6)
+EQU CLI.LICENSE TO CLIENV(7)
+EQU CLI.USER TO CLIENV(8)
+EQU CLI.VERSION TO CLIENV(9)
+EQU CLI.CONFIG TO CLIENV(10)
+*
+**************************************************************************
+*
+* VALIDATE CONFIGURATION & INITIALIZE PARAMETERS
+*
+**************************************************************************
+*
+STAT=''
+MAT VARS=''
+CALL FTINITEX('',MAT PARAMS,MAT CLIENV,FV,STAT)
+IF STAT NE '' THEN RETURN
+IF CLI.PLATFORM=0 THEN
+ STAT='FTS/FTX requires AccuTerm to run!'
+ RETURN
+END
+IF INDEX(CLI.CAPAS,'Z',1) THEN
+ STAT='Upper case / lower case inversion must be disabled to call FTS/FTX.'
+ RETURN
+END
+IF (INDEX(CLI.CAPAS,'D',1) + INDEX(CLI.CAPAS,'U',1)) = 0 THEN
+ STAT='This version of AccuTerm does not support file transfers.'
+ RETURN
+END
+*
+PATH.VAR=PATH
+FILE.VAR=FILE
+SUBNAME=''
+*
+**************************************************************************
+*
+* UPDATE PARAMETERS PASSED IN MODE PARAMETER
+*
+**************************************************************************
+*
+P=''
+I=0
+LOOP
+ I=I+1
+ Z=OCONV(TRIM(FIELD(MODE,',',I))[1,1],'MCU')
+WHILE COL2() DO
+ K=INDEX(MODES,Z,1)
+ IF K THEN
+  J=FIELD(MODE.SET,',',K)
+  IF P<ABS(J)> NE '' THEN
+   READV TXT FROM FV,'FTPARAMS',ABS(J) ELSE TXT='*'
+   STAT='Cannot specify more than one setting for ':FIELD(TXT,',',1):'!'
+   RETURN
+  END
+  IF J > 0 THEN
+   PARAMS(J)=FIELD(MODE.VAL,',',K)+0
+  END ELSE
+   SUBNAME = FIELD(TRIM(FIELD(MODE,',',I)),' ',2)
+  END
+  P<ABS(J)>='1'
+ END
+REPEAT
+IF P<25> EQ '' THEN
+ STAT='Kermit or ASCII protocol must be specified to FTX subroutine!'
+ RETURN
+END
+IF P<21> EQ '' THEN
+ STAT='Send or Receive mode must be specified to FTX subroutine!'
+ RETURN
+END
+*
+IDLST=IDL
+FNLST=FNL
+*
+**************************************************************************
+*
+* EXECUTE PROPER MODE
+*
+**************************************************************************
+*
+IF SUBNAME EQ '' THEN
+ BEGIN CASE
+  CASE DIR.FLG.PARAM AND FIL.FLG.PARAM; SUBNAME='FTRDITMS'
+  CASE DIR.FLG.PARAM AND NOT(FIL.FLG.PARAM); SUBNAME = 'FTRDBUFF'
+  CASE NOT(DIR.FLG.PARAM) AND FIL.FLG.PARAM; SUBNAME='FTWTITMS'
+  CASE NOT(DIR.FLG.PARAM) AND NOT(FIL.FLG.PARAM); SUBNAME='FTWTBUFF'
+ END CASE
+END
+IF DIR.FLG.PARAM THEN ITEM.VAR=ITEM
+CALL FTMODE(STAT,SUBNAME,MAT PARAMS,MAT VARS,MAT CLIENV)
+ICNT=ICNT.VAR
+BCNT=BCNT.VAR
+IDS=IDS.VAR
+FNS=FNS.VAR
+XCNT=DCOUNT(FNS,AM)
+IF NOT(DIR.FLG.PARAM) THEN ITEM=ITEM.VAR
+RETURN
+*
+END

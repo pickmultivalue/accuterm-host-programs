@@ -1,0 +1,230 @@
+SUBROUTINE FTCONECT(STAT,SUBNAME,MAT PARAMS,MAT VARS,MAT CLIENV)
+**************************************************************************
+*Copyright (c) 1996-2006 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTCONECT
+* AUTHOR: PJS
+* VERSION: 5.3.1
+* CREATED: 01/01/1996
+* UPDATED: 07/24/2006
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.1
+*  PJS 07/24/2006
+*   Changed size of VARS() array from 25 to 26, defining VARS(26)
+*   as MD. Define previously unused VARS(24) as DFILE, the file
+*   variable for the dictionary.
+*
+* 5.0.3
+*  PJS 10/09/2003
+*   Modified to fix bug where echo is turned on by a lower-level
+*   routine, causing the receiver to error out when second transfer
+*   is attempted. Echo and prompt are now disabled before each
+*   receive. Eliminated test for AccuTerm (now performed in FTPICK).
+*
+* 5.0.2
+*  PJS 09/11/2003
+*   Modified PRINT expressions for UniVerse because concatenated
+*   expressions are sent in separate packets in NT version of
+*   UniVerse causing TCP "delayed ack" performance issues.
+*
+* 5.0.1
+*  PJS 02/17/2002
+*  Added new element to CLIENV() array for FTBP library version number.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM FILE TRANSFER - DIRECT CONNECT PICK-TO-PICK
+*
+**************************************************************************
+**************************************************************************
+*
+DIM PARAMS(30), VARS(26), CLIENV(10)
+*
+EQU OVR.PCK.PARAM TO PARAMS(19)
+EQU TXT.FLG.PARAM TO PARAMS(13)
+EQU DIR.FLG.PARAM TO PARAMS(21)
+EQU FIL.FLG.PARAM TO PARAMS(22)
+EQU DTA.FLG.PARAM TO PARAMS(23)
+EQU PRO.FLG.PARAM TO PARAMS(25)
+*
+EQU ICNT TO VARS(1)
+EQU BCNT TO VARS(2)
+EQU IDMODE TO VARS(3)
+EQU HDR TO VARS(5)
+EQU DISC TO VARS(6)
+EQU TARGET TO VARS(7)
+EQU FILE TO VARS(11)
+EQU FNAME TO VARS(12)
+EQU ID TO VARS(13)
+EQU IDLST TO VARS(14)
+EQU IDS TO VARS(16)
+EQU ISIZ TO VARS(17)
+EQU ISEQ TO VARS(18)
+EQU ITEM TO VARS(19)
+EQU XSIZ TO VARS(20)
+EQU PATH TO VARS(21)
+EQU FN TO VARS(22)
+EQU FNLST TO VARS(23)
+EQU DFILE TO VARS(24)
+EQU FNS TO VARS(25)
+EQU MD TO VARS(26)
+*
+EQU CLI.PLATFORM TO CLIENV(1)
+EQU CLI.PRODUCT TO CLIENV(2)
+EQU CLI.RELEASE TO CLIENV(3)
+EQU CLI.CAPAS TO CLIENV(4)
+EQU CLI.SVCS TO CLIENV(5)
+EQU CLI.SERIAL TO CLIENV(6)
+EQU CLI.LICENSE TO CLIENV(7)
+EQU CLI.USER TO CLIENV(8)
+EQU CLI.VERSION TO CLIENV(9)
+EQU CLI.CONFIG TO CLIENV(10)
+*
+**************************************************************************
+*
+EQU AM TO CHAR(254)
+EQU CR TO CHAR(13), ESC TO CHAR(27), STX TO CHAR(2), SUB TO CHAR(26)
+EQU XFER.MSGS TO 'Direct connection only supported with AccuTerm/Windows!,File transfer aborted!,DOS file exists!,Timeout error!,Corrupted packet!,Unexpected packet type!,File transfer failure,File transfer failure!,File transfer failure!'
+*
+**************************************************************************
+*
+* ESTABLISH DIRECT CONNECTION THROUGH TWO ACCUTERM SESSIONS
+*
+**************************************************************************
+*
+STAT=''
+FATAL=0
+ECHO OFF
+PROMPT ''
+*
+**************************************************************************
+*
+* SEND
+*
+**************************************************************************
+*
+IF DIR.FLG.PARAM THEN
+*
+* CHECK IF RECEIVER IS READY
+*
+ LOOP
+  PRINT '':(ESC:STX:'PChain "PXSEND.SCR|Send"':CR):
+  INPUT ANS:
+ UNTIL ANS EQ 'OK' OR ANS EQ 'NO' DO
+  IF ANS EQ 'END' THEN STAT=FIELD(XFER.MSGS,',',2); ECHO ON; PROMPT '?'; RETURN; * GIVE UP!
+  SLEEP 1
+ REPEAT
+*
+* WAIT FOR RECEIVER TO ACTIVATE
+*
+ IF ANS NE 'OK' THEN
+  PRINT 'Activate session connected to receiving machine, then at TCL, type'
+  PRINT 'FTPICK. Enter "R" to receive, and "D" for direct connection.'
+  PRINT
+  PRINT 'Waiting for receiving program to start...'
+  PRINT
+  PRINT 'Enter "END" to abort'
+  PRINT
+  SLEEP 1 ; * WAIT FOR PREVIOUS SCRIPT TO TERMINATE
+  LOOP
+   PRINT '':(ESC:STX:'PChain "PXSEND.SCR|Send"':CR):
+   INPUT ANS:
+  UNTIL ANS EQ 'OK' DO
+   IF ANS EQ 'END' THEN STAT=FIELD(XFER.MSGS,',',2); ECHO ON; PROMPT '?'; RETURN; * GIVE UP!
+   SLEEP 1
+  REPEAT
+ END
+ * WAIT FOR RECEIVER TO START PROTOCOL
+ LOOP
+  INPUT ANS:
+ UNTIL ANS EQ 'GO' OR ANS EQ 'NO' DO
+  IF ANS EQ 'END' OR ANS EQ 'NO' THEN STAT=FIELD(XFER.MSGS,',',2); ECHO ON; PROMPT '?'; RETURN; * GIVE UP!
+  SLEEP 1
+ REPEAT
+ CALL FTKERMIT(STAT,SUBNAME,0,MAT PARAMS,MAT VARS)
+ PRINT '':(ESC:CR):; * TERMINATE DIRECT CONNECTION WITH RECEIVER
+*
+**************************************************************************
+*
+* RECEIVE
+*
+**************************************************************************
+*
+END ELSE
+*
+* CHECK IF OK TO START RECEIVER
+*
+ LAST.ICNT=0
+ LAST.BCNT=0
+ LOOP
+  IF CLI.RELEASE >= 3.1 THEN
+   PRINT '':(ESC:STX:'PChain "PXRECVA.SCR|Receive"':CR):
+  END ELSE
+   PRINT '':(ESC:STX:'PChain "PXRECV.SCR|Receive"':CR):
+  END
+  INPUT ANS:
+ UNTIL ANS EQ 'OK' OR ANS EQ 'NO' DO
+  IF ANS EQ 'END' THEN STAT=FIELD(XFER.MSGS,',',2); ECHO ON; PROMPT '?'; RETURN; * GIVE UP!
+  SLEEP 1
+ REPEAT
+ IF ANS NE 'OK' THEN
+  PRINT 'Only one terminal session may be in receive mode. Activate the'
+  PRINT 'session which is currently in FTPICK in receive mode, and press'
+  PRINT 'the <ESC> key to terminate. Then activate this session and'
+  PRINT 're-start this program.'
+  STAT=FIELD(XFER.MSGS,',',2)
+  ECHO ON
+  PROMPT '?'
+  RETURN
+ END
+*
+* WAIT FOR 'GO', 'STAT', OR 'DONE' COMMAND
+*
+ LOOP
+  ECHO OFF
+  PROMPT ''
+  INPUT ANS:
+ UNTIL ANS EQ 'DONE' DO
+*
+* START RECEIVING FILE
+*
+  BEGIN CASE
+   CASE ANS EQ 'GO'
+    PRINT 'OK':
+    TOT.ICNT=ICNT; ICNT=0
+    TOT.BCNT=BCNT; BCNT=0
+    IDMODE=0
+    CALL FTKERMIT(STAT,SUBNAME,0,MAT PARAMS,MAT VARS)
+    PRINT '':(ESC:CR):; * TERMINATE DIRECT CONNECTION WITH RECEIVER
+    LAST.ICNT=ICNT; ICNT=ICNT+TOT.ICNT
+    LAST.BCNT=BCNT; BCNT=BCNT+TOT.BCNT
+   CASE ANS EQ 'STAT'
+    IF STAT EQ '' THEN
+     PRINT '%STATUS%=Transferred ':LAST.ICNT:' items, ':LAST.BCNT:' bytes'
+    END ELSE
+     PRINT '%STATUS%=':STAT
+    END
+   CASE 1
+    SLEEP 1
+  END CASE
+ REPEAT
+END
+ECHO ON
+PROMPT '?'
+RETURN
+*
+END

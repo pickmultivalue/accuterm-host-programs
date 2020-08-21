@@ -1,0 +1,76 @@
+SUBROUTINE ATGETEVENT(OBJID, EVENTNAME, ARGS, Timeout, ERRMSG, OPTS)
+**************************************************************************
+*Copyright (c) 1998-2000 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGETEVENT
+* AUTHOR: PJS
+* VERSION: 4.0.1
+* CREATED: 01/01/1998
+* UPDATED: 09/25/2000
+*
+* MAINTENANCE RECORD:
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM OBJECT MANAGER - GET EVENT
+*
+* CALL THIS SUBROUTINE TO WAIT FOR AN EVENT TO OCCUR. BEFORE
+* CALLING THIS ROUTINE, CALL THE ATSETEVENT ROUTINE TO SPECIFIY WHICH
+* EVENTS YOU WANT TO CATCH (FOR EACH OBJECT). ONLY EVENTS ENABLED
+* BY CALLING ATSETEVENT WILL BE MONITORED. SPECIFY A TIMEOUT VALUE
+* IN MILLISECONDS TO WAIT FOR THE EVENT TO OCCUR, OR ZERO TO WAIT
+* FOREVER. WHEN AN ENABLED EVENT OCCURS, THE OBJID ARGUMENT WILL BE
+* SET TO THE ID OF THE OBJECT WHICH RECEIVED THE EVENT, AND THE ARGS
+* ARGUMENT WILL BE SET TO THE EVENT ARGUMENT VALUES (IF ANY). IF A
+* TIMEOUT OCCURS, THE ERRMSG ARGUMENT WILL BE SET TO 'TIMEOUT'.
+* IF THIS SUBROUTINE RETURNS SUCCESSFULLY (ERRMSG = '') YOU MUST
+* PROCESS THE EVENT, THEN CALL THE ATENDEVENT SUBROUTINE WITH THE
+* OBJID OF THE OBJECT, THE EVENTNAME AND THE ARGS PARAMETER. YOU
+* CAN MODIFY ANY OF THE ARGS VALUES IF THE OBJECT PERMITS THIS.
+* THIS IS VERY IMPORTANT BECAUSE THE OBJECT WHICH FIRED THE EVENT
+* IS NORMALLY BLOCKED UNTIL THE EVENT PROCESSING COMPLETES. IF AN
+* ERROR OCCURS, THE ERROR MESSAGE IS RETURNED IN THE ERRMSG ARGUMENT.
+*
+**************************************************************************
+*
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30), CLIENV(10)
+FOR I = 1 TO 30; PARAMS(I) = OPTS<I>; NEXT I
+FOR I = 1 TO 10; CLIENV(I) = OPTS<I+30>; NEXT I
+IF PARAMS(1) < 1 THEN
+ ERRMSG = 'Subroutine ATINITOBJMGR must be called before using this function!'
+ RETURN
+END
+REC = '8':VM:VM:VM:Timeout
+CALL FTOBJREQ('a',REC,RSP,0,MAT PARAMS,MAT CLIENV)
+IF RSP[1,4] EQ 'ERR:' THEN
+ ERRNUM = FIELD(RSP,' ',2)
+ ERRMSG = RSP[COL2()+1,9999]
+ IF ERRMSG EQ '' THEN ERRMSG = 'Unknown error: ':ERRNUM
+ RETURN
+END
+ERRNUM = RSP<1,5>
+IF ERRNUM THEN
+ ERRMSG = RSP<1,6>
+ RETURN
+END
+ERRMSG = ''
+OBJID = RSP<1,2>
+EVENTNAME = RSP<1,3>
+ARGS = RSP<1,4>
+LOOP K = INDEX(ARGS,SVM,1) WHILE K DO ARGS = ARGS[1,K-1]:VM:ARGS[K+1,9999] REPEAT
+RETURN
+*
+END

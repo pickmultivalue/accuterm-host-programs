@@ -1,0 +1,240 @@
+SUBROUTINE FTRDPICK(BUF,CNT,MAX,EOF,CAN,ERR,MAT PARAMS,MAT VARS)
+**************************************************************************
+*Copyright (c) 1996-2012 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTS
+* AUTHOR: PJS
+* VERSION: 7.1.1
+* CREATED: 01/01/1996
+* UPDATED: 11/07/2012
+*
+* MAINTENANCE RECORD:
+*
+* 7.1.1
+*  PJS 11/07/2012
+*   Added support for QM ECS (UTF8). Extended protocol with new 'U' record
+*   type for items which contain any extended (non-8-bit) characters.
+*
+* 5.3.1
+*  PJS 07/24/2006
+*   Changed size of VARS() array from 25 to 26, defining VARS(26)
+*   as MD. Define previously unused VARS(24) as DFILE, the file
+*   variable for the dictionary. Added support for OI (OpenInsight
+*   CTO) platform.
+*
+* 4.0.2
+*  PJS 09/29/2004
+*   Changed max string length from 9999999 to 999999999
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* READ PICK ITEMS
+*
+**************************************************************************
+**************************************************************************
+*
+* FTRDPICK() SUBROUTINE INTERFACE
+*
+* INPUT:
+*         BUF   = VARIABLE TO RETURN DATA (APPEND)
+*         CNT   = LEN(BUF)
+*         MAX   = MAXIMUM LENGTH OF BUF
+*         CAN   = 1 TO DISCARD REST OF CURRENT ITEM,
+*                 2 IF TRANSACTION TERMINATED, ELSE 0
+*
+* OUTPUT:
+*         BUF   = UPDATED (NEW DATA APPENDED)
+*         CNT   = LEN(BUF)
+*         EOF   = 1 IF NO MORE DATA FOR THIS ITEM, 2 IF NO MORE ITEMS
+*         ERR   = ERROR STATUS (STRING)
+*
+* ACTION:
+*
+* THIS ROUTINE IS CALLED BY THE FILE TRANSFER PROTOCOL TO RETURN
+* DATA TO BE TRANSMITTED.  ON FIRST ENTRY, IDMODE MUST BE SET TO
+* ZERO, AND THE FILE MUST BE OPENED TO THE DESIRED FILE. THIS
+* ROUTINE RETURNS UP TO MAX BYTES TO THE PROTOCOL BY APPENDING THE
+* NEXT DATA TO BUF AND RETURNING. WHEN THERE IS NO MORE DATA LEFT
+* IN THE SOURCE FILE, RETURNS WITH EOF SET TO ONE.
+*
+* THE NEXT CALL TO THIS ROUTINE AFTER EOF WILL RETURN
+* WITH EOF SET TO 2 AND NO NEW ITEM DATA.
+*
+* UPON ENTRY AND EXIT, CNT REFLECTS THE SIZE OF BUF.
+*
+**************************************************************************
+*
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30),VARS(26)
+EQU OVR.PCK.PARAM TO PARAMS(19)
+EQU ICNT TO VARS(1)
+EQU BCNT TO VARS(2)
+EQU IDMODE TO VARS(3)
+EQU AUTO TO VARS(4)
+EQU HDR TO VARS(5)
+EQU DISC TO VARS(6)
+EQU TARGET TO VARS(7)
+EQU DCHK TO VARS(8)
+EQU ECSFLG TO VARS(9)
+EQU FILE TO VARS(11)
+EQU FNAME TO VARS(12)
+EQU ID TO VARS(13)
+EQU IDLST TO VARS(14)
+EQU CLST TO VARS(15)
+EQU IDS TO VARS(16)
+EQU ISIZ TO VARS(17)
+EQU ISEQ TO VARS(18)
+EQU ITEM TO VARS(19)
+EQU XSIZ TO VARS(20)
+EQU PATH TO VARS(21)
+EQU FN TO VARS(22)
+EQU FNLST TO VARS(23)
+EQU DFILE TO VARS(24)
+EQU FNS TO VARS(25)
+EQU MD TO VARS(26)
+*
+**************************************************************************
+*
+* CHECK FOR ABORT
+*
+**************************************************************************
+*
+IDMODE=IDMODE+0
+IF CAN THEN
+ ITEM=''
+ ISIZ=0
+ IDMODE=5
+ EOF=CAN
+ RETURN
+END
+*
+**************************************************************************
+*
+* HANDLE BEGINNING / ENDING SPECIAL CASES
+*
+**************************************************************************
+*
+EOF=0
+BEGIN CASE
+ CASE IDMODE EQ 0
+  CALL FTSELECT(MAT VARS); * SETUP IDLST LIST VARIABLE
+  FN=FNLST<1>; * SET TARGET DOS FILENAME
+  ISIZ=0
+ CASE IDMODE EQ 3
+  BUF=BUF:AM:'X00000000':AM; * ADD TRAILER
+  CNT=CNT+11
+  BCNT=BCNT+11
+  IDMODE=4; * REPORT EOF ON NEXT CALL
+  RETURN
+ CASE IDMODE EQ 4
+  FNS=FN
+  EOF=1
+  IDMODE=5; * REPORT EOT ON NEXT CALL
+  RETURN
+ CASE IDMODE EQ 5
+  EOF=2
+  RETURN
+END CASE
+*
+**************************************************************************
+*
+* LOOP THROUGH DATA ITEMS
+*
+**************************************************************************
+*
+IF MAX > 5000 THEN MAXX=5000 ELSE MAXX=MAX
+XCNT=0
+EXIST=(ISIZ>0)
+LOOP
+ LOOP UNTIL EXIST DO
+  READNEXT ID FROM IDLST ELSE ;*#GENERIC#*
+*#DEFAULT#*  READNEXT ID FROM IDLST ELSE
+*#OI#*  READNEXT ID USING IDLST ELSE
+*#QM_ECS#*  READNEXT ID FROM IDLST ELSE
+   IF XCNT THEN
+    BCNT=BCNT+XCNT
+    IDMODE=3; * ADD TRAILER ON NEXT CALL
+   END ELSE
+    IF IDMODE EQ 2 THEN
+     FNS=FN
+     BUF=BUF:AM:'X00000000':AM; * ADD TRAILER
+     CNT=CNT+11
+     BCNT=BCNT+11
+     IDMODE=4; * REPORT EOF ON NEXT CALL
+    END ELSE
+     IDMODE=5; * REPORT EOT ON NEXT CALL
+     EOF=1
+    END
+   END
+   RETURN
+  END
+  EXIST=1
+  READ ITEM FROM FILE,ID ELSE EXIST=0
+  IF EXIST AND DCHK THEN
+*#DEFAULT#*   IF OCONV(ITEM<1>,'MCU') MATCHES '"D"0A' AND ITEM<2> MATCHES '1N0N' THEN EXIST=0; *D-POINTER?
+*#OI#*   IF ID[1,1]='%' AND ID[LEN(ID),1]='%' THEN EXIST=0; *METADATA?
+  END
+  IF EXIST THEN
+   ITEM=ID:AM:ITEM
+*#QM_ECS#*   IF IS.ECS(ID:ITEM) THEN
+*#QM_ECS#*    RECTYP='U'
+*#QM_ECS#*    ITEM=OCONV(SWAPMARKS(ITEM),'XUTF8')
+*#QM_ECS#*   END ELSE
+   RECTYP='I'
+*#QM_ECS#*  END
+   ISIZ=LEN(ITEM)
+   ITEM=AM:RECTYP:(ISIZ 'R%%%%%%%%'):AM:ITEM
+   ISIZ=ISIZ+11
+   ICNT=ICNT+1   
+  END
+ REPEAT
+UNTIL CNT >= MAXX DO
+ IF IDMODE EQ 1 THEN
+  *
+  * BUILD HEADER RECORD...
+  *
+*#QM_ECS#*  IF IS.ECS(TARGET) THEN
+*#QM_ECS#*   TARG=OCONV(TARGET,'XUTF8')
+*#QM_ECS#*   ECSFLG=1
+*#QM_ECS#*  END ELSE
+  TARG=TARGET
+  ECSFLG=0
+*#QM_ECS#*  END  
+  HDRTXT='AccuTerm Pick intermediate file: ':TARG:CHAR(13):CHAR(10):CHAR(26)
+  HDRREC=TARG:AM:('O'[1,OVR.PCK.PARAM]):('U'[1,ECSFLG])
+  K=LEN(HDRREC)
+  HDRREC=AM:'F':(K 'R%%%%%%%%'):AM:HDRREC
+  BUF=BUF:HDRTXT:HDRREC
+  CNT=CNT+LEN(HDRTXT)+LEN(HDRREC)
+  XCNT=XCNT+K+11
+  IDMODE=2
+ END ELSE
+  *
+  * ADD ITEM TO BUF
+  *
+  N=MAXX-CNT
+  IF ISIZ<N THEN N=ISIZ
+  BUF=BUF:ITEM[1,N]
+  ITEM=ITEM[N+1,999999999]
+  CNT=CNT+N
+  XCNT=XCNT+N
+  ISIZ=ISIZ-N
+  IF ISIZ<=0 THEN EXIST=0
+ END
+REPEAT
+BCNT=BCNT+XCNT
+FNS=FN
+RETURN
+END

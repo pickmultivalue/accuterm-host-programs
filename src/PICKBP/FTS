@@ -1,0 +1,50 @@
+SUBROUTINE FTS(MODE,PATH,FILE,ITEM,STAT)
+**************************************************************************
+*Copyright (c) 1993-2000 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTS
+* AUTHOR: PJS
+* VERSION: 4.0.1
+* CREATED: 01/01/1993
+* UPDATED: 09/25/2000
+*
+* MAINTENANCE RECORD:
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*   ADDED 'XLATE' MODE TO SUPPORT AUTOMATIC FILE FORMAT CONVERSIONS
+*
+**************************************************************************
+************************************************************************** 
+*
+* ACCUTERM SIMPLE FILE TRANSFER SUBROITINE
+*
+**************************************************************************
+**************************************************************************
+*
+* FTS() SUBROUTINE INTERFACE
+*
+* INPUT:  MODE   = MODES SEPARATED BY COMMAS (FIRST LETTER IS SUFFICIENT):
+*                  SEND, RECEIVE, OVERLAY, NO OVERLAY, TEXT, BINARY,
+*                  PRESERVE EXT, IGNORE EXT, KERMIT, ASCII, XLATE
+*         PATH   = DOS PATH NAME (MAY INCLUDE DRIVE AND/OR DIRECTORY)
+*         FILE   = DOS FILE NAME (MAY INCLUDE EXTENSION)
+*         ITEM   = BODY OF ITEM TO BE SEND
+*
+* OUTPUT:
+*         ITEM     = BODY OF RECEIVED ITEM
+*         STAT     = NULL INDICATES SUCCESS, OTHERWISE ERROR MESSAGE
+*
+**************************************************************************
+*
+CALL FTX(MODE,'',FILE,PATH,ITEM,'','','','','','',STAT)
+RETURN
+END

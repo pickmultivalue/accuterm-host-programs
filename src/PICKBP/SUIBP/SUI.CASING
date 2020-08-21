@@ -1,0 +1,11 @@
+*INCLUDE
+*
+* SMART USER INTERFACE Case Sensitive Compare Option
+*
+*   This INCLUDE item is platform-dependant!
+* 
+*   Enables case-sensitive compares for strings
+*
+* D3/AP:
+*#PICK#*CASING ON
+*#AP#*CASING ON

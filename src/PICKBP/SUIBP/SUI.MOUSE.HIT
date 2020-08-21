@@ -1,0 +1,83 @@
+SUBROUTINE SUI.MOUSE.HIT(Left, Top, Width, Height, WinID, Hit, MAT TermDef)
+**************************************************************************
+*Copyright (c) 2004 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: SUI.MOUSE.HIT
+* AUTHOR: PJS
+* VERSION: 1.0.0
+* CREATED: 06/01/2004
+* UPDATED: 
+*
+* MAINTENANCE RECORD:
+*
+*************************************************************************
+*************************************************************************
+*
+* SMART USER INTERFACE Mouse Hit Detection
+*
+*   Input Interface:
+*
+*    Left, Top: upper-left corner of test area (relative to current window)
+*
+*    Width, Height: size of test area
+*
+*    WinID:   ID of window to check (or zero for current window)
+*
+*    TermDef: terminal definitions as set up by SUI.GET.TERM
+*
+*
+*   Output Interface:
+*
+*    Hit: 1 if last mouse click is within test area, else 0.
+*
+*************************************************************************
+*************************************************************************
+*
+$INCLUDE SUI.TERMDEF
+$INCLUDE SUI.WINDEF
+*
+EQU VM TO CHAR(253)
+*
+Hit = 0
+HitCol = Left
+HitRow = Top
+IF TERM.MOUSEADDR NE '' THEN
+ *
+ * Locate window information
+ WinIdx = 0
+ N = DCOUNT(TERM.WINDOW,VM)
+ IF WinID > 0 THEN
+  FOR I = 2 TO N
+   IF WinID = TERM.WINDOW<1,I,SUI.WINID$> THEN
+    WinIdx = I
+    I = N
+   END
+  NEXT I
+  IF WinIdx = 0 THEN RETURN
+ END ELSE
+  WinIdx = 2
+ END
+ WinInf = TERM.WINDOW<1,2>
+ *
+ * Translate coordinates from window to screen
+ IF WinInf NE '' THEN
+  HitCol = HitCol + WinInf<1,1,SUI.WINLEFT$> + WinInf<1,1,SUI.CLILEFT$>
+  HitRow = HitRow + WinInf<1,1,SUI.WINTOP$> + WinInf<1,1,SUI.CLITOP$>
+ END
+ *
+ * Check for hit
+ MouseCol = FIELD(TERM.MOUSEADDR,'.',1)
+ MouseRow = FIELD(TERM.MOUSEADDR,'.',2)
+ IF MouseRow >= HitRow AND MouseRow < HitRow + Height THEN
+  IF MouseCol >= HitCol AND MouseCol < HitCol + Width THEN
+   Hit = 1
+  END
+ END
+END
+RETURN
+END

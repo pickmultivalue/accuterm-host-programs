@@ -1,0 +1,1624 @@
+SUBROUTINE FTFSI(FUNC,DIO,ERRCD,ERRMSG,MAT PARAMS,MAT CLIENV,CFGFV,MD)
+**************************************************************************
+*Copyright (c) 1996-2020 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTFSI
+* AUTHOR: PJS
+* VERSION: 8.0.3
+* CREATED: 05/24/2001
+* UPDATED: 04/21/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.3
+*  PJS 04/21/2020
+*   Changed file selection function to skip MD or VOC entries when
+*   selecting items from MD or VOC. This mainly affects platforms
+*   that have a VOC or MD F-pointer in the VOC or MD.
+*
+* 8.0.2
+*  PJS 02/11/2020
+*   Added support for MVON# platform (MVON).
+*
+* 8.0.1
+*  PJS 02/10/2020
+*   Remove read-only flag from D & Q pointers, for use with MVREST.
+*
+* 7.2.2
+*  PJS 03/19/2014
+*   Added support for OASYS platform.
+*
+* 7.2.1
+*  PJS 10/08/2013
+*   Added CLEARSELECT for QM platform when SELECT...TO list is not
+*   completely consumed, otherwise remaining items become an active
+*   list when program ends.
+*
+* 7.1.1
+*  PJS 10/12/2012
+*   Added check in get/set config file setting to ensure that attr 1
+*   is 'X'. This way, we won't return source code text from FTBP when
+*   ACCUTERMCTRL file is missing, and config item name is same as one
+*   of the FTBP items (e.g. WED).
+*
+* 7.0.1
+*  PJS 06/22/2010
+*   Fixed unassigned variable KNOWN.SYSTEM.FILES in CACHE platform code.
+*
+* 5.3.6
+*  PJS 05/26/2008
+*   Update Northgate Reality (NR) platform code (System attribute for
+*   known system accounts & compiled object code).
+*
+* 5.3.5
+*  PJS 12/20/2007
+*   Added support for CACHE platform.
+*
+* 5.3.4
+*  PJS 11/08/2006
+*   Added support for ON (ONWare MVON) platform.
+*
+* 5.3.3
+*  PJS 10/27/2006
+*   Updated jBase platform code to properly identify (fake) file
+*   pointers. Previously we were misidentifying files as fields.
+*
+* 5.3.2
+*  PJS 07/31/2006
+*   Updated OI platform code (file scan & attributes).
+*
+* 5.3.1
+*  PJS 07/24/2006
+*   Added new MD subroutine argument, which the caller should open
+*   to MD or VOC before calling this routine. Added NR platform
+*   specific code to use @ACCOUNT & @LOGNAME instead of U50BB.
+*   Added support for OI (OpenInsight CTO) platform.
+*
+* 5.0.7
+*  PJS 08/16/2005
+*   Changed U50BB to @ACCOUNT, @USER, @PIB for PICK (D3) platform
+*   type to account for unpredictable format of U50BB result:
+*   "WHO (A" vs. "WHO (C".
+*
+* 5.0.6
+*  PJS 05/14/2004
+*   Changed INS statement on line 547 to old style syntax for
+*   R83 compatibility.
+*
+* 5.0.5
+*  PJS 10/24/2003
+*   Integrated QM platform specific code per mods from Martin
+*   Phillips. Changed LOCATE statements to use old style syntax
+*   for compatibility with QM & PI/Open.
+*
+* 5.0.4
+*  PJS 02/14/2003
+*   Fixed extra 'END ELSE' (line 914) in JB, UD and UV platforms.
+*
+* 5.0.3
+*  PJS 12/18/2002
+*   Fixed bug in Do.ITEM.INFO for Pick Q-pointers - item does not exist
+*   in file dictionary, but its a good file anyway.
+*
+* 5.0.2
+*  PJS 09/12/2002
+*   Updated for 2k2 release.
+*
+* 5.0.1
+*  PJS 02/17/2002
+*  Added new element to CLIENV() array for FTBP library version number.
+*
+* 4.1.5
+*  PJS 02/06/2002
+*   When sorting out attribute of an item, if server WRITE function
+*   is disabled, then apply the READONLY attribute to all items.
+*
+* 4.1.4
+*  PJS 09/25/2001
+*   Added support for user-defined hidden files. Hidden file list saved
+*   by client using SaveSetting: MVCONNECTION.OPTIONS, attribute 2.
+*
+* 4.1.3
+*  PJS 09/08/2001
+*   Rewrite & extend browser support functions
+*
+* 4.1.2
+*  PJS 06/22/2001
+*   Added support for UniData "V" virtual dictionary definitions
+*
+* 4.1.1
+*  PJS
+*   Module created to return file system information to Windows client
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM SERVER EXTENSION - FILE TRANSFER SUPPORT
+*
+**************************************************************************
+**************************************************************************
+*
+DIM PARAMS(30), CLIENV(10)
+*
+EQU AM TO CHAR(254)
+EQU VM TO CHAR(253)
+EQU SVM TO CHAR(252)
+*
+EQU SVRNAME TO PARAMS(26)
+EQU READ.OK TO PARAMS(27)
+EQU WRITE.OK TO PARAMS(28)
+EQU CONV.OK TO PARAMS(29)
+EQU EXEC.OK TO PARAMS(30)
+*
+EQU CLI.PLATFORM TO CLIENV(1)
+EQU CLI.PRODUCT TO CLIENV(2)
+EQU CLI.RELEASE TO CLIENV(3)
+EQU CLI.CAPAS TO CLIENV(4)
+EQU CLI.SVCS TO CLIENV(5)
+EQU CLI.SERIAL TO CLIENV(6)
+EQU CLI.LICENSE TO CLIENV(7)
+EQU CLI.USER TO CLIENV(8)
+EQU CLI.VERSION TO CLIENV(9)
+*
+DIM FLAGS(16) ;* SELECTION ATTRIBUTES
+DIM ATTS(16)  ;* ATTRIBUTES OF CURRENT ITEM
+*
+DIM RESULTS(2)
+DIM ICNT(2)
+EQU FOUND.FILES TO ICNT(1)
+EQU FOUND.ITEMS TO ICNT(2)
+*
+*Attribute bit exponent constants (plus one)
+EQU MVATT.READONLY TO 1 ;* item is read-only (MV files are always read-only)
+EQU MVATT.HIDDEN TO 2 ;* item is hidden
+EQU MVATT.SYSTEM TO 3 ;* item is a system file
+EQU MVATT.VOLUME TO 4 ;* N/A
+EQU MVATT.FOLDER TO 5 ;* item is a DOS folder or MV file (D or Q pointer)
+EQU MVATT.ARCHIVE TO 6 ;* N/A
+EQU MVATT.ALIAS TO 7 ;* item is Q-pointer
+EQU MVATT.ITEM TO 8 ;*item is normal DOS file or MV item
+EQU MVATT.FIELD TO 9 ;* item is a field definition (A or S type)
+EQU MVATT.VIRTUAL TO 10 ;* item is MD or VOC file
+EQU MVATT.ROOT TO 11 ;* item is root of MV databases
+EQU MVFLG.DATAONLY TO 16 ;* return list of data (not dict) files when selecting from MD
+*
+*#DEFAULT#*EQU KNOWN.SYSTEM.ACCOUNTS TO 'SYSTEMýSYSPROGýACCýERRMSGýBLOCK-CONVERTýNEWACýDMýMDSýSPOOLER'
+*#DEFAULT#*EQU KNOWN.SYSTEM.FILES TO 'PROCLIBýSYSPROG-PLýACCýERRMSGýPOINTER-FILEýBLOCK-CONVERTýNEWAC'
+*#CACHE#*EQU KNOWN.SYSTEM.FILES TO ''
+*#JB#*EQU KNOWN.SYSTEM.FILES TO 'binýlib'
+*#MVON#*KNOWN.SYSTEM.FILES = 'DICT.DICT':VM:'ERRMSG':VM:'Netbasic.BP':VM:'Netbasic.BP.Lib'
+*#NR#*EQU KNOWN.SYSTEM.ACCOUNTS TO 'SYSFILESýSYSMAN'
+*#NR#*EQU KNOWN.SYSTEM.FILES TO 'PROCLIBýACCýERRMSGýPOINTER-FILEýBLOCK-CONVERT'
+*#OAS#*KNOWN.SYSTEM.FILES = 'AE_COMSýAE_SCRATCHýAE_DOCýCATALOG.DIRýCAPTJOBSýCOMOJOBSýCTLG_RESULTSýDICT.DICTýGLOBAL.CATALOGýGLOBAL.DICTýERRMSGýHELP.FILEýMENUFILEýOAS.HELPýSAVEDLISTSýSAVEDLISTSLýSPOOLJOBS'
+*#OI#*KNOWN.SYSTEM.FILES = @SYSTEM_TABLES; CONVERT AM TO VM IN KNOWN.SYSTEM.FILES; KNOWN.SYSTEM.FILES<1,-1>='SPOOLINFO'; KNOWN.SYSTEM.FILES<1,-1>='SYSWORKSTATION_SETTINGS'
+*#ON#*KNOWN.SYSTEM.FILES = 'DATA.TYPES]DICT.DICT]ERRMSG]GCI]MVON_COMO]MVON_HOLD]ONBASIC_OBJECT]SAVEDLISTS'; CONVERT ']' TO @VM IN KNOWN.SYSTEM.FILES
+*#PICK#*EQU KNOWN.SYSTEM.ACCOUNTS TO 'SYSTEMýSYSPROGýACCýERRMSGýBLOCK-CONVERTýNEWACýDMýMDSýSPOOLER'
+*#PICK#*EQU KNOWN.SYSTEM.FILES TO 'PROCLIBýSYSPROG-PLýACCýERRMSGýPOINTER-FILEýBLOCK-CONVERTýNEWAC'
+*#QM#*KNOWN.SYSTEM.FILES = 'DICT.DICTýERRMSGýNEWVOCýQM.VOCLIBýVOCLIB'
+*#UD#*KNOWN.SYSTEM.FILES = 'AE_COMSýAE_SCRATCHýAE_XCOMSýCTLGýCTLGTBýCOLLATIONSýUTILITY.MSGS'
+*#UV#*EQU KNOWN.SYSTEM.FILES TO 'BASIC.HELPýBCI.HELPýBLTRSýDICT.DICTýDICT.PICKýERRMSGýGLOBAL.CATDIRýNEWACCýPTERM.FILEýREVISE.DISCUSSIONSýREVISE.PROCESSESýSQL.HELPýSYS.HELPýSYS.MESSAGEýUNIVERSE.STAT.FILEýUNIVERSE.VOCLIBýUV.SAVEDLISTSýVOCLIB'
+*
+**************************************************************************
+*
+* INITIALIZE & DECODE FUNCTION
+*
+**************************************************************************
+*
+ERRCD = 0
+ERRMSG = ''
+*
+BEGIN CASE
+ CASE FUNC = 0
+  DIO = '8' ;* FUNCTIONS SUPPORTED: 1-8
+ CASE FUNC = 1
+  DIO='';*#GENERIC#*
+  ERRCD=2;*#GENERIC#*
+  ERRMSG = 'File browsing is not supported in the GENERIC version of the host programs!';*#GENERIC#*
+  RETURN;*#GENERIC#*
+  GOSUB DO.ITEM.LIST
+ CASE FUNC = 2
+  GOSUB DO.WHO
+ CASE FUNC = 3
+  DIO='';*#GENERIC#*
+  ERRCD=2;*#GENERIC#*
+  ERRMSG = 'Item properties are not supported in the GENERIC version of the host programs!';*#GENERIC#*
+  RETURN;*#GENERIC#*
+  GOSUB DO.ITEM.INFO
+ CASE FUNC = 4
+  GOSUB DO.FILE.EXISTS
+ CASE FUNC = 5
+  GOSUB DO.ITEM.EXISTS
+ CASE FUNC = 6
+  GOSUB DO.GET.SETTING
+ CASE FUNC = 7
+  GOSUB DO.SAVE.SETTING
+ CASE FUNC = 8
+  GOSUB DO.GET.CONFIG
+ CASE 1
+  DIO = ''
+  ERRCD = 3; * ERROR CODE
+  ERRMSG = 'Invalid function code!'
+END CASE
+RETURN
+*
+**************************************************************************
+*
+* RETURN LIST OF ITEMS
+*
+*  INPUT:
+*
+*   DIO<1> = FILE NAME
+*   DIO<2> = ATTRIBUTES OF ITEMS TO SELECT (BITWISE)
+*   DIO<3> = MAX ITEMS TO RETURN (DEFAULTS TO 1000)
+*   DIO<4> = SELECTION CRITERIA (RESERVED FOR FUTURE USE)
+*   DIO<5> = PROPERTY CODE LIST (MV: -1=ATTRIBUTES, -2=SIZE, -3=LOCATION)
+*
+*  OUTPUT:
+*
+*   DIO<1> = RESULT CODE: NUMBER OF ITEMS IN LIST
+*   DIO<2,N,1> = ITEM-ID, FILE NAME, FIELD DEFINITION
+*   DIO<2,N,2> = INFO FOR FIRST PROPERTY CODE
+*   DIO<2,N,...> = INFO FOR OTHER PROPERTY CODES
+*
+**************************************************************************
+*
+DO.ITEM.LIST: *
+*
+IF READ.OK = 0 THEN
+ ERRCD = 2
+ ERRMSG = 'COMMAND NOT AVAILABLE'
+ RETURN
+END
+*
+*#DEFAULT#*WHO = OCONV('','U50BB')
+*#DEFAULT#*ACCT = FIELD(WHO,' ',3)
+*#DEFAULT#*IF ACCT = '' THEN ACCT = FIELD(WHO,' ',2)
+*#CACHE#*ACCT = @WHO
+*#JB#*ACCT = @WHO
+*#MVON#*ACCT = @WHO
+*#NR#*ACCT = @ACCOUNT
+*#OAS#*ACCT = @WHO
+*#OI#*ACCT = @APPID<1>
+*#ON#*ACCT = @WHO
+*#PICK#*ACCT = @ACCOUNT
+*#QM#*ACCT = @WHO
+*#UD#*ACCT = @WHO
+*#UV#*ACCT = @WHO
+ACCT = OCONV(ACCT,'MCU')
+*
+GOSUB 600 ;* GET HIDDEN FILE LIST
+*
+DICTNAME = ''
+FILENAME = DIO<1>
+FLGS = DIO<2> + 0; IF FLGS = 0 THEN FLGS = 208 ;* FOLDER+ALIAS+ITEM
+MAXITEMS = DIO<3> + 0; IF MAXITEMS <= 0 THEN MAXITEMS = 1000
+SELCRITERIA = DIO<4>
+RETURNINFO = DIO<5>
+*
+* DECODE SELECTION ATTRIBUTES
+FOR I = 1 TO 16
+ FLAGS(I) = REM(FLGS,2)
+ FLGS = INT(FLGS/2)
+NEXT I
+*
+* DETERMINE FILE NAME, DICT, LEVEL & OPEN THE FILE
+GOSUB 500
+BEGIN CASE
+ CASE LVL = 0
+  ERRCD = 200
+  ERRMSG = 'File name missing!'
+  RETURN
+ CASE LVL = 1
+  FILENAME = ACCT
+  FV = MD
+ CASE LVL = 2 OR LVL = 3
+  OPEN FILENAME TO FV ELSE
+   ERRCD = 201
+   ERRMSG = 'Unable to open ':FILENAME:'!'
+   RETURN
+  END
+  IF LVL = 2 THEN
+   DICTNAME = FILENAME[6,9999]
+   IF FLAGS(MVFLG.DATAONLY) THEN FLAGS(MVATT.ITEM) = 0; FLAGS(MVATT.FIELD) = 0 ;* DONT RETURN ITEMS FROM DICT IF DATAONLY
+  END ELSE
+   DICTNAME = FIELD(FILENAME,',',1)
+  END
+ CASE 1
+  ERRCD = 201
+  ERRMSG = 'Invalid file name: ':FILENAME:'!'
+  RETURN
+END CASE
+*
+IF FLAGS(MVFLG.DATAONLY) AND LVL = 1 THEN GOTO SCAN.DATA.ONLY
+*
+* START SCANNING THE FILE
+*
+DO.FILE.SCAN: *
+*
+* TO BE CONSISTANT WITH EXPLORER, WE WANT TO PLACE THE FILES
+* BEFORE THE ORDINARY ITEMS, SO WE BUILD TWO SORTED MULTI-VALUE
+* LISTS: ONE OF FILES, THE OTHER OF ITEMS. THEN, BEFORE RETURNING
+* THE RESULT WE CONCATENATE THE TWO LISTS
+*
+DIO = ''
+MAT RESULTS = ''
+MAT ICNT = 0
+*
+* Cache version
+*  If looking for data files, read VOC entry and decode
+*  single or multiple data section names...
+*#CACHE#*IF LVL = 2 THEN
+*#CACHE#* READ MDINFO FROM MD,DICTNAME THEN
+*#CACHE#*  DCODE = OCONV(MDINFO[1,1],'MCU')
+*#CACHE#*  IF DCODE = 'F' THEN
+*#CACHE#*   IF MDINFO<2> <> '' THEN
+*#CACHE#*    * DEFAULT DATA SECTION
+*#CACHE#*    ID = DICTNAME
+*#CACHE#*    DINFO = MDINFO
+*#CACHE#*    GOSUB 200
+*#CACHE#*    GOSUB 50; IF ERRCD THEN RETURN
+*#CACHE#*   END
+*#CACHE#*   IF OCONV(MDINFO<4>[1,1],'MCU') = 'M' THEN
+*#CACHE#*    * MULTIPLE DATA SECTIONS
+*#CACHE#*    N = DCOUNT(MDINFO<7>,VM)
+*#CACHE#*    FOR I = 1 TO N
+*#CACHE#*     ID = MDINFO<7,I>
+*#CACHE#*     DINFO = MDINFO
+*#CACHE#*     GOSUB 200 ;* TRANSLATE FILE POINTER
+*#CACHE#*     GOSUB 50; IF ERRCD THEN RETURN
+*#CACHE#*    NEXT I
+*#CACHE#*   END
+*#CACHE#*  END ELSE
+*#CACHE#*   IF DCODE = 'Q' THEN
+*#CACHE#*    ID = DICTNAME
+*#CACHE#*    DINFO = MDINFO
+*#CACHE#*    GOSUB 200
+*#CACHE#*    GOSUB 50; IF ERRCD THEN RETURN
+*#CACHE#*   END
+*#CACHE#*  END
+*#CACHE#* END
+*#CACHE#*END
+*
+* jBase version
+*  Scan "." for directories which can be opened and assume
+*  if successfully opened that this is a valid file. Parse
+*  file name for ]D suffix, or embedded ]M to identify
+*  dictionaries or multiple data sections...
+*#JB#*IF LVL < 3 THEN
+*#JB#* IF LVL = 2 THEN
+*#JB#* * HANDLE DICT OF Q-POINTER
+*#JB#*  READ DINFO FROM MD,DICTNAME THEN
+*#JB#*   IF OCONV(DINFO<1>,'MCU') = 'Q' THEN
+*#JB#*    ID = DICTNAME
+*#JB#*    GOSUB 200
+*#JB#*    GOSUB 50
+*#JB#*   END
+*#JB#*  END
+*#JB#* END
+*#JB#* OPEN '.' TO FTMP ELSE
+*#JB#*  ERRCD = 201
+*#JB#*  ERRMSG = 'Unable to open "."'
+*#JB#*  RETURN
+*#JB#* END
+*#JB#* SELECT FTMP TO LST
+*#JB#* DONE = 0
+*#JB#* LOOP
+*#JB#*  READNEXT XID FROM LST ELSE DONE = 1
+*#JB#* UNTIL DONE DO
+*#JB#*  IF LVL = 2 THEN
+*#JB#*   * SCAN FOR DATA LEVEL FILES
+*#JB#*   ID = ''
+*#JB#*   IF XID = DICTNAME THEN
+*#JB#*    ID = XID
+*#JB#*    TMPNAME = ID
+*#JB#*   END ELSE
+*#JB#*    IF XID[1,LEN(DICTNAME)+2] = DICTNAME:']M' THEN
+*#JB#*     ID = XID[LEN(DICTNAME)+3,9999]
+*#JB#*     TMPNAME = DICTNAME:',':ID
+*#JB#*    END
+*#JB#*   END
+*#JB#*   IF ID <> '' THEN
+*#JB#*    OPEN TMPNAME TO FTMP THEN
+*#JB#*     DINFO = 'F' ;* FAKE F-POINTER
+*#JB#*     GOSUB 200
+*#JB#*     GOSUB 50; IF ERRCD THEN RETURN
+*#JB#*    END
+*#JB#*   END
+*#JB#*  END ELSE
+*#JB#*   * SCAN FOR DICTIONARY LEVEL FILES
+*#JB#*   IF XID[LEN(XID)-1,2] = ']D' THEN
+*#JB#*    ID = XID[1,LEN(XID)-2]
+*#JB#*    OPEN 'DICT ':ID TO FTMP THEN
+*#JB#*     DINFO = 'F' ;* FAKE F-POINTER
+*#JB#*     GOSUB 200
+*#JB#*     GOSUB 50; IF ERRCD THEN RETURN
+*#JB#*    END
+*#JB#*   END
+*#JB#*  END
+*#JB#* REPEAT
+*#JB#*END
+*
+* MVON# version
+*  If looking for data files, read VOC entry and decode
+*  single or multiple data section names...
+*#MVON#*IF LVL = 2 THEN
+*#MVON#* READ MDINFO FROM MD,DICTNAME THEN
+*#MVON#*  DCODE = OCONV(MDINFO[1,1],'MCU')
+*#MVON#*  IF DCODE = 'Q' OR (DCODE = 'F' AND MDINFO<6> = '') THEN
+*#MVON#*   ID = DICTNAME
+*#MVON#*   DINFO = MDINFO
+*#MVON#*   GOSUB 200
+*#MVON#*   GOSUB 50; IF ERRCD THEN RETURN
+*#MVON#*  END ELSE
+*#MVON#*   IF DCODE = 'F' THEN
+*#MVON#*    * file has multiple data sections
+*#MVON#*    X = '_':DICTNAME ; * default data section
+*#MVON#*    IF MDINFO<2> <> '' THEN
+*#MVON#*     MDINFO = INSERT(MDINFO, 6, 1; X:MDINFO<2>)
+*#MVON#*    END
+*#MVON#*    N = DCOUNT(MDINFO<6>,VM)
+*#MVON#*    FOR I = 1 TO N
+*#MVON#*     ID = MDINFO<6,I>
+*#MVON#*     IF MDINFO<4>[1,1] = 'D' THEN
+*#MVON#*      CONVERT '/' TO '\' IN ID
+*#MVON#*      ID = FIELD(ID, '\', DCOUNT(ID, '\'))
+*#MVON#*      IF ID[1,LEN(X)+1] = X:'_' THEN ID = ID[LEN(X)+2,9999]
+*#MVON#*     END ELSE
+*#MVON#*      K = INDEX(ID, '.[dbo].', 1)
+*#MVON#*      IF K THEN
+*#MVON#*       ID = ID[K+7,999]
+*#MVON#*      END ELSE
+*#MVON#*       K = INDEX(ID, '.dbo.', 1)
+*#MVON#*       IF K THEN
+*#MVON#*        ID = ID[K+5,999]
+*#MVON#*       END
+*#MVON#*      END
+*#MVON#*      IF ID[1,LEN(X)+1] = X:'_' THEN ID = ID[LEN(X)+2,9999]
+*#MVON#*      IF ID[1,1] = '_' THEN ID = ID[2,999]
+*#MVON#*     END
+*#MVON#*     DINFO = MDINFO
+*#MVON#*     GOSUB 200 ;* TRANSLATE FILE POINTER
+*#MVON#*     GOSUB 50; IF ERRCD THEN RETURN
+*#MVON#*    NEXT I
+*#MVON#*   END
+*#MVON#*  END
+*#MVON#* END
+*#MVON#*END
+*
+* OASYS version
+*  Dictionary does not contain data section pointer, so
+*  simply read the file pointer from VOC and test if data
+*  file name specified on line 2 of file pointer...
+*#OAS#*IF LVL = 2 THEN 
+*#OAS#* READ DINFO FROM MD,DICTNAME THEN
+*#OAS#*  IF DINFO<2> NE '' THEN
+*#OAS#*   ID = DICTNAME
+*#OAS#*   GOSUB 200
+*#OAS#*   GOSUB 50; IF ERRCD THEN RETURN
+*#OAS#*  END
+*#OAS#* END
+*#OAS#*END
+*
+* OI version
+*  Get file list from @TABLES
+*#OI#*IF LVL < 3 THEN
+*#OI#* N = DCOUNT(@TABLES,AM)
+*#OI#* FOR I = 1 TO N
+*#OI#*  XID = @TABLES<I>
+*#OI#*  IF LVL = 1 THEN
+*#OI#*   IF XID[1,5] = 'DICT.' THEN
+*#OI#*    IF XID <> 'DICT.MD' THEN
+*#OI#*     ID = XID[6,9999]
+*#OI#*     DINFO = 'D' ;* FAKE D-POINTER
+*#OI#*     GOSUB 200
+*#OI#*     GOSUB 50; IF ERRCD THEN RETURN
+*#OI#*    END
+*#OI#*   END
+*#OI#*  END ELSE
+*#OI#*   IF XID = DICTNAME THEN
+*#OI#*    ID = XID
+*#OI#*    DINFO = 'D' ;* FAKE D-POINTER
+*#OI#*    GOSUB 200
+*#OI#*    GOSUB 50; IF ERRCD THEN RETURN
+*#OI#*   END
+*#OI#*  END
+*#OI#* NEXT I
+*#OI#* * NOW, SCAN MD FOR FILES WITH MULTIPLE DATA SECTIONS (Q-POINTER IN MD WITH COMMA IN ID)
+*#OI#* IF LVL = 2 THEN
+*#OI#*  LST = 0
+*#OI#*  SELECT MD TO LST
+*#OI#*  DONE = 0
+*#OI#*  LOOP
+*#OI#*   READNEXT XID FROM LST ELSE DONE = 1
+*#OI#*  UNTIL DONE DO
+*#OI#*   IF INDEX(XID,',',1) > 0 THEN
+*#OI#*    IF DICTNAME = FIELD(XID,',',1) THEN
+*#OI#*     READV DCODE FROM MD,XID,1 THEN
+*#OI#*      IF OCONV(DCODE,'MCU') = 'Q' THEN
+*#OI#*       OPEN XID TO FTMP THEN
+*#OI#*        ID = FIELD(XID,',',2)
+*#OI#*        DINFO = 'D' ;* FAKE D-POINTER
+*#OI#*        GOSUB 200
+*#OI#*        GOSUB 50; IF ERRCD THEN RETURN
+*#OI#*       END
+*#OI#*      END
+*#OI#*     END
+*#OI#*    END
+*#OI#*   END
+*#OI#*  REPEAT
+*#OI#* END
+*#OI#*END
+*
+* MVON version
+*  If looking for data files, read VOC entry and decode
+*  single or multiple data section names...
+*#ON#*IF LVL = 2 THEN
+*#ON#* READ MDINFO FROM MD,DICTNAME THEN
+*#ON#*  DCODE = OCONV(MDINFO[1,1],'MCU')
+*#ON#*  IF DCODE = 'F' THEN
+*#ON#*   IF OCONV(MDINFO<4>[1,1],'MCU') = 'M' THEN
+*#ON#*    N = DCOUNT(MDINFO<5>,VM)
+*#ON#*    FOR I = 1 TO N
+*#ON#*     ID = MDINFO<5,I>
+*#ON#*     DINFO = MDINFO
+*#ON#*     GOSUB 200 ;* TRANSLATE FILE POINTER
+*#ON#*     GOSUB 50; IF ERRCD THEN RETURN
+*#ON#*    NEXT I
+*#ON#*   END ELSE
+*#ON#*    * SINGLE DATA SECTION
+*#ON#*    IF MDINFO<2> <> '' THEN
+*#ON#*     ID = DICTNAME
+*#ON#*     DINFO = MDINFO
+*#ON#*     GOSUB 200
+*#ON#*     GOSUB 50; IF ERRCD THEN RETURN
+*#ON#*    END
+*#ON#*   END
+*#ON#*  END ELSE
+*#ON#*   IF DCODE = 'Q' THEN
+*#ON#*    ID = DICTNAME
+*#ON#*    DINFO = MDINFO
+*#ON#*    GOSUB 200
+*#ON#*    GOSUB 50; IF ERRCD THEN RETURN
+*#ON#*   END
+*#ON#*  END
+*#ON#* END
+*#ON#*END
+*
+* QM version
+*  If looking for data files, read VOC entry and decode data section
+*#QM#*IF LVL = 2 THEN
+*#QM#* READ MDINFO FROM MD,DICTNAME THEN
+*#QM#*  DCODE = OCONV(MDINFO[1,1],'MCU')
+*#QM#*  IF DCODE = 'F' THEN
+*#QM#*    IF OCONV(MDINFO<2>[4],'MCU') <> '.DIC' THEN
+*#QM#*     ID = DICTNAME
+*#QM#*     DINFO = MDINFO
+*#QM#*     GOSUB 200
+*#QM#*     GOSUB 50; IF ERRCD THEN RETURN
+*#QM#*   END
+*#QM#*  END ELSE
+*#QM#*   IF DCODE = 'Q' THEN
+*#QM#*    ID = DICTNAME
+*#QM#*    DINFO = MDINFO
+*#QM#*    GOSUB 200
+*#QM#*    GOSUB 50; IF ERRCD THEN RETURN
+*#QM#*   END
+*#QM#*  END
+*#QM#* END
+*#QM#*END
+*
+* Unidata version
+*  Dictionary does not contain data section pointer, so
+*  simply read the file pointer from VOC and test if data
+*  file name specified on line 2 of file pointer...
+*#UD#*IF LVL = 2 THEN 
+*#UD#* READ DINFO FROM MD,DICTNAME THEN
+*#UD#*  IF DINFO<2> NE '' THEN
+*#UD#*   ID = DICTNAME
+*#UD#*   GOSUB 200
+*#UD#*   GOSUB 50; IF ERRCD THEN RETURN
+*#UD#*  END
+*#UD#* END
+*#UD#*END
+*
+* UniVerse version
+*  If looking for data files, read VOC entry and decode
+*  single or multiple data section names...
+*#UV#*IF LVL = 2 THEN
+*#UV#* READ MDINFO FROM MD,DICTNAME THEN
+*#UV#*  DCODE = OCONV(MDINFO[1,1],'MCU')
+*#UV#*  IF DCODE = 'F' THEN
+*#UV#*   IF OCONV(MDINFO<4>[1,1],'MCU') = 'M' THEN
+*#UV#*    N = DCOUNT(MDINFO<7>,VM)
+*#UV#*    FOR I = 1 TO N
+*#UV#*     ID = MDINFO<7,I>
+*#UV#*     DINFO = MDINFO
+*#UV#*     GOSUB 200 ;* TRANSLATE FILE POINTER
+*#UV#*     GOSUB 50; IF ERRCD THEN RETURN
+*#UV#*    NEXT I
+*#UV#*   END ELSE
+*#UV#*    * SINGLE DATA SECTION
+*#UV#*    IF OCONV(MDINFO<2>[1,2],'MCU') <> 'D_' THEN
+*#UV#*     ID = DICTNAME
+*#UV#*     DINFO = MDINFO
+*#UV#*     GOSUB 200
+*#UV#*     GOSUB 50; IF ERRCD THEN RETURN
+*#UV#*    END
+*#UV#*   END
+*#UV#*  END ELSE
+*#UV#*   IF DCODE = 'Q' THEN
+*#UV#*    ID = DICTNAME
+*#UV#*    DINFO = MDINFO
+*#UV#*    GOSUB 200
+*#UV#*    GOSUB 50; IF ERRCD THEN RETURN
+*#UV#*   END
+*#UV#*  END
+*#UV#* END
+*#UV#*END
+*
+* SCAN MD/DICT/DATA FILE
+*
+*#CACHE#** OPTIMIZATION FOR CACHE SINCE ALL DATA FILES HAVE ALREADY BEEN DETERMINED
+*#CACHE#*IF LVL = 2 AND FLAGS(MVATT.ITEM) = 0 AND FLAGS(MVATT.FIELD) = 0 THEN GOTO BYPASS
+*#CACHE#*LST = 0 ;* CACHE USES NUMBERED LISTS
+*#MVON#** OPTIMIZATION FOR MVON SINCE ALL DATA FILES HAVE ALREADY BEEN DETERMINED
+*#MVON#*IF LVL = 2 AND FLAGS(MVATT.ITEM) = 0 AND FLAGS(MVATT.FIELD) = 0 THEN GOTO BYPASS
+*#MVON#*LST = 0 ;* DOES MVON# USE NUMBERED LISTS?
+*#OAS#*LST = 0 ;* PREVENT OASYS UNASSIGNED WARNING
+*#OI#** OPTIMIZATION FOR OI SINCE ALL DATA FILES HAVE ALREADY BEEN DETERMINED
+*#OI#*IF LVL = 2 AND FLAGS(MVATT.ITEM) = 0 AND FLAGS(MVATT.FIELD) = 0 THEN GOTO BYPASS
+*#OI#*LST = 0 ;* OI USES NUMBERED LISTS
+*#ON#** OPTIMIZATION FOR MVON SINCE ALL DATA FILES HAVE ALREADY BEEN DETERMINED
+*#ON#*IF LVL = 2 AND FLAGS(MVATT.ITEM) = 0 AND FLAGS(MVATT.FIELD) = 0 THEN GOTO BYPASS
+*#ON#*LST = 0 ;* MVON USES NUMBERED LISTS
+*#QM#** OPTIMIZATION FOR QM SINCE ALL DATA FILES HAVE ALREADY BEEN DETERMINED
+*#QM#*IF LVL = 2 AND FLAGS(MVATT.ITEM) = 0 AND FLAGS(MVATT.FIELD) = 0 THEN GOTO BYPASS
+*#QM#*LST = 0 ;* QM USES NUMBERED LISTS
+*#UV#** OPTIMIZATION FOR UNIVERSE SINCE ALL DATA FILES HAVE ALREADY BEEN DETERMINED
+*#UV#*IF LVL = 2 AND FLAGS(MVATT.ITEM) = 0 AND FLAGS(MVATT.FIELD) = 0 THEN GOTO BYPASS
+*#UV#*LST = 0 ;* UNIVERSE IDEAL USES NUMBERED LISTS
+*#UD#*LST = 0 ;* UNIDATA USES NUMBERED LISTS
+*
+SELECT FV TO LST
+DONE = 0
+LOOP
+ READNEXT ID FROM LST ELSE DONE = 1
+UNTIL DONE DO
+ IF LVL < 3 THEN
+  READ DINFO FROM FV,ID THEN
+*#UD#*   IF LVL = 2 THEN
+*#UD#*    IF ID[1,1] = '@' AND ID <> '@ID' AND ID <> '@':DICTNAME THEN
+*#UD#*     DINFO<1> = 'F' ;* TRANSLATE UNIDATA @FILE INTO DUMMY MULTI-FILE POINTER
+*#UD#*    END
+*#UD#*   END
+   * CONVERT CACHE/OAS/OI/QM/UV/UD DICT ITEMS TO COMMON FORMAT
+   GOSUB 200
+   SKIP = 0
+   IF LVL = 1 AND (ID = 'VOC' OR ID = 'MD') THEN SKIP = 1 ;* SKIP F OR Q POINTER TO MD WHEN SCANNING MD
+   IF NOT(FLAGS(MVATT.ITEM)) AND DINFO<1> = 'Q' AND DINFO<2> = '' AND DINFO<3> = '' THEN SKIP = 1 ;* SKIP SELF-REFERENTIAL Q-POINTER UNLESS SELECTING ITEMS
+*#OI#*   IF ID[1,1] <> '%' AND ID[LEN(ID),1] <> '%' THEN SKIP = 1 ;* SKIP METADATA
+   IF NOT(SKIP) THEN
+    GOSUB 50
+    IF ERRCD THEN
+*#QM#*     CLEARSELECT LST
+     RETURN
+    END
+   END
+  END
+ END ELSE
+  GOSUB 50
+  IF ERRCD THEN
+   *#QM#*CLEARSELECT LST
+   RETURN
+  END
+ END
+REPEAT
+*
+BYPASS: *
+*
+* RETURN THE RESULT
+IF FOUND.FILES AND FOUND.ITEMS THEN
+ DIO = (FOUND.FILES + FOUND.ITEMS) : AM : RESULTS(1) : VM : RESULTS(2)
+END ELSE
+ DIO = (FOUND.FILES + FOUND.ITEMS) : AM : RESULTS(1) : RESULTS(2)
+END
+RETURN
+*
+*
+**************************************************************************
+*
+* SPECIAL SCAN OF MD/VOC WHICH RETURNS LIST OF DATA FILES ONLY
+*
+**************************************************************************
+*
+SCAN.DATA.ONLY: *
+*
+* CALCULATE A FEW CONSTANTS
+FLAGS(MVATT.ITEM) = 0 ;* ONLY RETURN FILES FROM MD OR DICTIONARY
+FLAGS(MVATT.FIELD) = 0 ;* NO FIELDS EITHER
+DATAONLY.MASK = PWR(2,MVFLG.DATAONLY-1) ;* MASK ADDED TO RETURN ATTRIBUTES
+LOCATE('-1',RETURNINFO,1;ATTSPOS) ELSE ATTSPOS = 0 ;* ATTRIBUTES POSITION IN PROPERTY CODE LIST
+*
+* SCAN MD RETURNING LIST OF DICTIONARY FILES
+GOSUB DO.FILE.SCAN 
+IF ERRCD THEN RETURN
+*
+* FOR EACH DICTIONARY FOUND, SCAN FOR DATA FILES
+DDIO = ''
+DCNT = DIO<1> + 0
+DLST = DIO<2>
+LVL = 2
+FOR DINDX = 1 TO DCNT
+ DICTNAME = DLST<1,DINDX,1>
+ FILENAME = 'DICT ':DICTNAME
+ OPEN FILENAME TO FV THEN
+  *
+  * SCAN THE FILE DICTIONARY FOR DATA FILES
+  GOSUB DO.FILE.SCAN
+  IF ERRCD = 0 THEN
+   *
+   * UPDATE RETURN LIST WITH LIST OF DATA FILES FROM EACH DICT
+   DDCNT = DIO<1> + 0
+   FOR DDINDX = 1 TO DDCNT
+    DATAITEM = DIO<2,DDINDX>
+    DATANAME = DATAITEM<1,1,1>
+    IF DATANAME <> DICTNAME THEN
+     DATAITEM<1,1,1> = DICTNAME:',':DATANAME
+    END
+    IF ATTSPOS THEN
+     FLGS = DATAITEM<1,1,ATTSPOS+1>
+     IF FLGS < DATAONLY.MASK THEN DATAITEM<1,1,ATTSPOS+1> = FLGS + DATAONLY.MASK
+    END
+    DDIO<1,-1> = DATAITEM
+   NEXT DDINDX
+  END ELSE
+   *
+   * IGNORE ERRORS IN DICTIONARY SCANS
+   ERRCD = 0
+   ERRMSG = ''
+  END
+ END
+NEXT DINDX 
+*
+* BUILD RETURN VALUE
+DIO = DCOUNT(DDIO<1>,VM) : AM : DDIO
+RETURN
+*
+**************************************************************************
+*
+50 * CHECK SELECTION ATTRIBUTES & ADD ITEM TO RESULT
+*
+* PREPARE ATTRIBUTES FROM LVL, ID, DINFO
+GOSUB 300
+*
+* PRIMARY SELECTION ON FILE, ITEM OR FIELD ATTRIBUTE
+BEGIN CASE
+ CASE ATTS(MVATT.FOLDER) AND FLAGS(MVATT.FOLDER)
+  WHICH = 1
+ CASE ATTS(MVATT.ITEM) AND FLAGS(MVATT.ITEM)
+  WHICH = 2
+ CASE ATTS(MVATT.FIELD) AND FLAGS(MVATT.FIELD)
+  WHICH = 2
+ CASE 1
+  RETURN
+END CASE
+*
+* SECONDARY SELECTION ON SYSTEM, HIDDEN, ALIAS
+IF ATTS(MVATT.SYSTEM) AND NOT(FLAGS(MVATT.SYSTEM)) THEN RETURN
+IF ATTS(MVATT.HIDDEN) AND NOT(FLAGS(MVATT.HIDDEN)) THEN RETURN
+IF FLAGS(MVATT.FOLDER) THEN
+ IF ATTS(MVATT.ALIAS) AND NOT(FLAGS(MVATT.ALIAS)) THEN RETURN
+END
+*
+* ITEM PASSES ATTRIBUTE SELECTION - CHECK ITEM COUNT
+IF FOUND.FILES + FOUND.ITEMS + 1 > MAXITEMS THEN
+ ERRCD = 199
+ ERRMSG = 'There are more than ':MAXITEMS:' records matching the criteria!'
+ RETURN
+END
+*
+* COMPUTE INSERT POSITION
+LOCATE(ID, RESULTS(WHICH),1;K;'AL') THEN NULL
+*
+* CALCULATE RETURN INFO
+GOSUB 400
+*
+* ADD ITEM TO RESULT LIST
+Z = ID:SVM:INFO
+*NEXT LINE CHANGED FROM INCOMPATIBLE SYNTAX TO R83 COMPATIBLE SYNTAX
+*INS Z BEFORE RESULTS(WHICH)<1,K>
+RESULTS(WHICH) = INSERT(RESULTS(WHICH),1,K;Z)
+ICNT(WHICH) = ICNT(WHICH) + 1
+*
+RETURN
+*
+**************************************************************************
+*
+100 * CONVERT D/I/V/F DICTIONARY ITEMS TO COMMON FORMAT
+*
+**************************************************************************
+*
+DCODE1 = OCONV(DINFO<1>[1,1],'MCU')
+*#OI#*IF DCODE1 = 'F' THEN DINFO<1> = 'A'; RETURN
+Z='A'
+Z<3>=DINFO<4>
+IF DCODE1 EQ 'I' OR DCODE1 EQ 'V' THEN
+ Z<1>='S'
+ Z<2>='0'
+ Z<8>='A;':DINFO<2>
+END ELSE
+ Z<2>=DINFO<2>
+END
+Fmt=DINFO<5>
+WID=''
+LOOP C=Fmt[1,1] WHILE C NE '' AND C MATCHES '1N' DO
+ WID=WID:C
+ Fmt = Fmt[2,99]
+REPEAT
+IF INDEX('LRTQ',C,1) THEN PAD='' ELSE
+ IF C EQ '"' THEN
+  PAD=Fmt[2,1]
+  Fmt=Fmt[4,99]
+ END ELSE
+  PAD=C
+  Fmt=Fmt[2,99]
+ END
+END
+JST=Fmt[1,1]; Fmt=Fmt[2,99]
+IF JST EQ 'T' THEN CNV='ML' ELSE CNV='M':JST
+IF JST EQ 'Q' THEN
+ C=Fmt[1,1]
+ IF C EQ 'L' OR C EQ 'R' THEN JST=C; Fmt=Fmt[2,99] ELSE JST='R'
+END
+LOOP C=Fmt[1,1] WHILE C NE '' AND INDEX('(#%*',C,1) EQ 0 DO
+ CNV=CNV:C
+ Fmt=Fmt[2,99] 
+REPEAT
+I=LEN(Fmt)
+IF C EQ '(' THEN I=I-2
+IF I > WID THEN WID=I
+CNV=CNV:Fmt
+IF LEN(CNV) > 2 THEN
+ IF DINFO<3> EQ '' THEN Z<7>=CNV ELSE Z<7>=DINFO<3>:VM:CNV
+END ELSE
+ Z<7>=DINFO<3>
+END
+Z<9>=JST
+Z<10>=WID
+DINFO=Z
+DCODE=DINFO<1>
+DCODE1=DCODE
+RETURN
+*
+**************************************************************************
+*
+200 * CONVERT DIR/F/LD/LF/D/I/V ITEMS TO COMMON FORMAT
+*
+IF LVL < 3 THEN
+ DCODE = OCONV(DINFO<1>,'MCU')
+*
+*#CACHE#* IF DCODE[1,1] = 'F' THEN
+*#CACHE#*  DINFO<1> = 'D'
+*#CACHE#* END ELSE
+*#CACHE#*  IF DCODE[1,1] = 'D' OR DCODE[1,1] = 'I' THEN GOSUB 100
+*#CACHE#* END
+*
+*#JB#* IF DCODE = 'F' THEN
+*#JB#*  DINFO<1> = 'D'
+*#JB#* END ELSE
+*#JB#*  IF DCODE = 'D' OR DCODE = 'I' OR DCODE = 'V' THEN GOSUB 100
+*#JB#* END
+*
+*#MVON#* IF DCODE[1,1] = 'F' THEN
+*#MVON#*  IF DINFO<4>[1,1] = 'D' THEN
+*#MVON#*   IF DINFO<2>[2,1] = ':' OR DINFO<2>[1,2] = '\\' THEN
+*#MVON#*    DINFO<1> = 'Q' ; * treat files with absolute path as Q files
+*#MVON#*   END ELSE
+*#MVON#*    DINFO<1> = 'D'
+*#MVON#*   END
+*#MVON#*  END ELSE
+*#MVON#*   IF INDEX(DINFO<2>, '.[dbo].', 1) + INDEX(DINFO<2>, '.dbo.', 1) THEN
+*#MVON#*    DINFO<1> = 'Q'
+*#MVON#*   END ELSE
+*#MVON#*    DINFO<1> = 'D'
+*#MVON#*   END
+*#MVON#*  END
+*#MVON#* END ELSE
+*#MVON#*  IF DCODE[1,1] = 'D' OR DCODE[1,1] = 'I' THEN GOSUB 100
+*#MVON#* END
+*
+*#OAS#* IF DCODE[1,1] = 'F' OR DCODE[1,3] = 'DIR' OR DCODE[1,2] = 'LF' OR DCODE[1,2] = 'LD' THEN
+*#OAS#*  IF LVL = 1 AND DINFO<2> = 'VOC' THEN
+*#OAS#*   DINFO = 'Q' ;* self-referential Q-pointer to VOC will be excluded from file list
+*#OAS#*  END ELSE
+*#OAS#*   IF DINFO<2>[1,2] = '..' OR DINFO<2>[1,1] = '/' OR DINFO<2>[1,1] = '\' OR DINFO<2>[2,2] = ':\' THEN
+*#OAS#*    DINFO<1> = 'Q'
+*#OAS#*   END ELSE
+*#OAS#*    DINFO<1> = 'D'
+*#OAS#*   END
+*#OAS#*  END
+*#OAS#* END ELSE
+*#OAS#*  IF DCODE[1,1] = 'D' OR DCODE[1,1] = 'I' OR DCODE[1,1] = 'V' THEN GOSUB 100
+*#OAS#* END
+*
+*#OI#* IF DCODE = 'F' THEN GOSUB 100
+*
+*#ON#* IF DCODE[1,1] = 'F' THEN
+*#ON#*  DINFO<1> = 'D'
+*#ON#* END ELSE
+*#ON#*  IF DCODE[1,1] = 'D' OR DCODE[1,1] = 'I' THEN GOSUB 100
+*#ON#* END
+*
+*#QM#* IF DCODE[1,1] = 'F' THEN
+*#QM#*  IF DINFO<2>[1,2] = '..' OR DINFO<2>[1,1] = '/' OR DINFO<2>[1,1] = '\' THEN
+*#QM#*   DINFO<1> = 'Q'
+*#QM#*  END ELSE
+*#QM#*   DINFO<1> = 'D'
+*#QM#*  END
+*#QM#* END ELSE
+*#QM#*  IF DCODE[1,1] = 'D' OR DCODE[1,1] = 'I' THEN GOSUB 100
+*#QM#* END
+*
+*#UD#* IF DCODE[1,1] = 'F' OR DCODE[1,3] = 'DIR' OR DCODE[1,2] = 'LF' OR DCODE[1,2] = 'LD' THEN
+*#UD#*  IF DINFO<2>[1,2] = '..' OR DINFO<2>[1,1] = '/' OR DINFO<2>[1,1] = '\' THEN
+*#UD#*   DINFO<1> = 'Q'
+*#UD#*  END ELSE
+*#UD#*   DINFO<1> = 'D'
+*#UD#*  END
+*#UD#* END ELSE
+*#UD#*  IF DCODE[1,1] = 'D' OR DCODE[1,1] = 'I' OR DCODE[1,1] = 'V' THEN GOSUB 100
+*#UD#* END
+*
+*#UV#* IF DCODE[1,1] = 'F' THEN
+*#UV#*  IF DINFO<2>[1,2] = '..' OR DINFO<2>[1,1] = '/' OR DINFO<2>[1,1] = '\' THEN
+*#UV#*   DINFO<1> = 'Q'
+*#UV#*  END ELSE
+*#UV#*   DINFO<1> = 'D'
+*#UV#*  END
+*#UV#* END ELSE
+*#UV#*  IF DCODE[1,1] = 'D' OR DCODE[1,1] = 'I' THEN GOSUB 100
+*#UV#* END
+*
+END
+RETURN
+*
+**************************************************************************
+*
+300 * DETERMINE ATTRIBUTE FLAGS BASED ON LVL, DINFO, ID
+*
+MAT ATTS = 0
+IF LVL < 3 THEN
+ DCODE1 = OCONV(DINFO[1,1],'MCU')
+ BEGIN CASE
+  CASE DCODE1 = 'D'
+   ATTS(MVATT.FOLDER) = 1 ; * ; ATTS(MVATT.READONLY) = 1
+  CASE DCODE1 = 'Q'
+   ATTS(MVATT.FOLDER) = 1; ATTS(MVATT.ALIAS) = 1 ; * ; ATTS(MVATT.READONLY) = 1
+  CASE DCODE1 = 'A' OR DCODE1 = 'S'
+   ATTS(MVATT.ITEM) = 1; ATTS(MVATT.FIELD) = 1
+  CASE 1
+   ATTS(MVATT.ITEM) = 1
+ END CASE
+END ELSE
+ ATTS(MVATT.ITEM) = 1
+END
+*
+* ASSUME READONLY IF SERVER WRITE FUNCTION IS DISABLED
+IF WRITE.OK = 0 THEN ATTS(MVATT.READONLY) = 1
+*
+* SORT OUT SYSTEM ATTRIBUTE
+*#DEFAULT#*IF SYSTEM(0) = 10 THEN ATTS(MVATT.SYSTEM) = 1
+*#CACHE#** NO SPECIAL FILE TYPES MAP TO 'SYSTEM' ATTRIBUTE
+*#JB#*IF ID[1,1] = '$' OR ID[1,1] = '!' THEN ATTS(MVATT.SYSTEM) = 1
+*#MVON#*IF LEN(FILENAME) > 4 THEN IF FILENAME[LEN(FILENAME)-3,4] = '.dll' THEN ATTS(MVATT.SYSTEM) = 1
+*#MVON#*IF LEN(FILENAME) > 4 THEN IF FILENAME[LEN(FILENAME)-3,4] = '.Lib' THEN ATTS(MVATT.SYSTEM) = 1
+*#NR#*IF LVL > 1 AND ID[1,1] = '$' THEN ATTS(MVATT.SYSTEM) = 1
+*#OAS#*IF LVL > 1 AND ID[1,1] = '$' THEN ATTS(MVATT.SYSTEM) = 1
+*#OI#*IF LVL = 2 AND ID[1,1] = '*' THEN ATTS(MVATT.SYSTEM) = 1
+*#ON#*IF ID[1,1] = '$' THEN ATTS(MVATT.SYSTEM) = 1
+*#PICK#*IF SYSTEM(0) = 10 THEN ATTS(MVATT.SYSTEM) = 1
+*#QM#*IF LEN(FILENAME) > 4 THEN IF FILENAME[LEN(FILENAME)-3,4] = '.OUT' THEN ATTS(MVATT.SYSTEM) = 1
+*#UD#*IF ID[1,1] = '_' THEN ATTS(MVATT.SYSTEM) = 1
+*#UV#*IF LEN(FILENAME) > 2 THEN IF FILENAME[LEN(FILENAME)-1,2] = '.O' THEN ATTS(MVATT.SYSTEM) = 1
+IDU = OCONV(ID,'MCU')
+IF LVL = 1 THEN
+ IF ATTS(MVATT.SYSTEM) = 0 THEN
+  LOCATE(IDU,KNOWN.SYSTEM.FILES,1;XX) THEN
+   ATTS(MVATT.SYSTEM) = 1
+  END ELSE
+*#DEFAULT#*   IF DCODE1 = 'Q' THEN
+*#DEFAULT#*    LOCATE(OCONV(DINFO<2>,'MCU'), KNOWN.SYSTEM.ACCOUNTS, 1; XX) THEN
+*#DEFAULT#*     ATTS(MVATT.SYSTEM) = 1
+*#DEFAULT#*    END
+*#DEFAULT#*   END
+*#CACHE#*   IF ID[1,1] = '&' OR OCONV(DINFO<2>[1,5],'MCU') = '^%MV.' OR OCONV(DINFO<3>[1,5],'MCU') = '^%MV.' THEN ATTS(MVATT.SYSTEM) = 1
+*#MVON#*   IF ID[1,1] = '&' THEN ATTS(MVATT.SYSTEM) = 1
+*#NR#*   IF DCODE1 = 'Q' THEN
+*#NR#*    LOCATE(OCONV(DINFO<2>,'MCU'), KNOWN.SYSTEM.ACCOUNTS, 1; XX) THEN
+*#NR#*     ATTS(MVATT.SYSTEM) = 1
+*#NR#*    END
+*#NR#*   END
+*#OAS#*   IF ID[1,1] = '&' OR ID[1,1] = '_' THEN ATTS(MVATT.SYSTEM) = 1
+*#OI#* * OI DOES NOT HAVE "SYSTEM ACCOUNTS"
+*#ON#*   IF ID[1,1] = '&' THEN ATTS(MVATT.SYSTEM) = 1
+*#PICK#*   IF DCODE1 = 'Q' THEN
+*#PICK#*    LOCATE(OCONV(DINFO<2>,'MCU'), KNOWN.SYSTEM.ACCOUNTS, 1; XX) THEN
+*#PICK#*     ATTS(MVATT.SYSTEM) = 1
+*#PICK#*    END
+*#PICK#*   END
+*#QM#*   IF ID[1,1] = '$' THEN ATTS(MVATT.SYSTEM) = 1
+*#UD#*   IF ID[1,1] = '&' OR ID[1,1] = '_' THEN ATTS(MVATT.SYSTEM) = 1
+*#UV#*   IF ID[1,1] = '&' OR IDU[1,3] = 'UV_' THEN ATTS(MVATT.SYSTEM) = 1
+  END
+ END
+ * SORT OUT HIDDEN ATTRIBUTE (COMPARE WITH USER-DEFINED HIDDEN FILE LIST)
+ IF ATTS(MVATT.FOLDER) AND CHECK.HIDDEN.FILES THEN
+  IF HIDDEN.FILE.LIST<1> <> '' THEN
+   LOCATE(IDU, HIDDEN.FILE.LIST,1; XX) THEN
+    ATTS(MVATT.HIDDEN) = 1
+   END
+  END
+  IF ATTS(MVATT.HIDDEN) = 0 AND HIDDEN.FILE.LIST<2> <> '' THEN
+   YY = DCOUNT(HIDDEN.FILE.LIST<2>,VM)
+   FOR XX = 1 TO YY
+    ZZ = HIDDEN.FILE.LIST<2,XX>
+    IF LEN(IDU) >= LEN(ZZ) THEN
+     IF IDU[LEN(IDU)-LEN(ZZ)+1,999] = ZZ THEN ATTS(MVATT.HIDDEN) = 1; XX = YY + 1
+    END
+   NEXT XX
+  END
+  IF ATTS(MVATT.HIDDEN) = 0 AND HIDDEN.FILE.LIST<3> <> '' THEN
+   YY = DCOUNT(HIDDEN.FILE.LIST<3>,VM)
+   FOR XX = 1 TO YY
+    ZZ = HIDDEN.FILE.LIST<3,XX>
+    IF INDEX(IDU,ZZ,1) = 1 THEN ATTS(MVATT.HIDDEN) = 1; XX = YY + 1
+   NEXT XX
+  END   
+  IF ATTS(MVATT.HIDDEN) = 0 AND HIDDEN.FILE.LIST<4> <> '' THEN
+   YY = DCOUNT(HIDDEN.FILE.LIST<4>,VM)
+   FOR XX = 1 TO YY
+    ZZ = HIDDEN.FILE.LIST<4,XX>
+    IF INDEX(IDU,ZZ,1) THEN ATTS(MVATT.HIDDEN) = 1; XX = YY + 1
+   NEXT XX
+  END   
+ END
+*
+END
+*
+RETURN
+*
+**************************************************************************
+*
+400 * RETRIEVE ITEM PROPERTIES
+*
+* USES RETURNINFO, LVL, FUNC, DINFO
+* RETURNS INFO (MV OR SV DEPENDING ON FUNC)
+*
+IF LVL < 3 THEN DCODE1 = OCONV(DINFO[1,1],'MCU')
+INFO = ''
+NINFO = DCOUNT(RETURNINFO,VM)
+FOR INDX = 1 TO NINFO
+ ICD = RETURNINFO<1,INDX>
+ PROPVAL = ''
+ BEGIN CASE
+  CASE ICD = -1
+   * ATTRIBUTES
+   PROPVAL = 0
+   MSK = 1
+   FOR A = 1 TO 16
+    IF ATTS(A) THEN PROPVAL = PROPVAL + MSK
+    MSK = MSK * 2
+   NEXT A
+  CASE ICD = -2
+   * ITEM SIZE
+   IF LVL < 3 THEN
+    PROPVAL = LEN(DINFO)
+   END ELSE
+    READ ITM FROM FV,ID ELSE ITM = ''
+    PROPVAL = LEN(ITM)
+   END
+  CASE ICD = -3
+   * LOCATION (Q-POINTER)
+   IF LVL < 3 THEN
+    IF DCODE1 = 'Q' THEN
+     PROPVAL = DINFO<2>
+    END
+   END
+ END CASE
+ *
+ IF FUNC = 1 THEN
+  INFO<1,1,INDX> = PROPVAL
+ END ELSE
+  INFO<1,INDX> = PROPVAL
+ END
+NEXT INDX
+*
+RETURN
+*
+**************************************************************************
+*
+500 * DETERMINE FILE LEVEL FROM NAME
+*
+X = OCONV(FILENAME,'MCU')
+BEGIN CASE
+ CASE X = '' OR X = '\'
+  *SYSTEM
+  LVL = 0
+ CASE X = '.' OR X = 'MD' OR X = 'VOC' OR X = ACCT
+  *ACCOUNT
+  LVL = 1
+ CASE X[1,5] = 'DICT '
+  *DICTIONARY
+  LVL = 2
+ CASE 1
+  *DATA
+  LVL = 3
+END CASE
+RETURN
+*
+**************************************************************************
+*
+600 * SETUP HIDDEN FILE LIST
+*
+* RETURN DYNAMIC ARRAY WHERE:
+*  HIDDEN.FILE.LIST<1> IS LIST OF EXACT FILE NAMES
+*  HIDDEN.FILE.LIST<2> IS LIST OF ENDING SUBSTRING
+*  HIDDEN.FILE.LIST<3> IS LIST OF LEADING SUBSTRING
+*  HIDDEN.FILE.LIST<4> IS LIST OF ANY SUBSTRING
+*
+HIDDEN.FILE.LIST = ''
+READV LST FROM CFGFV,'MVCONNECTION.OPTIONS',2 ELSE LST = ''
+N = DCOUNT(LST,VM)
+FOR I = 1 TO N
+ X = OCONV(LST<1,I>,'MCU')
+ M = LEN(X)
+ K = (X[1,1] = '[') + (2*(X[M,1] = ']'))
+ BEGIN CASE
+  CASE K=0
+   HIDDEN.FILE.LIST<1,-1> = X
+  CASE K=1
+   HIDDEN.FILE.LIST<2,-1> = X[2,999]
+  CASE K=2
+   HIDDEN.FILE.LIST<3,-1> = X[1,M-1]
+  CASE K=3
+   HIDDEN.FILE.LIST<4,-1> = X[2,M-2]
+ END CASE
+NEXT I
+CHECK.HIDDEN.FILES = (N > 0)
+RETURN
+*
+**************************************************************************
+*
+* RETURN SERVER INFORMATION
+*
+*  INPUT:
+*
+*   DIO = 'S' - RETURN SERVER NAME
+*       = 'A' - RETURN ACCOUNT NAME
+*       = 'U' - RETURN USER NAME
+*       = 'P' - RETURN PORT NUMBER
+*       = 'M' - RETURN MD NAME
+*       = 'V' - RETURN FTBP LIBRARY VERSION
+*       = 'R' - RETURN SERVER RIGHTS (READ.WRITE.CONV.EXEC)
+*       = '*' - RETURN ALL INFO (SERVER]ACCOUNT]USER]PORT]MDNAME]VERSION]RIGHTS)
+*
+*  OUTPUT:
+*
+*   DIO = SERVER INFORMATION
+*
+**************************************************************************
+*
+DO.WHO: *
+*
+BEGIN CASE
+ CASE DIO = 'S'
+   DIO = SVRNAME
+ CASE DIO = 'A'
+  WHO = OCONV('','U50BB');*#GENERIC#*
+  DIO = FIELD(WHO,' ',3);*#GENERIC#*
+  IF DIO = '' THEN DIO = FIELD(WHO,' ',2);*#GENERIC#*
+*#DEFAULT#*  WHO = OCONV('','U50BB')
+*#DEFAULT#*  DIO = FIELD(WHO,' ',3)
+*#DEFAULT#*  IF DIO = '' THEN DIO = FIELD(WHO,' ',2)
+*#CACHE#*  DIO = @WHO
+*#JB#*  DIO = @WHO
+*#MVON#*  DIO = @WHO
+*#NR#*  DIO = @ACCOUNT
+*#OAS#*  DIO = @WHO
+*#OI#*  DIO = @APPID<1>
+*#ON#*  DIO = @WHO
+*#PICK#*  DIO = @ACCOUNT
+*#QM#*  DIO = @WHO
+*#UD#*  DIO = @WHO
+*#UV#*  DIO = @WHO
+ CASE DIO = 'U'
+  DIO = FIELD(OCONV('','U50BB'),' ',2);*#GENERIC#*
+*#DEFAULT#*  DIO = FIELD(OCONV('','U50BB'),' ',2)
+*#CACHE#*  DIO = @LOGNAME
+*#JB#*  DIO = @LOGNAME
+*#MVON#*  DIO = @LOGNAME
+*#NR#*  DIO = @LOGNAME
+*#OAS#*  DIO = @LOGNAME
+*#OI#*  DIO = @USERNAME
+*#ON#*  DIO = @LOGNAME
+*#PICK#*  DIO = @USER
+*#QM#*  DIO = @LOGNAME
+*#UD#*  DIO = @LOGNAME
+*#UV#*  DIO = @LOGNAME
+ CASE DIO = 'P'
+  DIO = FIELD(OCONV('','U50BB'),' ',1);*#GENERIC#*
+*#DEFAULT#*  DIO = FIELD(OCONV('','U50BB'),' ',1)
+*#CACHE#*  DIO = @USERNO
+*#JB#*  DIO = @USERNO
+*#MVON#*  DIO = @USERNO
+*#NR#*  DIO = FIELD(OCONV('','U50BB'),' ',1)
+*#OAS#*  DIO = @USERNO
+*#OI#*  DIO = SYSTEM(18)
+*#ON#*  DIO = @USERNO
+*#PICK#*  DIO = @PIB
+*#QM#*  DIO = @USERNO
+*#UD#*  DIO = FIELD(OCONV('','U50BB'),' ',1)
+*#UV#*  DIO = @USERNO
+ CASE DIO = 'M'
+  DIO = 'MD';*#GENERIC#*
+*#DEFAULT#*  DIO = 'MD'
+*#CACHE#*  DIO = 'VOC'
+*#JB#*  DIO = 'MD'
+*#MVON#*  DIO = 'VOC'
+*#NR#*  DIO = 'MD'
+*#OAS#*  DIO = 'VOC'
+*#OI#*  DIO = 'MD'
+*#ON#*  DIO = 'VOC'
+*#PICK#*  DIO = 'MD'
+*#QM#*  DIO = 'VOC'
+*#UD#*  DIO = 'VOC'
+*#UV#*  DIO = 'VOC'
+ CASE DIO = 'V'
+  * RETURN FTBP LIBRARY VERSION NUMBER (WITHOUT BUILD NUMBER)
+  DIO = FIELD(CLI.VERSION,'.',1):'.':FIELD(CLI.VERSION,'.',2)
+ CASE DIO = 'R'
+  * RETURN RIGHTS (NEGATIVE LOGIC)
+  DIO = NOT(READ.OK):'.':NOT(WRITE.OK):'.':NOT(CONV.OK):'.':NOT(EXEC.OK)
+ CASE DIO = '*'
+  WHO = OCONV('','U50BB')
+  DIO = FIELD(WHO,' ',3);*#GENERIC#*
+  IF DIO = '' THEN DIO = FIELD(WHO,' ',2);*#GENERIC#*
+  DIO = SVRNAME:VM:DIO:VM:FIELD(WHO,' ',2):VM:FIELD(WHO,' ',1):VM:'MD';*#GENERIC#*
+*#DEFAULT#*  DIO = FIELD(WHO,' ',3)
+*#DEFAULT#*  IF DIO = '' THEN DIO = FIELD(WHO,' ',2)
+*#DEFAULT#*  DIO = SVRNAME:VM:DIO:VM:FIELD(WHO,' ',2):VM:FIELD(WHO,' ',1):VM:'MD'
+*#CACHE#*  DIO = SVRNAME:VM:@WHO:VM:@LOGNAME:VM:@USERNO:VM:'VOC'
+*#JB#*  DIO = SVRNAME:VM:@WHO:VM:@LOGNAME:VM:@USERNO:VM:'MD'
+*#MVON#*  DIO = SVRNAME:VM:@WHO:VM:@LOGNAME:VM:@USERNO:VM:'VOC'
+*#NR#*  DIO = SVRNAME:VM:@ACCOUNT:VM:@LOGNAME:VM:FIELD(WHO,' ',1):VM:'MD'
+*#OAS#*  DIO = SVRNAME:VM:@WHO:VM:@LOGNAME:VM:@USERNO:VM:'VOC'
+*#OI#*  DIO = SVRNAME:VM:@APPID<1>:VM:@USERNAME:VM:SYSTEM(18):VM:'MD'
+*#ON#*  DIO = SVRNAME:VM:@WHO:VM:@LOGNAME:VM:@USERNO:VM:'VOC'
+*#PICK#*  DIO = SVRNAME:VM:@ACCOUNT:VM:@USER:VM:@PIB:VM:'MD'
+*#QM#*  DIO = SVRNAME:VM:@WHO:VM:@LOGNAME:VM:@USERNO:VM:'VOC'
+*#UD#*  DIO = SVRNAME:VM:@WHO:VM:@LOGNAME:VM:FIELD(OCONV('','U50BB'),' ',1):VM:'VOC'
+*#UV#*  DIO = SVRNAME:VM:@WHO:VM:@LOGNAME:VM:@USERNO:VM:'VOC'
+  DIO = DIO:VM:FIELD(CLI.VERSION,'.',1):'.':FIELD(CLI.VERSION,'.',2)
+  DIO = DIO:VM:NOT(READ.OK):'.':NOT(WRITE.OK):'.':NOT(CONV.OK):'.':NOT(EXEC.OK)
+ CASE 1
+  DIO = ''
+  ERRCD = 3
+  ERRMSG = 'Undefined information code: ' : DIO
+END CASE
+RETURN
+*
+**************************************************************************
+*
+* GET ITEM INFORMATION (PROPERTIES)
+*
+*  INPUT:
+*
+*   DIO<1> = FILE NAME
+*   DIO<2> = ITEM ID
+*   DIO<3> = PROPERTY CODES (MV: -1=ATTRIBUTES, -2=SIZE, -3=LOCATION)
+*   DIO<3,1> = FIRST PROPERTY CODE
+*   DIO<3,2> = SECOND PROPERTY CODE
+*   DIO<3,n> = Nth PROPERTY CODE
+*
+*  OUTPUT:
+*
+*   DIO = '' IF ITEM DOES NOT EXIST
+*   DIO<1,1> = PROPERTY VALUE FOR FIRST CODE IN PROPERTY CODES
+*   DIO<1,2> = PROPERTY VALUE FOR SECOND CODE IN PROPERTY CODES
+*   DIO<1,n> = PROPERTY VALUE FOR Nth CODE IN PROPERTY CODES
+*
+**************************************************************************
+*
+DO.ITEM.INFO: *
+*
+*#DEFAULT#*WHO = OCONV('','U50BB')
+*#DEFAULT#*ACCT = FIELD(WHO,' ',3)
+*#DEFAULT#*IF ACCT = '' THEN ACCT = FIELD(WHO,' ',2)
+*#CACHE#*ACCT = @WHO
+*#JB#*ACCT = @WHO
+*#MVON#*ACCT = @WHO
+*#NR#*ACCT = @ACCOUNT
+*#OAS#*ACCT = @WHO
+*#OI#*ACCT = @APPID<1>
+*#ON#*ACCT = @WHO
+*#PICK#*ACCT = @ACCOUNT
+*#QM#*ACCT = @WHO
+*#UD#*ACCT = @WHO
+*#UV#*ACCT = @WHO
+ACCT = OCONV(ACCT,'MCU')
+GOSUB 600 ;* GET HIDDEN FILE LIST
+FILENAME = DIO<1>
+ID = DIO<2>
+RETURNINFO = DIO<3>
+DIO = ''
+GOSUB 500 ;* NEED LEVEL TO GET ATTRIBUTES & OTHER INFO
+OPEN FILENAME TO FV THEN
+ IF LVL < 3 THEN
+*#CACHE#*  IF LVL = 1 THEN TMPNAME = 'DICT ':ID ELSE
+*#CACHE#*   TMPNAME = FILENAME[6,999]
+*#CACHE#*   IF TMPNAME <> ID THEN TMPNAME=TMPNAME:',':ID
+*#CACHE#*  END
+*#CACHE#*  OPEN TMPNAME TO FTMP THEN
+*#CACHE#*   DINFO = 'F' ;* DUMMY D-POINTER
+*#CACHE#*  END ELSE
+*#JB#*  IF LVL = 1 THEN TMPNAME = 'DICT ':ID ELSE
+*#JB#*   TMPNAME = FILENAME[6,999]
+*#JB#*   IF TMPNAME <> ID THEN TMPNAME=TMPNAME:',':ID
+*#JB#*  END
+*#JB#*  OPEN TMPNAME TO FTMP THEN
+*#JB#*   DINFO = 'F' ;* DUMMY F-POINTER
+*#JB#*  END ELSE
+*#MVON#*  IF LVL = 1 THEN TMPNAME = 'DICT ':ID ELSE
+*#MVON#*   TMPNAME = FILENAME[6,999]
+*#MVON#*   IF TMPNAME <> ID THEN TMPNAME=TMPNAME:',':ID
+*#MVON#*  END
+*#MVON#*  OPEN TMPNAME TO FTMP THEN
+*#MVON#*   DINFO = 'F' ;* DUMMY D-POINTER
+*#MVON#*  END ELSE
+*#OAS#*  IF LVL = 1 THEN TMPNAME = 'DICT ':ID ELSE
+*#OAS#*   TMPNAME = FILENAME[6,999]
+*#OAS#*   IF TMPNAME <> ID THEN TMPNAME=TMPNAME:',':ID
+*#OAS#*  END
+*#OAS#*  OPEN TMPNAME TO FTMP THEN
+*#OAS#*   DINFO = 'F' ;* DUMMY D-POINTER
+*#OAS#*  END ELSE
+*#ON#*  IF LVL = 1 THEN TMPNAME = 'DICT ':ID ELSE
+*#ON#*   TMPNAME = FILENAME[6,999]
+*#ON#*   IF TMPNAME <> ID THEN TMPNAME=TMPNAME:',':ID
+*#ON#*  END
+*#ON#*  OPEN TMPNAME TO FTMP THEN
+*#ON#*   DINFO = 'F' ;* DUMMY D-POINTER
+*#ON#*  END ELSE
+*#QM#*  IF LVL = 1 THEN TMPNAME = 'DICT ':ID ELSE
+*#QM#*   TMPNAME = FILENAME[6,999]
+*#QM#*   IF TMPNAME <> ID THEN TMPNAME=TMPNAME:',':ID
+*#QM#*  END
+*#QM#*  OPEN TMPNAME TO FTMP THEN
+*#QM#*   DINFO = 'F' ;* DUMMY D-POINTER
+*#QM#*  END ELSE
+*#UD#*  IF LVL = 1 THEN TMPNAME = 'DICT ':ID ELSE
+*#UD#*   TMPNAME = FILENAME[6,999]
+*#UD#*   IF TMPNAME <> ID THEN TMPNAME=TMPNAME:',':ID
+*#UD#*  END
+*#UD#*  OPEN TMPNAME TO FTMP THEN
+*#UD#*   DINFO = 'F' ;* DUMMY D-POINTER
+*#UD#*  END ELSE
+*#UV#*  IF LVL = 1 THEN TMPNAME = 'DICT ':ID ELSE
+*#UV#*   TMPNAME = FILENAME[6,999]
+*#UV#*   IF TMPNAME <> ID THEN TMPNAME=TMPNAME:',':ID
+*#UV#*  END
+*#UV#*  OPEN TMPNAME TO FTMP THEN
+*#UV#*   DINFO = 'F' ;* DUMMY D-POINTER
+*#UV#*  END ELSE
+  READ DINFO FROM FV,ID ELSE
+*#DEFAULT#*   IF LVL = 1 THEN TMPNAME = 'DICT ':ID ELSE
+*#DEFAULT#*    TMPNAME = FILENAME[6,999]
+*#DEFAULT#*    IF TMPNAME <> ID THEN TMPNAME=TMPNAME:',':ID
+*#DEFAULT#*   END
+*#DEFAULT#*   OPEN TMPNAME TO FTMP THEN
+*#DEFAULT#*    DINFO = 'Q' ;* DUMMY Q-POINTER
+*#DEFAULT#*   END ELSE
+*#OI#*   IF LVL = 1 THEN TMPNAME = 'DICT ':ID ELSE
+*#OI#*    TMPNAME = FILENAME[6,999]
+*#OI#*    IF TMPNAME <> ID THEN TMPNAME=TMPNAME:',':ID
+*#OI#*   END  
+*#OI#*   OPEN TMPNAME TO FTMP THEN
+*#OI#*    IF LVL = 1 THEN TMPNAME = 'DICT.':ID
+*#OI#*    LOCATE(TMPNAME,@TABLES;XX) THEN
+*#OI#*     DINFO = 'D' ;* DUMMY D-POINTER
+*#OI#*    END ELSE   
+*#OI#*     DINFO = 'Q' ;* DUMMY Q-POINTER
+*#OI#*    END
+*#OI#*   END ELSE
+*#NR#*   IF LVL = 1 THEN TMPNAME = 'DICT ':ID ELSE
+*#NR#*    TMPNAME = FILENAME[6,999]
+*#NR#*    IF TMPNAME <> ID THEN TMPNAME=TMPNAME:',':ID
+*#NR#*   END
+*#NR#*   OPEN TMPNAME TO FTMP THEN
+*#NR#*    DINFO = 'Q' ;* DUMMY Q-POINTER
+*#NR#*   END ELSE
+*#PICK#*   IF LVL = 1 THEN TMPNAME = 'DICT ':ID ELSE
+*#PICK#*    TMPNAME = FILENAME[6,999]
+*#PICK#*    IF TMPNAME <> ID THEN TMPNAME=TMPNAME:',':ID
+*#PICK#*   END
+*#PICK#*   OPEN TMPNAME TO FTMP THEN
+*#PICK#*    DINFO = 'Q' ;* DUMMY Q-POINTER
+*#PICK#*   END ELSE
+    ERRCD = 202
+    ERRMSG = 'Unable to read record ':FILENAME:' ':ID:'!'
+    RETURN
+   END
+*#DEFAULT#*  END
+*#CACHE#*  END
+*#JB#*  END
+*#MVON#*  END
+*#NR#*  END
+*#OAS#*  END
+*#OI#*  END
+*#ON#*  END
+*#PICK#*  END
+*#QM#*  END
+*#UD#*  END
+*#UV#*  END
+  GOSUB 200
+ END ELSE
+  READV DUMMY FROM FV,ID,1 ELSE
+   ERRCD = 202
+   ERRMSG = 'Unable to read record ':FILENAME:' ':ID:'!'
+   RETURN
+  END
+ END
+ GOSUB 300 ;* NEXT ROUTINE REQUIRES ATTS(), DINFO TO BE SET UP FIRST
+ GOSUB 400
+ DIO = INFO
+END ELSE
+ ERRCD = 200
+ ERRMSG = 'Invalid file name: ':FILENAME:'!'
+END
+RETURN
+*
+**************************************************************************
+*
+* TEST IF FILE EXISTS
+*
+*  INPUT:
+*
+*   DIO<1> = FILE NAME
+*
+*  OUTPUT:
+*
+*   DIO: 0 = FILE DOES NOT EXIST, 1 = FILE EXISTS
+*
+**************************************************************************
+*
+DO.FILE.EXISTS: *
+*
+OPEN DIO<1> TO FTMP THEN
+ DIO = '1'
+END ELSE
+ DIO = '0'
+END
+RETURN
+*
+**************************************************************************
+*
+* TEST IF ITEM EXISTS
+*
+*  INPUT:
+*
+*   DIO<1> = FILE NAME
+*   DIO<2> = ITEM ID
+*
+*  OUTPUT:
+*
+*   DIO: 0 = ITEM OR FILE DOES NOT EXIST, 1 = ITEM AND FILE EXIST
+*
+**************************************************************************
+*
+DO.ITEM.EXISTS: *
+*
+OPEN DIO<1> TO FTMP THEN
+ READV X FROM FTMP,DIO<2>,1 THEN
+  DIO = '1'
+ END ELSE
+  DIO = '0'
+ END
+END ELSE
+ DIO = '0'
+END
+RETURN
+*
+**************************************************************************
+*
+* GET SETTING FROM CONFIG FILE
+*
+*  INPUT:
+*
+*   DIO<1> = SETTING ITEM ID
+*   DIO<2> = SETTING ATTRIBUTE
+*
+*  OUTPUT:
+*
+*   DIO: SETTING VALUE (MAY BE MULTI-VALUED)
+*
+*  NOTE: CONFIG ITEMS MUST HAVE 'X' IN ATTR 1
+*
+**************************************************************************
+*
+DO.GET.SETTING: *
+*
+ID = DIO<1>
+X = DIO<2>
+DIO = ''
+IF NUM(X) THEN
+ IF X > 0 AND X < 1000 THEN
+  READ ITM FROM CFGFV,ID ELSE ITM = 'X' ;* on new item, initialize attr 1 = 'X'
+  IF ITM<1>[1,1] = 'X' THEN  ;* ensure config item attr 1 = 'X'
+   DIO = ITM<X>
+  END
+ END
+END
+RETURN
+*
+**************************************************************************
+*
+* SAVE SETTING IN CONFIG FILE
+*
+*  INPUT:
+*
+*   DIO<1> = SETTING ITEM ID
+*   DIO<2> = SETTING ATTRIBUTE
+*   DIO<3> = SETTING VALUE (MAY BE MULTI-VALUED)
+*
+*  OUTPUT: NONE
+*
+*  NOTE: NEW CONFIG ITEM ATTR 1 INITIALIZED TO 'X'
+*
+**************************************************************************
+*
+DO.SAVE.SETTING: *
+*
+ID = DIO<1>
+X = DIO<2>
+IF NUM(X) THEN
+ IF X > 0 AND X < 1000 THEN
+  READ ITM FROM CFGFV,ID ELSE ITM = 'X' ;* on new item, initialize attr 1 = 'X'
+  IF ITM<1>[1,1] = 'X' THEN  ;* ensure config item attr 1 = 'X'
+   ITM<X> = DIO<3>
+   WRITE ITM ON CFGFV,ID
+  END
+ END
+END
+DIO = ''
+RETURN
+*
+**************************************************************************
+*
+* RETURN CURRENT CONFIGURATION (MAT PARAMS)
+*
+*  INPUT: NONE
+*
+*  OUTPUT:
+*
+*   DYNAMIC ARRAY OF CURRENT CONFIGURATION (MAT PARAMS)
+*
+**************************************************************************
+*
+DO.GET.CONFIG: *
+*
+DIO = ''
+FOR I = 1 TO 30
+ DIO<I> = PARAMS(I)
+NEXT I
+RETURN
+*
+**************************************************************************
+*
+END

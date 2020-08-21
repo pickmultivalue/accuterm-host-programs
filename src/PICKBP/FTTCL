@@ -1,0 +1,29 @@
+*
+**************************************************************************
+*Copyright (c) 2002 Zumasys,Inc. as an unpublished work. All rights      *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTTCL
+* AUTHOR: PJS
+* VERSION: 5.0.1
+* CREATED: 09/12/2002
+* UPDATED: 09/12/2002
+*
+* MAINTENANCE RECORD:
+*
+* 5.0.1
+*  PJS 09/12/2002
+*  Routine created to identify that port is at TCL
+*
+**************************************************************************
+**************************************************************************
+*
+PRINT "**TCL**"
+*
+END

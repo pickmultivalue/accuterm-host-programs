@@ -1,0 +1,188 @@
+*
+**************************************************************************
+*Copyright (c) 2004 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: SUI.TEST
+* AUTHOR: PJS
+* VERSION: 1.0.0
+* CREATED: 06/01/2004
+* UPDATED: 
+*
+* MAINTENANCE RECORD:
+*
+**************************************************************************
+**************************************************************************
+*
+* Smart User Interface test program
+*
+**************************************************************************
+**************************************************************************
+*
+EQU VM TO CHAR(253)
+EQU BEL TO CHAR(7)
+*
+$INCLUDE SUI.TERMDEF
+*
+CALL SUI.GET.TERM(MAT TermDef)
+*
+* Window, Display & Input function test
+*
+PRINT TERM.RESET:
+PRINT TERM.CLEAR:
+*
+* display background text
+PRINT @(0,0):'This is the first line on the screen - ':
+IF TERM.SPECIAL NE '' THEN PRINT 'AccuTerm detected' ELSE PRINT 'not running AccuTerm'
+PRINT @(2,10):'This line of text appears under the window':
+SLEEP 1  
+CALL SUI.OPEN.WINDOW(5,1,70,22,'F','New Window',1,WinID,RtnCom,MAT TermDef)
+PRINT @(0,23):'ID=':WinID:' Cmd=':RtnCom:TERM.CEOL:
+IF RtnCom NE 0 AND RtnCom NE TERM.FAKEWIN$ THEN
+ PRINT @(0,0):'This terminal does not support true windowing!':TERM.CEOL:
+END ELSE
+ PRINT @(0,0):'overwriting the first line':TERM.CEOL:
+END
+SLEEP 1
+*
+* Label test
+CALL SUI.DISPLAY.LABEL(0, 0, 68, 'C', 0, 'This label should be centered in the window', RtnCom, MAT TermDef)
+CALL SUI.DISPLAY.LABEL(2, 2, 35, 'L', 0, 'Select style:', RtnCom, MAT TermDef)
+CALL SUI.DISPLAY.LABEL(2, 9, 15, 'R', 0, 'Description:', RtnCom, MAT TermDef)
+CALL SUI.DISPLAY.LABEL(2, 11, 15, 'R', 0, 'Notes:', RtnCom, MAT TermDef)
+CALL SUI.DISPLAY.LABEL(39, 2, 20, 'L', 0, 'Options:', RtnCom, MAT TermDef)
+CALL SUI.DISPLAY.LABEL(20, 17, 40, 'L', 0, 'Press F2 to exit', RtnCom, MAT TermDef)
+* 
+* Single-select list box display test
+List = ''
+List<1,1,1> = 'Red'; List<1,1,2> = 'solid oak with metal trim'
+List<1,2,1> = 'Blue'; List<1,2,2> = 'polished cherry wood'
+List<1,3,1> = 'Yellow'; List<1,3,2> = 'stainless steel'
+List<1,4,1> = 'Green'; List<1,4,2> = 'medium density fiberboard'
+List<1,5,1> = 'Violet'; List<1,5,2> = 'walnut veneer'
+List<1,6,1> = 'Black'; List<1,6,2> = 'vinyl laminate'
+List<1,7,1> = 'Brown'; List<1,7,2> = 'brushed aluminum'
+Headings = 'Color':VM:'Finish'
+Widths = '8':VM:'25'
+LSel = 0
+LBegPos = 0
+LCurPos = 0
+CALL SUI.DISPLAY.LIST(2, 3, 35, 5, 0, '', Headings, Widths, List, LSel, LBegPos, RtnCom, MAT TermDef)
+*
+* Multi-select list box display test
+MList = ''
+MList<1,1,1> = 'preferred'
+MList<1,2,1> = 'cash only'
+MList<1,3,1> = 'own truck'
+MList<1,4,1> = 'greeting'
+MSel = ''
+MBegPos = 0
+MCurPos = 0
+CALL SUI.DISPLAY.LIST(39, 3, 15, 4, 0, 'M', '', '', MList, MSel, MCurPos, RtnCom, MAT TermDef)
+*
+* Single-line text display test
+SText = 'Office gizmo for MAC'
+SBegPos = 0
+SCurPos = 0
+CALL SUI.DISPLAY.TEXT(18, 9, 25, 1, 0, '', SText, SBegPos, RtnCom, MAT TermDef)
+*
+* Multi-line text display test
+MLText = 'Your new time for class 223 is SUNDAY AT 1:00 TO 2:30.  Thanks for being flexible in allowing me to move your class.'
+MLBegPos = 0
+MLCurPos = 0
+CALL SUI.DISPLAY.TEXT(18, 11, 25, 6, 0, '', MLText, MLBegPos, RtnCom, MAT TermDef)
+*
+* Button bar display test
+Captions = ''; Hotkeys = ''
+Captions<1,-1> = 'Save'; Hotkeys<1,-1> = 'S'
+Captions<1,-1> = 'eXit'; Hotkeys<1,-1> = 'X'
+Captions<1,-1> = 'Print'; Hotkeys<1,-1> = 'P'
+Captions<1,-1> = 'Label'; Hotkeys<1,-1> = 'L'
+Btn = 0
+CALL SUI.DISPLAY.BTNBAR(0, 18, 68, 1, '', Captions, Hotkeys, 'C', RtnCom, MAT TermDef)
+*
+* Input Loop
+Fld = 1
+LOOP
+ *
+ * Get keyboard input for current field
+ BEGIN CASE
+  CASE Fld = 1
+   * Single-select list input test
+   CALL SUI.INPUT.LIST(2, 3, 35, 5, '', Headings, Widths, List, LSel, LBegPos, LCurPos, RtnCom, MAT TermDef)
+   PRINT @(0,23):'Selection=':LSel:TERM.CEOL:
+  CASE Fld = 2
+   * Multi-select list input test
+   CALL SUI.INPUT.LIST(39, 3, 15, 4, 'M', '', '', MList, MSel, MBegPos, MCurPos, RtnCom, MAT TermDef)
+   PRINT @(0,23):'Selection=':MSel:TERM.CEOL:
+  CASE Fld = 3
+   * Single-line text input test
+   CALL SUI.INPUT.TEXT(18, 9, 25, 1, '', 0, SText, SBegPos, SCurPos, RtnCom, MAT TermDef)
+   PRINT @(0,23):'Text=':SText:TERM.CEOL:
+  CASE Fld = 4
+   * Multi-line text input test
+   CALL SUI.INPUT.TEXT(18, 11, 25, 6, '', 0, MLText, MLBegPos, MLCurPos, RtnCom, MAT TermDef)
+   PRINT @(0,23):'Text=':MLText[1,50]:'...':TERM.CEOL:
+  CASE Fld = 5
+   * Button bar input test
+   CALL SUI.INPUT.BTNBAR(0, 18, 68, 1, '', Captions, Hotkeys, 'C', Btn, Chr, RtnCom, MAT TermDef)
+   IF RtnCom = TERM.ENTER$ THEN
+    BEGIN CASE
+     CASE Btn = 1
+      PRINT BEL:@(0,23):'saving item...':TERM.CEOL:
+     CASE Btn = 2
+      Fld = 0 ;* Exit!
+     CASE Btn = 3
+      PRINT BEL:@(0,23):'printing document...':TERM.CEOL:
+     CASE Btn = 4
+      PRINT BEL:@(0,23):'printing label...':TERM.CEOL:
+    END CASE
+    RtnCom = 0
+   END
+  CASE 1
+   * Exit
+   Fld = 0
+ END CASE  
+ *
+ * Decode keyboard command & navigate to next field
+ BEGIN CASE
+  CASE RtnCom = TERM.F2$
+   Fld = 0 ;* Exit!
+  CASE RtnCom = TERM.ENTER$ OR RtnCom = TERM.TAB$
+   IF Fld < 5 THEN Fld = Fld + 1 ;* Next field
+  CASE RtnCom = TERM.STAB$
+   IF Fld > 1 THEN Fld = Fld - 1 ;* Previous field
+  CASE RtnCom >= TERM.LEFTBUTTON$ AND RtnCom <= TERM.MIDBUTTON$
+   GOSUB CHECK.MOUSE.CLICK
+  CASE RtnCom < 0
+   PRINT BEL:@(0,23):'Error code: ':RtnCom:TERM.CEOL:
+   Fld = 0
+ END CASE  
+ *
+UNTIL Fld = 0 DO
+REPEAT
+*
+* Test message box
+CALL SUI.MESSAGE.BOX(33,10,20,4,'Thanks for testing!','OK','','','B',0,RtnCom,MAT TermDef)
+*
+* Window test
+CALL SUI.CLOSE.WINDOW(0, RtnCom, MAT TermDef)
+IF RtnCom = TERM.REFRESH$ THEN
+ PRINT TERM.CLEAR:
+ PRINT 'windowing not supported!'
+END
+PRINT TERM.CSRON:
+STOP
+!
+CHECK.MOUSE.CLICK: *
+CALL SUI.MOUSE.HIT(2, 3, 35, 5, 0, Hit, MAT TermDef); IF Hit THEN Fld = 1; RETURN
+CALL SUI.MOUSE.HIT(39, 3, 15, 4, 0, Hit, MAT TermDef); IF Hit THEN Fld = 2; RETURN
+CALL SUI.MOUSE.HIT(18, 9, 25, 1, 0, Hit, MAT TermDef); IF Hit THEN Fld = 3; RETURN
+CALL SUI.MOUSE.HIT(18, 11, 25, 6, 0, Hit, MAT TermDef); IF Hit THEN Fld = 4; RETURN
+CALL SUI.MOUSE.HIT(0, 18, 68, 1, 0, Hit, MAT TermDef); IF Hit THEN Fld = 5; RETURN
+RETURN
+END

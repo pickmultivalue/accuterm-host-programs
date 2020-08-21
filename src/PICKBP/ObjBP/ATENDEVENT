@@ -1,0 +1,63 @@
+SUBROUTINE ATENDEVENT(OBJID, EVENTNAME, ARGS, ERRMSG, OPTS)
+**************************************************************************
+*Copyright (c) 1998-2000 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATENDEVENT
+* AUTHOR: PJS
+* VERSION: 4.0.1
+* CREATED: 01/01/1998
+* UPDATED: 09/25/2000
+*
+* MAINTENANCE RECORD:
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM OBJECT MANAGER - END EVENT
+*
+* CALL THIS SUBROUTINE TO SIGNAL THE END OF EVENT HANDLING.
+* PASS THE OBJID, EVENTNAME AND ARGS AS THEY WERE RETURNED
+* FROM THE ATGETEVENT ROUTINE. YOU MAY MODIFY ANY OF THE ARGS
+* VALUES IF THE OBJECT PERMITS THIS BEFORE CALLING ATENDEVENT.
+* NO OTHER EVENTS MAY BE MONITORED UNTIL ATENDEVENT IS CALLED. IF AN
+* ERROR OCCURS, THE ERROR MESSAGE IS RETURNED IN THE ERRMSG ARGUMENT.
+*
+**************************************************************************
+*
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30), CLIENV(10)
+FOR I = 1 TO 30; PARAMS(I) = OPTS<I>; NEXT I
+FOR I = 1 TO 10; CLIENV(I) = OPTS<I+30>; NEXT I
+IF PARAMS(1) < 1 THEN
+ ERRMSG = 'Subroutine ATINITOBJMGR must be called before using this function!'
+ RETURN
+END
+LOOP K = INDEX(ARGS,VM,1) WHILE K DO ARGS = ARGS[1,K-1]:SVM:ARGS[K+1,9999] REPEAT
+REC = '9':VM:OBJID:VM:EVENTNAME:VM:ARGS
+CALL FTOBJREQ('a',REC,RSP,0,MAT PARAMS,MAT CLIENV)
+IF RSP[1,4] EQ 'ERR:' THEN
+ ERRNUM = FIELD(RSP,' ',2)
+ ERRMSG = RSP[COL2()+1,9999]
+ IF ERRMSG EQ '' THEN ERRMSG = 'Unknown error: ':ERRNUM
+ RETURN
+END
+ERRNUM = RSP<1,5>
+IF ERRNUM THEN
+ ERRMSG = RSP<1,6>
+ RETURN
+END
+ERRMSG = ''
+RETURN
+*
+END

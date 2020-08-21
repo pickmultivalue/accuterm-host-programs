@@ -1,0 +1,153 @@
+SUBROUTINE SUI.CLOSE.WINDOW(WinID, RtnCom, MAT TermDef)
+**************************************************************************
+*Copyright (c) 2004 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: SUI.CLOSE.WINDOW
+* AUTHOR: PJS
+* VERSION: 1.0.1
+* CREATED: 06/01/2004
+* UPDATED: 01/07/2005
+*
+* MAINTENANCE RECORD:
+*
+* 1.0.1
+*  PJS 01/07/2005
+*   Added code to use new AccuTerm Save/Restore feature for windowing.
+*
+*************************************************************************
+*************************************************************************
+*
+* SMART USER INTERFACE: Close Window. If window is fake, then simply
+*                       remove the window element from the window
+*                       structure and return with RtnCom = TERM.REFRESH$
+*
+*************************************************************************
+*************************************************************************
+*
+*   Input Interface:
+*
+*    WinID:   ID of window to close (or zero to close current window)
+*
+*    TermDef: terminal definitions as set up by SUI.GET.TERM
+*
+*
+*   Output Interface:
+*
+*    RtnCom:  zero if success, TERM.REFRESH$ if true windowing
+*             is not supported and the window was opened with
+*             the F option, else error code
+*
+*    TERM.WINDOW element in TermDef array updated
+*
+*************************************************************************
+*
+$INCLUDE SUI.TERMDEF
+$INCLUDE SUI.WINDEF
+$INCLUDE SUI.CONFIG
+*
+EQU VM TO CHAR(253), SVM TO CHAR(252)
+EQU ESC TO CHAR(27), STX TO CHAR(2), EM TO CHAR(25), CR TO CHAR(13)
+*
+* Substitution variable strings for SELPAGE command
+EQU varPg TO 'PG'
+*
+* Locate window information
+WinIdx = 0
+N = DCOUNT(TERM.WINDOW,VM)
+IF WinID > 0 THEN
+ FOR I = 2 TO N
+  IF WinID = TERM.WINDOW<1,I,SUI.WINID$> THEN
+   WinIdx = I
+   I = N
+  END
+ NEXT I
+ IF WinIdx = 0 THEN
+  RtnCom = SUI.ERROR.INVID$
+  RETURN
+ END
+END ELSE
+ IF N > 1 THEN
+  * close current window (first one in window list)
+  WinIdx = 2
+ END ELSE
+  * no windows open - done
+  RtnCom = 0
+  RETURN
+ END
+END
+*
+RtnCom = SUI.ERROR.NOTSUPPORTED$ ;* Assume windowing not supported
+WinInf = TERM.WINDOW<1,WinIdx>
+*
+IF INDEX(WinInf<1,1,SUI.WINMODE$>,'F',1) = 0 THEN
+ * Use AccuTerm save/restore function to close window?
+ IF INDEX(TERM.SPECIAL,'J',1) THEN
+  WinID = WinInf<1,1,SUI.WINID$>
+  PRINT ESC : STX : 'jR,' : WinID : ',,,,1' : CR :
+  RtnCom = 0 ;* Previous screen restored - success
+ END ELSE
+  * Use AccuTerm script to close window?
+  IF INDEX(TERM.SPECIAL,'S',1) THEN
+   *
+   * build Script to restore previous Screen contents
+   WinID = WinInf<1,1,SUI.WINID$>
+   Scr = ''
+   Scr = Scr : 'Dim sID as String' : EM
+   Scr = Scr : 'sID = "SUIWID" & CStr(InitSession.ID) & ".' : WinID : '"' : EM
+   Scr = Scr : 'InitSession.SetBlock Common(sID),0,0' : EM
+   Scr = Scr : 'Common(sID) = NOTHING' : EM
+   Scr = Scr : 'InitSession.Output vbCR'
+   * execute script to restore previous Screen contents
+   $INCLUDE SUI.TACLEAR
+   PRINT ESC : STX : 'P' : Scr : CR :
+   PROMPT ''
+   INPUT X:
+   RtnCom = 0 ;* Previous screen restored - success
+   *
+  END ELSE
+   *
+   * Use native terminal block copy for windowing
+   IF TERM.SELPAGE NE '' THEN
+    IF TERM.PAGE > 0 THEN
+     RtnCom = 0 ;* Assume command format OK
+     Cmd = TERM.SELPAGE
+     varName = varPg; varVal = TERM.PAGE - 1; GOSUB VARSUBST
+     IF RtnCom = 0 THEN
+      PRINT Cmd:
+      TERM.PAGE = TERM.PAGE - 1
+     END
+    END
+   END
+   *
+  END
+ END
+END ELSE
+ RtnCom = TERM.REFRESH$
+END
+*
+* Update window structure in TERM.WINDOW
+TERM.WINDOW = DELETE(TERM.WINDOW,1,WinIdx)
+*
+RETURN
+!
+VARSUBST: *
+*
+varx = SVM:varName:SVM
+K = INDEX(Cmd,varx,1)
+IF K = 0 THEN
+ varx = SVM:varName:'+1':SVM
+ K = INDEX(Cmd,varx,1)
+ varVal = varVal + 1
+END
+IF K THEN
+ Cmd = Cmd[1,K-1]:varVal:Cmd[K+LEN(varx),9999]
+END ELSE
+ RtnCom = SUI.ERROR.BADVAR$
+END
+RETURN
+END

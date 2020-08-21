@@ -1,0 +1,132 @@
+SUBROUTINE FTCONFIG(OPTS,MAT PARAMS,FV)
+**************************************************************************
+*Copyright (c) 1993-2013 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTCONFIG
+* AUTHOR: PJS
+* VERSION: 7.2.1
+* CREATED: 01/01/1993
+* UPDATED: 10/09/2013
+*
+* MAINTENANCE RECORD:
+*
+* 7.2.1
+*  PJS 10/09/2013
+*   Modified this routine to handle settings that are not in the first
+*   30 attributes of KMTCFG, passing CNF = 2 and using PARAMS(1) as a
+*   dynamic array containing the current settings being configured.
+*   This was necessary to support FTSETUP "miscellaneous settings".
+*
+* 5.4.1
+*  PJS 04/18/2007
+*   Added support for custom settings in hex.
+*  
+* 4.0.2
+*  PJS 11/03/2000
+*   Allow more than 30 attributes in KMTCFG and FTPARAMS items
+*   (the CONFIG() array is still dimensioned at 30 elements)
+*   
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* UPDATE FILE TRANSFER CONFIGURATION
+*
+**************************************************************************
+**************************************************************************
+*
+* FTCONFIG() SUBROUTINE INTERFACE
+*
+* INPUT:  PARAMS  = CURRENT FILE TRANSFER PARAMETER SETTINGS & FLAGS
+*         OPTS    = STRING OF PARAM INDICIES TO UPDATE
+*         FV      = CONFIG FILE VARIABLE (FTBP)
+********************************************************************
+*
+DIM PARAMS(30),CONFIG(30)
+EQU SETTINGS TO CONFIG(1)
+*
+CNF=1
+LST=''
+N=0
+K=DCOUNT(OPTS,',')
+FOR I=1 TO K
+ RNG=FIELD(OPTS,',',I)
+ N1=FIELD(RNG,'-',1)
+ N2=FIELD(RNG,'-',2)
+ IF N2='' THEN N2=N1
+ FOR J=N1 TO N2
+  LST<-1>=J
+  N=N+1
+  IF J>30 THEN CNF=2 ;* must switch to settings mode instead of config mode - PARAMS only handles first 30 attr
+ NEXT J
+NEXT I
+READ DEFAULTS FROM FV,'FTPARAMS' ELSE RETURN
+READ CFG FROM FV,'KMTCFG' ELSE CFG=''
+MAT CONFIG=''
+FOR J=1 TO N
+ I=LST<J>
+ Z=CFG<I>
+ DEF=FIELD(DEFAULTS<I>,',',2)
+ CD=FIELD(DEFAULTS<I>,',',9)
+ IF DEF MATCHES '1N0N' AND CD EQ '' THEN
+  IF NOT(Z MATCHES '1N0N' AND Z >= FIELD(DEFAULTS<I>,',',3) AND Z <= FIELD(DEFAULTS<I>,',',4)) THEN
+   Z=DEF
+  END
+ END
+ IF CNF=2 THEN SETTINGS<I>=Z ELSE CONFIG(I)=Z
+NEXT J
+CALL FTOPTION(OPTS, CNF, MAT CONFIG, FV)
+LOOP
+ GOSUB 2222; IF NOT(CHKSTKINP) THEN
+  PRINT
+  IF CNF=2 THEN
+   PRINT 'Save new settings (Y/N) ? ':
+  END ELSE
+   PRINT 'Save configuration changes (Y/N) ? ':
+  END
+ END
+ INPUT OPT
+ OPT=OCONV(OPT[1,1],'MCU')
+ IF OPT EQ '?' THEN CALL FTHELP(4,FV)
+UNTIL OPT EQ 'Y' OR OPT EQ 'N' DO NULL REPEAT
+IF OPT EQ 'Y' THEN
+ FOR J=1 TO N
+  I=LST<J>
+  IF CNF=2 THEN Z=SETTINGS<I> ELSE Z=CONFIG(I)
+  CFG<I>=Z
+  IF CNF=1 THEN PARAMS(I)=CONFIG(I)
+ NEXT J
+ IF CNF=2 THEN PARAMS(1)=CONFIG(1)
+ WRITE CFG ON FV,'KMTCFG'
+ PRINT 'Configuration saved...'
+ PRINT
+END ELSE
+ PRINT 'Configuration not updated...'
+ PRINT
+END
+RETURN
+*
+**************************************************************************
+*
+* SUBROUTINE TO CHECK FOR STACKED INPUT
+*
+**************************************************************************
+*
+2222 *
+CHKSTKINP=0;*#GENERIC#*
+*#DEFAULT#*CHKSTKINP=SYSTEM(10)
+*#ULT#*CHKSTKINP=SYSTEM(29)
+*#ULTX#*CHKSTKINP=0
+RETURN
+*
+END

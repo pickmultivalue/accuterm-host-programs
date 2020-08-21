@@ -1,0 +1,155 @@
+SUBROUTINE ATGUIERROR(LEVEL, COMMAND, ID, PROP, ERRNUM, ERRMSG, ERRORS)
+**************************************************************************
+*Copyright (c) 1999-2012 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUIERROR
+* AUTHOR: PJS
+* VERSION: 7.1.2
+* CREATED: 11/01/1999
+* UPDATED: 12/17/2012
+*
+* MAINTENANCE RECORD:
+*
+* 7.1.2
+*  PJS 12/17/2012
+*   Fixed bad CASE statement syntax.
+*
+* 7.1.1
+*  PJS 08/22/2012
+*   When decoding the PROP argument, check COMMAND for 'PROP' or 'METH'
+*   substring, as well as equated constants GCGETPROP, GCSETPROP and
+*   GCMETHOD.
+*
+* 7.0.3
+*  PJS 08/09/2010
+*   Update GRINVVER error processing so that any versions (from the PROP
+*   argument) are displayed in the message. This should make understanding
+*   the cause for the failure clearer.
+*
+* 7.0.2
+*  PJS 11/15/2009
+*   Moved error messages & other text out of ATGUIEQUATES and into
+*   ATGUIERRMSG to eliminate code lines longer than 999 (helps make
+*   upgrading simpler since FTCHK does not get compiled automatically
+*   before performing the upgrade).
+*
+* 7.0.1
+*  PJS 10/08/2009
+*   Updated for GUI version 1.4. Added code to show method names in
+*   error message.
+*
+* 4.0.2
+*  PJS 12/24/2004
+*   If command or property name not found, display its number instead.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI MANAGER - LOG ERRORS
+*
+* THIS IS AN INTERNAL SUBROUTINE USED TO UPDATE THE ERRORS
+* STRUCTURE.
+*
+**************************************************************************
+*
+$INCLUDE ATGUIEQUATES
+EQU VM TO CHAR(253)
+IF LEVEL > ERRORS<1> THEN ERRORS<1> = LEVEL
+IF ERRMSG EQ '' THEN
+ IF ERRNUM >= GRFATAL AND ERRNUM <= GRLAST THEN
+  CALL ATGUIERRMSG('ERROR', ERRNUM, ERRMSG)
+ END
+END
+IF ERRMSG EQ '' THEN ERRMSG = 'ERR#':ERRNUM
+XTRA = ''
+DESC = ''
+IF COMMAND NE '' THEN
+ IF NUM(COMMAND) THEN
+  IF COMMAND > 0 THEN
+   CALL ATGUIERRMSG('COMMAND', COMMAND, NAME)
+   IF NAME EQ '' THEN
+    DESC = 'command=' : COMMAND
+   END ELSE
+    DESC = 'command=' : NAME
+   END
+  END
+ END ELSE
+  DESC = 'command=' : COMMAND
+ END
+END
+IF DESC NE '' THEN XTRA = ' (':DESC
+IF ID NE '' THEN
+ IF XTRA EQ '' THEN XTRA = ' (' ELSE XTRA = XTRA : ', '
+ XTRA = XTRA : 'ID=' : ID
+END
+DESC = ''
+IF PROP NE '' THEN
+ BEGIN CASE
+  CASE COMMAND = GCGETPROP OR COMMAND = GCSETPROP OR INDEX(COMMAND,'PROP',1)
+   * decode property name
+   IF NUM(PROP) THEN
+    IF PROP > 0 THEN
+     CALL ATGUIERRMSG('PROPERTY', PROP, NAME)
+     IF NAME EQ '' THEN
+      DESC = 'property=' : PROP
+     END ELSE
+      DESC = 'property=' : NAME
+     END
+    END
+   END ELSE
+    DESC = 'property=' : PROP
+   END
+  CASE COMMAND = GCMETHOD OR INDEX(COMMAND,'METH',1)
+   * decode method name
+   IF NUM(PROP) THEN
+    IF PROP >= 0 THEN
+     CALL ATGUIERRMSG('METHOD', PROP, NAME)
+     IF NAME EQ '' THEN
+      DESC = 'method=' : PROP
+     END ELSE
+      DESC = 'method=' : NAME
+     END
+    END
+   END ELSE
+    DESC = 'method=' : PROP
+   END
+  CASE ERRNUM = GRINVVER
+   IF PROP <> '' THEN
+    * DISPLAY VERSION NUMBERS IN ERROR MESSAGE
+    VERS = FIELD(PROP, '|', 1)
+    IF VERS <> '' THEN DESC = DESC : 'project=' : VERS : ' '
+    VERS = FIELD(PROP, '|', 2)
+    IF VERS <> '' THEN DESC = DESC : 'runtime=' : VERS : ' '
+    VERS = FIELD(PROP, '|', 3)
+    IF VERS = '' THEN VERS = ATGUIVERSION
+    DESC = DESC : 'library=' : VERS
+   END
+  CASE 1
+   IF PROP <> '' THEN DESC = PROP
+ END CASE
+END
+IF DESC NE '' THEN
+ IF XTRA EQ '' THEN XTRA = '(' ELSE XTRA = XTRA : ', '
+ XTRA = XTRA : DESC
+END
+IF XTRA NE '' THEN XTRA = XTRA : ')'
+ERRMSG = ERRMSG : XTRA
+ERRORS<-1> = LEVEL : VM : COMMAND : VM : ID : VM : PROP : VM : ERRNUM : VM : ERRMSG
+*
+* DISPLAY ERROR
+*
+*PRINT '[':ERRNUM:'] ':ERRMSG
+RETURN
+*
+END

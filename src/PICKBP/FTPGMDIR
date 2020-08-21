@@ -1,0 +1,109 @@
+SUBROUTINE FTPGMDIR(PATH)
+**************************************************************************
+*Copyright (c) 1999-2013 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTPGMDIR
+* AUTHOR: PJS
+* VERSION: 7.2.1
+* CREATED: 01/01/1999
+* UPDATED: 02/11/2015
+*
+* MAINTENANCE RECORD:
+*
+* 7.2.1
+*  PJS 02/11/2015
+*   Added code to detect MOBILE version.
+*
+* 7.1.1
+*  PJS 01/28/2013
+*   Updated for ATIE7.1 to return atwin.ini directory when product
+*   is ATIE client (WIN32IE or WIN32IS).
+*
+* 5.3.2
+*  PJS 10/08/2008
+*   Added another kludge so AccuTerm Internet sessions running
+*   in Firefox IETab return path of ATWIN.INI instead of path
+*   to Firefox.
+*
+* 5.3.1
+*  PJS 03/01/2006
+*   Added code to ensure returned path ends with a backslash.
+*
+* 5.0.2
+*  PJS 08/15/2005
+*   Added kludge so AccuTerm Internet sessions return path of
+*   ATWIN.INI file instead of c:\Program Files\Internet Explorer.
+*
+* 5.0.1
+*  PJS 09/11/2003
+*   Modified PRINT expressions for UniVerse because concatenated
+*   expressions are sent in separate packets in NT version of
+*   UniVerse causing TCP "delayed ack" performance issues.
+*
+* 4.0.2
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*   FIX LOGIC FOR DETERMINING PATH UNDER WIN32
+*
+**************************************************************************
+************************************************************************** 
+*
+* GET ACCUTERM EXECUTABLE PATH
+*
+**************************************************************************
+**************************************************************************
+*
+* FTPGMDIR() SUBROUTINE INTERFACE
+*
+* INPUT:  NONE
+*
+* OUTPUT: PATH     = DIRECTORY OF THE MAIN ACCUTERM EXECUTABLE
+*
+**************************************************************************
+*
+EQU ESC TO CHAR(27), STX TO CHAR(2), CR TO CHAR(13), EM TO CHAR(25)
+*
+ECHO OFF; PROMPT ''
+PRINT '':(ESC:STX:'I'):
+INPUT ANS:
+ANS=OCONV(ANS,'MCU')
+BEGIN CASE
+ CASE (ANS[1,8] EQ 'ACCUTERM' OR ANS[1,10] EQ 'ATEMULATOR') AND (FIELD(ANS,' ',2) MATCHES '1N.0X') AND (FIELD(ANS,' ',2) >= 4 OR ANS[10,6] EQ 'MOBILE')
+  IF ANS[1,16] EQ 'ACCUTERM/WIN32IE' OR ANS[1,16] EQ 'ACCUTERM/WIN32IS' THEN
+   * GET ATWIN.INI PATH
+   PRINT '':(ESC:STX:'%2'):
+  END ELSE
+   * GET APPLICATION PATH
+   PRINT '':(ESC:STX:'%0'):
+  END
+  INPUT ANS:
+  PATH=OCONV(ANS,'MCU')
+ CASE INDEX(ANS,'/WIN32',1) OR ANS[1,10] EQ 'ATEMULATOR'
+  PRINT '':(ESC:STX:'PINITSESSION.OUTPUT CURDIR$ & CHR$(13)':CR):
+  INPUT ANS:
+  PATH=OCONV(ANS,'MCU')
+ CASE INDEX(ANS,'/WIN 2',1)
+  PRINT '':(ESC:STX:'PINITSESSION.OUTPUT APPFILENAME$("") & CHR$(13)':CR):
+  INPUT ANS:
+  N=COUNT(ANS,'\')
+  IF N>0 THEN ANS=ANS[1,INDEX(ANS,'\',N)]
+  PATH=OCONV(ANS,'MCU')
+ CASE INDEX(ANS,'/WIN',1)
+  PATH = 'C:\ATWIN\'
+ CASE 1
+  PATH='C:\ACCUTERM\'
+END CASE
+ECHO ON; PROMPT '?'
+IF PATH NE '' THEN
+ IF PATH[LEN(PATH),1] NE '\' THEN PATH = PATH : '\'
+END
+RETURN
+*
+END

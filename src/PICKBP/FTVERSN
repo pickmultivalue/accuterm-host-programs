@@ -1,0 +1,436 @@
+SUBROUTINE FTVERSN(VERSN)
+**************************************************************************
+*Copyright (c) 2005-2020 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTVERSN
+* AUTHOR: PJS
+* VERSION: 8.0.11
+* CREATED: 02/17/2002
+* UPDATED: 08/14/2020
+*
+**************************************************************************
+**************************************************************************
+*
+* RETURN HOST PROGRAM VERSION NUMBER
+*
+**************************************************************************
+**************************************************************************
+*
+* FTVERSN() SUBROUTINE INTERFACE
+*
+* THIS ROUTINE SIMPLY RETURNS THE VERSION NUMBER OF THE FTBP HOST
+* PROGRAM LIBRARY. INCLUDED AS COMMENTS IN THIS ROUTINE IS THE
+* MAINTENANCE HISTORY OF THE LIBRARY AS A UNIT, BEGINNING WITH
+* RELEASE 5.0.1, WHICH IS WHEN THIS MODULE CAME INTO EXISTANCE.
+* THE VERSION NUMBER NOW OCCUPIES A SLOT IN THE CLIENV ARRAY.
+*
+* THE VERSION NUMBER IS INTERPRETED AS FOLLOWS:
+*
+*  A.B.C
+*
+*  A = MAJOR RELEASE OF ACCUTERM WHICH INCLUDES THE LIBRARY
+*  B = FUNCTIONALITY CHANGE (ADDED FEATURE, CHANGED ARGUMENT, ETC)
+*  C = LIBRARY BUILD NUMBER (UPDATED FOR BUG FIXES, ETC)
+*
+* NOTE THE ZEROS - THIS IS SO THAT VERSION 5.009 IS LOWER THAN 5.010
+* WHEN USING NUMERIC COMPARISONS...
+*
+VERSN = '8.000.011'
+RETURN
+*
+**************************************************************************
+*
+* FTBP Library Maintenance History
+*
+* 02/17/2002 - 5.0.1
+*  Module created
+*
+* 09/15/2002 - 5.1.1
+*  New FTTCL program added. Modified FTSERVER to accept command
+*  line argument '1' to enable auto-close. FTSERVER now uses
+*  "MultiValue host" as the default server name when no name has
+*  been specified in FTSETUP. Minor bug fixes preparing for
+*  AccuTerm 2K2 release.
+*
+* 10/08/2002 - 5.1.2
+*  New platform type ULTX added for ancient Ultimate using old
+*  EXECUTE syntax and no way to test for stacked input.
+*
+* 10/29/2002 - 5.1.3
+*  Small bug fixed in FTD for UV platform.
+*
+* 11/29/2002 - 5.1.4
+*  New arguments to 'FT' function in converter (FTMODE).
+*  New IDLIST syntax in FT, FTD, FTPICK and FTSELECT.
+*
+* 12/11/2002 - 5.1.5
+*  Fixed wizard program name in FTWIZ.
+*
+* 12/18/2002 - 5.1.6
+*  Fixed Q-pointer bug in FTFSI.
+*
+* 02/14/2003 - 5.1.7
+*  Fixed extra 'END ELSE' in FTFSI for JB, UD and UV platforms.
+*
+* 08/21/2003 - 5.1.8
+*  Added new file transfer status message for status code 10 in FTSTATUS.
+*
+* 09/10/2003 - 5.1.9
+*  Added ON ERROR and ELSE clauses to WRITE command in FTSVRSUB.
+*
+* 09/11/2003 - 5.1.10
+*   Modified PRINT expressions for UniVerse because concatenated
+*   expressions are sent in separate packets in NT version of
+*   UniVerse causing TCP "delayed ack" performance issues. By concatenating
+*   a leading NULL, and enclosing the remainder of the PRINT expression
+*   within parentheses, forced concanenation of expressions before printing
+*   so all elements end up in the same TCP packet. Change affects:
+*   DOSSVC, FTCONECT, FTFILIST, FTKERMIT, FTMODE, FTOBJREQ, FTPGMDIR,
+*   FTSTATUS, FTSVRSUB.
+*
+* 09/19/2003 - 5.1.11
+*  Modified FTRDITMS to eliminate forcing target file name to upper case.
+*
+* 09/29/2003 - 5.1.12
+*  Modified FTMODE to fix "append comma delimited text file" bug.
+*
+* 10/09/2003 - 5.1.13
+*  Modified FTPICK & FTCONECT to fix problem with echo being turned
+*  on in lower level routine. Also fixed unassigned variable problem
+*  in FTKERMIT.
+*
+* 10/21/2003 - 5.1.14
+*  Fix version history in this file (FTVERSN) to reflect updates made
+*  on 9/19/03 and 9/29/03.
+*
+* 10/24/2003 - 5.1.15
+*  Integrated QM platform specific code per mods from Martin Phillips.
+*  Changed LOCATE statements in FTFSI to use old style syntax for
+*  compatibility with QM & PI/Open. Added missing END statements for JB
+*  and UV sections in FTSETUP.
+*
+* 11/26/2003 - 5.1.16
+*  Fixed ATGUIGETPROP & ATGUISETPROP so that ID was formed correctly
+*  when referencing a menu ID on an MDI app.  
+*
+* 12/29/2003 - 5.1.17
+*  Updated FTSETUP for UV Ideal flavor.
+*
+* 01/12/2004 - 5.1.18
+*  Updated FTCHK for QM compatibility.
+*
+* 01/14/2004 - 5.1.19
+*  Fixed ON ERROR clauses for UniData - space required before semicolon
+*  after ERROR keyword.
+*
+* 02/03/2004 - 5.1.20
+*  Fixed problem in FTCHK where UV_AIX platform did not create @@SELECT
+*  verb in VOC.
+*
+* 03/05/2004 - 5.2.1
+*  Updated for 5.2 release. Added Northgate Reality 9+ platform type (NR).
+*
+* 04/07/2004 - 5.2.2
+*  Updated FTVSINF to identify emulator control correctly.
+*
+* 08/25/2004 - 5.2.3
+*  Updated FTSELECT for UV platform. Updated FTSETUP to set up OBJBP
+*  and GUIBP Q-pointers and catalogged programs.
+*
+* 09/29/2004 - 5.2.4
+*  Updated multiple routines changing the max string length constant
+*  from 999999 or 9999999 to 999999999 (1GB) to avoid problems sending
+*  really big files.
+*
+* 01/06/2005 - 5.2.5
+*  Cleanup for 5.2b release. Updated FTSVRSUB to call optional RCS
+*  subroutine for READ, WRITE, DELETE, RELEASE. Updated FTVSINF to
+*  handshake "tagged delimiters" capability with client. Added support
+*  for "tagged delimiters" to FTENCODE and FTDECODE.
+*
+* 01/13/2005 - 5.2.6/5.2.7
+*  Fixed bugs in FTENCODE & FTDECODE regarding tagged delimiters.
+*
+* 01/21/2005 - 5.2.8
+*  Added buffering to FTSVRSUB receive logic.
+*
+* 02/15/2005 - 5.2.9
+*  Fixed MCP fix in FTKERMIT.
+*
+* 03/04/2005 - 5.2.10
+*  Updated FTSETUP to correct problem copying catalogged program items
+*  with numeric characters in the ID (like ATGUIINIT2). Added one-second
+*  SLEEP to FTKERMIT to handle error packets better. Updated FTVSINF to
+*  handle release number for locale-dependent decimal point character.
+*
+* 08/16/2005 - 5.2.11
+*  Updated FTPGMDIR with kludge for ATIE sessions.
+*
+* 03/01/2006 - 5.3.1
+*  New program LOAD-ACCUTERM-PROGS added to FTBP programs. Modified FTCHK
+*  to properly recognize AccuTerm programs and only compile and catalog
+*  if recognized, to eliminate problems if user uploads AccuTerm's host
+*  programs into an account other than ACCUTERM.
+*
+* 05/08/2006 - 5.3.2
+*  New FTINITEX subroutine added, supercedes FTINIT & FTCLIENV. Performs
+*  host capabilities exchange, reads host input buffer size from KMTCFG<52>
+*  to enable larger packets when using packetized protocol, for improved
+*  performance (GUI, WED, etc.)
+*
+* 06/12/2006 - 5.3.3
+*  Added new FTGETMSG & FTSENDMSG routines for client/server protocol,
+*  which are now called by FTOBJREQ and FTSVRSUB. New protocol supports
+*  message length check and checksum check, to ensure data integrity.
+*  Updated FTVSINF for QM timed input & LOAD-ACCUTERM-PROGS timing tweaks.
+*
+* 07/24/2006 - 5.3.4
+*  Added new OI (OpenInsight CTO) platform. Updated NR platform code
+*  to use @ACCOUNT & @LOGNAME instead of U50BB. Enlarged VARS() array
+*  by one to accomodate VARS(26) as the MD or VOC file variable, and
+*  assigned VARS(24) to be the file variable of the dict of the file
+*  being transferred. New file variables used in FTRDDATA to use the
+*  ITYPE() or CALCULATE() function to evaluate dictionary items.
+*  Modified FTRDDATA for QM, UD, UV to use ITYPE() or CALCULATE().
+*  Modified FTRDDATA to allow ID-only transfers.
+*
+* 07/31/2006 - 5.3.5
+*  Updated OI (OpenInsight CTO) platform code in FTSETUP, FTVSINF & FTFSI.
+*
+* 08/29/2006 - 5.3.6
+*  Updated DICT file open to accomodate funky D3 & Enhanced R83 paths
+*  syntax (FT, FTD, FTPICK, FTSXT, KERMIT). Note: path syntax is
+*  still not supported by file browser used by WED, GED, etc.)
+*
+* 10/27/2006 - 5.3.7
+*  Updated FTRDDATA to use ITYPE() function for jBase. Fixed bug in
+*  FTFSI for jBase, which caused files to be misidentified as fields.
+*  Updated LOAD-ACCUTERM-PROGS so that it translates A-correlatives
+*  to I-types for Unidata in the sample dictionaries.
+*
+* 11/08/2006 - 5.3.8
+*  Added support for ON (ONWare MVON) platform.
+*
+* 01/26/2007 - 5.3.9
+*  Added missing RETURN in FTX.
+*
+* 03/05/2007 - 5.3.10
+*  Fixed typo in FTSVRSUB for UV platform code, FTPICK & FTWTPICK for
+*  ULT/ULTX platform code.
+*
+* 03/12/2007 - 5.3.11
+*  Fixed typo in FTSETUP for JB platform code; removed bogus D3 platform
+*  from FTPICK & FTWTPICK (the correct platform is PICK, not D3).
+*
+* 04/10/2007 - 5.3.12
+*  Added new subroutines: FTSEND, FTRECV, FTEXPORT, FTIMPORT to provide
+*  callable version of FT & FTD. Parameters are passed as arguments
+*  instead of using DATA statements, and the correct status of the
+*  operation is returned. FTRDDATA, FTRDITMS, FTRDBUFF, FTWTITMS and
+*  FTKERMIT were updated to return more accurate status information.
+*  FTCHK modified to use 'LOCAL COMPLETE' option for UV CATALOG.
+*  FTSETUP checks for existing catalog pointers during account setup
+*  and prompts to overwrite.
+*
+* 04/18/2007 - 5.4.1
+*  Added support for extended delimiters in FTD/FTEXPORT/FTIMPORT.
+*  Modified FTMODE, FTRDDATA, FTWTDATA & FTPARAMS to accomodate more
+*  delimiter choices, include user-defined delimiter in hex. Modified
+*  FTCONFIG, FTOPTION, FTINIT & FTINITEX to allow custom settings in
+*  hex.
+*
+* 05/02/2007 - 5.4.2
+*   Fixed problem with ITYPE() in FTRDDATA & FTPARSE. ALST<8> now
+*   indicates if a field uses ITYPE().
+*
+* 06/20/2007 - 5.4.3
+*   Updated FTSEND, FTRECV, FTEXPORT, FTIMPORT to include new MODE options
+*   to override config settings. Modified LOAD-ACCUTERM-PROGS to CALL
+*   FTRECV instead of EXECUTE 'FT', using new MODE option to suppress
+*   ANSI/OEM charset conversion.
+*
+* 09/19/2007 - 5.4.4
+*   Fixed small bug in FTRDDATA which assumed delimiter length was 1 while
+*   stripping embedded delimiters. Fixed bug in ATGUICLEAREVENTS which did
+*   not match null ID to any app, form or control, per documentation.
+*   Fixed bug in FTRDITMS which caused old "join" feature to fail.
+*
+* 12/06/2007 - 5.4.5
+*   Fixed SELECT bug in FTRDDATA for Northgate Reality (NR) platform.
+*   Added CACHE platform type.
+*
+* 01/23/2008 - 5.4.6
+*   Added support for ATCLIENT connections (FTSERVER from QMClient).
+*
+* 05/26/2008 - 5.4.7
+*   Updated FTFSI for Northgate Reality (NR) SYstem attribute.
+*
+* 10/08/2008 - 5.4.8
+*   Added Firefox (IETab) kludge to FTPGMDIR.
+*
+* 10/08/2009 - 5.5.1
+*   Beta release of AccuTerm 7.
+*
+* 03/05/2010 - 7.0.1
+*   AccuTerm 7 Beta 3 release.
+*
+* 03/25/2010 - 7.0.2
+*   AccuTerm 7 RC 1 release.
+*
+* 04/26/2010 - 7.0.3
+*   AccuTerm 7 RC 3 release.
+*
+* 06/05/2010 - 7.0.4
+*   AccuTerm 7 final release. Updated capabilities list in FTVSINF & FTCLIENV.
+*
+* 06/22/2010 - 7.0.5
+*  Fixed unassigned variable in CACHE platform code in FTFSI.
+*
+* 07/09/2010 - 7.0.6
+*  Fixed bug in FTSETUP that caused "replace all" to only replace the first item.
+*
+* 02/11/2011 - 7.0.7
+*  Added new FTCMDLN subroutine to handle common command line parse for WED,
+*  GED, FTWIZ. New parser performs simple upper-case conversion on command
+*  line for platforms which support this feature.
+*
+* 03/11/2011 - 7.0.8
+*  Added missing EQUate for TXT.FLG.PARAM to FTEXPORT, FTEXPORTDA & FTIMPORT.
+*
+* 06/02/2011 - 7.0.9
+*  Added capability check in WED, GED, FTWIZ to show error message if
+*  program is not supported (ATIE "safe" connections).
+*
+* 06/23/2011 - 7.0.10
+*  Added NR_AIX platform to list in FTCHK.
+*
+* 07/13/2011 - 7.0.11
+*  Fixed problem in FTSETUP that was not copying @@SELECT verb to target
+*  VOC for Universe platform.
+*
+* 08/22/2012 - 7.1.1
+*  Updated several programs for 7.1 release. Added support for UTF-8 (ECS).
+*
+* 10/12/2012 - 7.1.2
+*  Updated FTFSI to check for 'X' in attr 1 when setting & retriving setting
+*  from config file.
+*
+* 01/28/2012 - 7.1.3
+*  Updated FTPGMDIR to work correctly with ATIE clients.
+*
+* 04/04/2013 - 7.1.4
+*  Fixed unassigned variable in call to ATGUIERROR (GUIBP).
+*
+* 04/12/2013 - 7.1.5
+*  Fixed QM ECS bug in FTKERMIT.
+*
+* 09/17/2013 - 7.2.1
+*  Added support for column heading option in FTSXT.
+*
+* 10/08/2013 - 7.2.2
+*  Added new FTABOUT program to display host program details.
+*  Added CLEARSELECT to FTFSI & FTSETUP for QM platform.
+*  Added optional prompt exit string for FT, FTD & FTPICK.
+*  Modified FTSETUP, FTCONFIG, FTOPTION, FTPARAMS to enable
+*  setting the exit string.
+*
+* 10/14/2013 - 7.2.3
+*  Updated FTKERMIT to prevent U2 compiler warning.
+*
+* 03/19/2014 - 7.2.4
+*  Added support for OASYS platform.
+*
+* 05/22/2014 - 7.2.5
+*  Updated FTVSINF for Universe to improve response time.
+*
+* 02/11/2015 - 7.2.6
+*  Updated FTVSINF & FTPGMDIR for MOBILE.
+*
+* 02/12/2015 - 7.2.7
+*  Added D3 UTF8 hack (experimental).
+*
+* 03/18/2015 - 7.2.8
+*  Removed PICK_D3UTF8 platform type. Added support for CLI.CONFIF<1,63>
+*  to enable UTF-8 Hack for systems that lack Unicode support.
+*
+* 07/10/2015 - 7.2.9
+*  Fixed Northgate Reality bug in FTRDDATA & FTPARSE when using BSELECT
+*  to process A/F conversions (only FTPARSE modified, but change affects
+*  how FTRDDATA process A/F attributes.)
+*
+* 09/17/2015 - 7.2.10
+*  Patched FTSVRSUB to handle item IDs with embedded commas.
+*
+* 11/07/2015 - 7.2.11
+*  Patched FTPARSE to convert VMs in column headings to blank instead of SVM
+*
+* 05/16/2016 - 7.2.12
+*  Fixed bad variable name in KERMIT. Fixed jBASE bug in FTRDDATA & FTPARSE
+*  when using SELECT to process A/F conversions (only FTPARSE modified, but
+*  change affects how FTRDDATA process A/F attributes.)
+*
+* 06/08/2016 - 7.2.13
+*  Fixed Unidata catalog options. Catalog shared programs globally. Catalog
+*  demo and setup programs locally.
+*
+* 06/09/2016 - 7.2.14
+*  Added new FTIMPORTDA subroutine.
+*
+* 08/04/2016 - 7.2.15
+*  Fixed typo in FTWTPICK.
+*
+* 10/07/2016 - 7.2.16
+*  Updated FTSETUP for jBASE
+*
+* 09/13/2017 - 7.2.17
+*  Updated LOAD-ACCUTERM-PROGS for jBASE
+*
+* 09/05/2019 - 8.0.1
+*  Allow 'PROGRAM' on line 1 for FTCHK.
+*  Update FTCHK, FTVSINF for jBASE in D3 emulation.
+*
+* 12/10/2019 - 8.0.2
+*  Add new '$' flag to capabilities to indicate premium features enabled.
+*  Added new phiReport option to LOAD-ACCUTERRM-PROGS dialog.
+*  Updated Unidata FTSETUP to use UD.ACCOUNT to find account path.
+*
+* 01/09/2020 - 8.0.3
+*  Update FTVSINF and FTABOUT to handle full AT8 release number.
+*
+* 02/10/2020 - 8.0.4
+*  Added support for VSCODE command
+*
+* 02/11/2020 - 8.0.5
+*  Added support for MVON# platform.
+*
+* 04/02/2020 - 8.0.6
+*  Improved VSCODE command to handle new items, workspace template.
+*
+* 04/20/2020 - 8.0.7
+*  Update FTCHK to use GENERIC if no platform or DEFAULT found. Update
+*  FTFSI to omit MD and VOC item when returning list of items from MD
+*  or VOC. Added jBASE compiler output parsing to FTFSCMD.
+*
+* 05/20/2020 - 8.0.8
+*  Updated jBASE install script to use 'jsh -c' in the helper program.
+*
+* 05/05/2020 - 8.0.9
+*  Updated FTSVRSUB with new RCS hooks. Updated FTRCS.SKEL with stubs for
+*  new hook functions.
+*
+* 05/30/2020 - 8.0.10
+*  Updated FTSVRSUB to initialize ERRCD & ERMSG before RCS hook calls.
+*
+* 08/14/2020 - 8.0.11
+*  Updated FTCLISVR to fix endless loop bug for clients not using packet protocol.
+*
+**************************************************************************
+*
+END

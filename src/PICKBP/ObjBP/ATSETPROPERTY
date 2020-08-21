@@ -1,0 +1,77 @@
+SUBROUTINE ATSETPROPERTY(OBJID, PROPNAMES, PROPVALUES, ERRMSG, OPTS)
+**************************************************************************
+*Copyright (c) 1998-2006 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATSETPROPERTY
+* AUTHOR: PJS
+* VERSION: 4.0.2
+* CREATED: 01/01/1998
+* UPDATED: 09/28/2006
+*
+* MAINTENANCE RECORD:
+*
+* 4.0.2
+*  PJS 09/28/2006
+*   This routine should not modify the PROPVALUES variable, since
+*   SetProp does not return any values (bug fix).
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM OBJECT MANAGER - SET PROPERTY
+*
+* CALL THIS SUBROUTINE TO SET PROPERTY VALUE(S) FOR AN OBJECT.
+* THE PROPNAMES ARGUMENT IS DYNAMIC ARRAY OF PROPERTY NAMES TO
+* BE RETRIEVED, ONE NAME PER ATTRIBUTE. THE PROPERTY VALUES
+* ARE IN CORRESPONDING ATTRIBUTES. IF ANY ERRORS
+* OCCUR, THE ERROR MESSAGES ARE RETURNED IN CORRESPONDING ATTRIBUTES
+* OF THE ERRMSG ARGUMENT.
+*
+**************************************************************************
+*
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30), CLIENV(10)
+FOR I = 1 TO 30; PARAMS(I) = OPTS<I>; NEXT I
+FOR I = 1 TO 10; CLIENV(I) = OPTS<I+30>; NEXT I
+IF PARAMS(1) < 1 THEN
+ ERRMSG = 'Subroutine ATINITOBJMGR must be called before using this function!'
+ RETURN
+END
+REC = ''
+N = DCOUNT(PROPNAMES,AM)
+FOR I = 1 TO N
+ REC<I> = '5':VM:OBJID:VM:PROPNAMES<I>:VM:PROPVALUES<I>
+NEXT I
+CALL FTOBJREQ('a',REC,RSP,0,MAT PARAMS,MAT CLIENV)
+IF RSP[1,4] EQ 'ERR:' THEN
+ ERRNUM = FIELD(RSP,' ',2)
+ ERRMSG = RSP[COL2()+1,9999]
+ IF ERRMSG EQ '' THEN ERRMSG = 'Unknown error: ':ERRNUM
+ RETURN
+END
+ERRMSG = ''
+FOR I = 1 TO N
+ BEGIN CASE
+  CASE RSP<I,5>
+   ERRNUM = RSP<I,5>
+   ERRMSGX = RSP<I,6>
+   IF ERRMSGX EQ '' THEN ERRMSGX = 'Unknown error: ':ERRNUM
+   ERRMSG<I> = ERRMSGX
+  CASE 1
+   *no return value from SetProp...
+ END CASE
+NEXT I
+RETURN
+*
+END

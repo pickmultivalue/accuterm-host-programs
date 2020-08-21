@@ -1,0 +1,497 @@
+*
+**************************************************************************
+*Copyright (c) 1996-2013 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTPICK
+* AUTHOR: PJS
+* VERSION: 7.2.1
+* CREATED: 01/01/1996
+* UPDATED: 10/08/2013
+*
+* MAINTENANCE RECORD:
+*
+* 7.2.1
+*  PJS 10/08/2013
+*   Modified all INPUT statements to accept an optional exit string
+*   specified in KMTCFG<62>. Removed call to FTCLIENV since FTINITEX
+*   initializes the CLIENV array.
+*
+* 7.1.1
+*  PJS 11/07/2012
+*   Added new record type 'U' for items containing Unicode characters.
+*   Added new 'F' record option type 'U' to indicate that the file name
+*   contains Unicode characters (encoded as UTF-8).
+*
+* 5.3.4
+*  PJS 03/05/2007
+*   Fixed typo for ULT & ULTX platform (IF FNAME...). Removed bogus D3
+*   platform code (the correct platform for D3 is 'PICK', not 'D3').
+*
+* 5.3.3
+*  PJS 11/08/2006
+*   Fixed bug where select statement entered at IDLIST prompt was parsed
+*   as if a list of IDs was entered instead of saving the statement.
+*   Added NO.PAGE=@(0,0) to disable pagination for QM, ON, etc.
+*
+* 5.3.2
+*  PJS 08/29/2006
+*   Changed DICT file open syntax to accomodate funky D3 & Ehnanced
+*   R83 path syntax.
+*
+* 5.3.1
+*  PJS 07/24/2006
+*   Changed size of VARS() array from 25 to 26, defining VARS(26)
+*   as MD. Define previously unused VARS(24) as DFILE, the file
+*   variable for the dictionary. These files are now opened up
+*   front in this routine. Use new FTINITEX routine instead of FTINIT.
+*
+* 5.0.3
+*  PJS 11/29/2002
+*   Added new ID list processing to accept a select statement if
+*   IDLIST starts with ">".
+*
+* 5.0.2
+*  PJS 10/08/2002
+*   Added new ULTX (ancient Ultimate) platform type which does
+*   not support test for stacked input (YUK!)
+*
+* 5.0.1
+*  PJS 02/17/2002
+*  Added new element to CLIENV() array for FTBP library version number.
+*
+* 4.0.2
+*  PJS 11/03/2000
+*   Added system specific support code for Ultimate
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM PICK-TO-PICK FILE TRANSFER - FRONT END
+*
+**************************************************************************
+**************************************************************************
+*
+DIM PARAMS(30),VARS(26),CLIENV(10)
+EQU TXT.FLG.PARAM TO PARAMS(13)
+EQU DIR.FLG.PARAM TO PARAMS(21)
+EQU PRO.FLG.PARAM TO PARAMS(25)
+EQU ICNT TO VARS(1)
+EQU BCNT TO VARS(2)
+EQU IDMODE TO VARS(3)
+EQU AUTO TO VARS(4)
+EQU HDR TO VARS(5)
+EQU DISC TO VARS(6)
+EQU TARGET TO VARS(7)
+EQU DCHK TO VARS(8)
+EQU FILE TO VARS(11)
+EQU FNAME TO VARS(12)
+EQU ID TO VARS(13)
+EQU IDLST TO VARS(14)
+EQU IDS TO VARS(16)
+EQU ISIZ TO VARS(17)
+EQU ISEQ TO VARS(18)
+EQU ITEM TO VARS(19)
+EQU XSIZ TO VARS(20)
+EQU PATH TO VARS(21)
+EQU FN TO VARS(22)
+EQU FNLST TO VARS(23)
+EQU DFILE TO VARS(24)
+EQU FNS TO VARS(25)
+EQU MD TO VARS(26)
+*
+EQU CLI.PLATFORM TO CLIENV(1)
+EQU CLI.PRODUCT TO CLIENV(2)
+EQU CLI.RELEASE TO CLIENV(3)
+EQU CLI.CAPAS TO CLIENV(4)
+EQU CLI.SVCS TO CLIENV(5)
+EQU CLI.SERIAL TO CLIENV(6)
+EQU CLI.LICENSE TO CLIENV(7)
+EQU CLI.USER TO CLIENV(8)
+EQU CLI.VERSION TO CLIENV(9)
+EQU CLI.CONFIG TO CLIENV(10)
+*
+NO.PAGE=@(0,0);* DISABLE PAGINATION (QM, ON)
+*
+**************************************************************************
+*
+* CHECK IF FTCHK HAS BEEN RUN SINCE THIS PROGRAM WAS INSTALLED
+*
+PRINT 'You should RUN FTBP FTCHK and select your host platform';*#GENERIC#*
+PRINT 'before you run this program!';*#GENERIC#*
+SLEEP 3;*#GENERIC#*
+*
+**************************************************************************
+*
+* VALIDATE CONFIGURATION & INITIALIZE PARAMETERS
+*
+**************************************************************************
+*
+MAT VARS=''
+CALL FTINITEX('',MAT PARAMS,MAT CLIENV,FV,STAT)
+IF STAT<>'' THEN
+ PRINT STAT
+ STOP
+END
+OPEN 'MD' TO MD ELSE
+ OPEN 'VOC' TO MD ELSE STOP 201,'MD'
+END
+DCHK=0
+*
+**************************************************************************
+*
+* PROMPT FOR DESIRED ACTION
+*
+**************************************************************************
+*
+PRINT
+PRINT 'AccuTerm Pick-to-Pick File Transfer Utility'
+PRINT
+*
+* TEST ACCUTERM CLIENT CAPABILITIES
+IF CLI.PLATFORM=0 THEN
+ PRINT 'FTPICK requires AccuTerm to run!'
+ STOP
+END
+IF INDEX(CLI.CAPAS,'Z',1) THEN
+ PRINT 'Upper case / lower case inversion must be disabled to run FTPICK.'
+ PRINT 'Try typing "PTERM CASE NOINVERT" before running FTPICK.'
+ STOP
+END
+*
+IF (INDEX(CLI.CAPAS,'D',1) + INDEX(CLI.CAPAS,'U',1)) = 0 THEN
+ PRINT 'This version of AccuTerm does not support file transfers.'
+ STOP
+END
+*
+PROMPT ''
+LOOP
+ GOSUB 2222; IF NOT(CHKSTKINP) THEN
+  PRINT
+  PRINT '(S)end, (R)eceive, (O)ptions, (C)onfigure, (H)elp or (E)xit ? ':
+ END
+ INPUT ANS; GOSUB 2233; MODE=ANS
+ MODE=OCONV(MODE[1,1],'MCU')
+UNTIL MODE EQ 'S' OR MODE EQ 'R' DO
+ BEGIN CASE
+  CASE MODE EQ '' OR MODE EQ 'X' OR MODE EQ 'E'; STOP
+  CASE MODE EQ 'C'; CALL FTCONFIG('19',MAT PARAMS,FV)
+  CASE MODE EQ 'O'; CALL FTOPTION('19',0,MAT PARAMS,FV)
+  CASE MODE EQ 'H'; CALL FTHELP(1,FV)
+ END CASE
+REPEAT
+*
+IF MODE EQ 'S' THEN
+ IF INDEX(CLI.CAPAS,'D',1) = 0 THEN
+  PRINT 'This version of AccuTerm does not support file downloads.'
+  STOP
+ END
+END ELSE
+ IF INDEX(CLI.CAPAS,'U',1) = 0 THEN
+  PRINT 'This version of AccuTerm does not support file uploads.'
+  STOP
+ END
+END
+*
+**************************************************************************
+*
+* SETUP DEFAULTS
+*
+**************************************************************************
+*
+PRO.FLG.PARAM=1; * FORCE KERMIT PROTOCOL
+TXT.FLG.PARAM=0; * FORCE BINARY MODE
+*
+**************************************************************************
+*
+* SEND FILE
+*
+**************************************************************************
+*
+IF MODE EQ 'S' THEN
+ DIR.FLG.PARAM = 1
+ SUBNAME='FTRDPICK'
+ *
+ * ENTER SOURCE FILE NAME
+ *
+ LOOP
+  GOSUB 2222; IF NOT(CHKSTKINP) THEN
+   PRINT
+   PRINT 'Enter PICK source file name: ':
+  END
+  INPUT ANS; GOSUB 2233; FNAME=ANS
+ WHILE FNAME EQ '?' DO
+  CALL FTHELP(2,FV)
+ REPEAT
+ IF FNAME[1,5] EQ 'DICT ' THEN
+  OPEN FNAME TO FILE ELSE STOP 201,FNAME
+  DFILE = MD
+ END ELSE
+  OPEN FNAME TO FILE ELSE STOP 201,FNAME
+  OPEN 'DICT',FNAME TO DFILE ELSE STOP 201,'DICT ':FNAME
+  IF FNAME EQ 'MD' THEN DCHK = 1 ELSE DCHK = 0  
+ END
+ *COULD THERE BE D-POINTERS IN THE FILE DICT OR MD?
+ DCHK = 0
+*#ADDS#* IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#AP#* IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#ENH#* IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#MD#* IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#MVBASE#* IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#NR#* IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#PICK#* IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#R83#* IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#SEQ#* IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#ULT#* IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#ULTX#* IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#VIS#* IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+ * 
+ * ENTER SOURCE ITEM LIST
+ *
+ LOOP
+  GOSUB 2222; IF NOT(CHKSTKINP) THEN
+   PRINT
+   PRINT 'Enter source (PICK) item list: ':
+  END
+  INPUT ANS; GOSUB 2233; IDLIST=ANS
+ WHILE IDLIST EQ '?' DO
+  CALL FTHELP(3,FV)
+ REPEAT
+ IF IDLIST[1,1] = '>' THEN
+  IDLST=IDLIST
+ END ELSE
+  IDLST=''
+  LOOP
+   LOOP C=IDLIST[1,1] WHILE C EQ ' ' DO IDLIST=IDLIST[2,9999] REPEAT
+  UNTIL C EQ '' DO
+   IF C EQ '"' OR C EQ "'" OR C EQ '\' THEN IDLIST=IDLIST[2,9999] ELSE C=' '
+   K=INDEX(IDLIST,C,1)
+   IF NOT(K) THEN K=LEN(IDLIST)+1
+   IDLST<-1>=IDLIST[1,K-1]
+   IDLIST=IDLIST[K+1,9999]
+  REPEAT
+ END
+ *
+ * SELECT DIRECT OR INTERMEDIATE TRANSFER
+ *
+ LOOP
+  GOSUB 2222; IF NOT(CHKSTKINP) THEN
+   PRINT
+   PRINT 'Send (D)irectly to PICK file or to (I)ntermediate DOS file ? ':
+  END
+  INPUT ANS; GOSUB 2233; AUTO=ANS
+  AUTO=OCONV(AUTO[1,1],'MCU')
+ UNTIL AUTO EQ 'D' OR AUTO EQ 'I' DO
+  IF AUTO EQ '?' THEN
+   CALL FTHELP(60,FV)
+  END ELSE
+   PRINT 'Please enter "D" or "I" only'
+  END
+ REPEAT
+ *
+ * SELECT TARGET PICK FILE
+ *
+ IF AUTO EQ 'D' THEN
+  AUTO=1
+  LOOP
+   GOSUB 2222; IF NOT(CHKSTKINP) THEN
+    PRINT
+    PRINT 'Enter target PICK filename: ':
+   END
+   INPUT ANS; GOSUB 2233; TARGET=ANS
+   TARGET=TRIM(TARGET)
+  WHILE TARGET EQ '' OR TARGET EQ '?' DO
+   IF TARGET EQ '?' THEN
+    CALL FTHELP(47,FV)
+   END
+  REPEAT
+ END ELSE
+ *
+ * SELECT INTERMEDIATE DOS FILENAME
+ *
+  AUTO=0
+  TARGET=FNAME; * FOR DISPLAY PURPOSES ONLY
+  LOOP
+   GOSUB 2222; IF NOT(CHKSTKINP) THEN
+    PRINT
+    PRINT 'Enter intermediate DOS file name (d:\directory\file.ext): ':
+   END
+   INPUT ANS; GOSUB 2233; PATH=ANS
+   PATH=TRIM(PATH)
+   K=COUNT(PATH,'\')
+   IF K THEN K=INDEX(PATH,'\',K); FNLST=PATH[K+1,999]; PATH=PATH[1,K] ELSE
+    K=COUNT(PATH,':')
+    IF K THEN K=INDEX(PATH,':',K); FNLST=PATH[K+1,999]; PATH=PATH[1,K] ELSE
+     FNLST=PATH; PATH=''
+    END
+   END
+  WHILE FNLST EQ '' OR FNLST EQ '?' DO
+   IF FNLST EQ '?' THEN
+    CALL FTHELP(49,FV)
+   END
+  REPEAT
+ END
+ PRINT
+END ELSE
+*
+**************************************************************************
+*
+* RECEIVE FILE
+*
+**************************************************************************
+*
+ DIR.FLG.PARAM = 0
+ SUBNAME='FTWTPICK'
+ *
+ * SELECT DIRECT OR INTERMEDIATE TRANSFER
+ *
+ LOOP
+  GOSUB 2222; IF NOT(CHKSTKINP) THEN
+   PRINT
+   PRINT 'Receive (D)irectly from PICK file or from (I)ntermediate DOS file ? ':
+  END
+  INPUT ANS; GOSUB 2233; AUTO=ANS
+  AUTO=OCONV(AUTO[1,1],'MCU')
+ UNTIL AUTO EQ 'D' OR AUTO EQ 'I' DO
+  IF AUTO EQ '?' THEN
+   CALL FTHELP(61,FV)
+  END ELSE
+   PRINT 'Please enter "D" or "I" only'
+  END
+ REPEAT
+ *
+ * IF INTERMEDIATE SELECTED, PROMPT FOR SOURCE DOS & TARGET PICK FILES
+ *
+ IF AUTO EQ 'D' THEN
+  AUTO=1
+ END ELSE
+  AUTO=0
+  *
+  * SELECT SOURCE DOS FILENAME
+  *
+  LOOP
+   GOSUB 2222; IF NOT(CHKSTKINP) THEN
+    PRINT
+    PRINT 'Enter intermediate DOS file name (d:\directory\file.ext): ':
+   END
+   INPUT ANS; GOSUB 2233; PATH=ANS
+   PATH=TRIM(PATH)
+   K=COUNT(PATH,'\')
+   IF K THEN K=INDEX(PATH,'\',K); FNLST=PATH[K+1,999]; PATH=PATH[1,K] ELSE
+    K=COUNT(PATH,':')
+    IF K THEN K=INDEX(PATH,':',K); FNLST=PATH[K+1,999]; PATH=PATH[1,K] ELSE
+     FNLST=PATH; PATH=''
+    END
+   END
+  WHILE FNLST EQ '' OR FNLST EQ '?' DO
+   IF FNLST EQ '?' THEN
+    CALL FTHELP(53,FV)
+   END
+  REPEAT
+  *
+  * ENTER DESTINATION FILE
+  *
+  LOOP
+   GOSUB 2222; IF NOT(CHKSTKINP) THEN
+    PRINT
+    PRINT 'Enter PICK target file name: ':
+   END
+   INPUT ANS; GOSUB 2233; FNAME=ANS
+  WHILE FNAME EQ '?' DO
+   CALL FTHELP(47,FV)
+  REPEAT
+  IF FNAME[1,5] EQ 'DICT ' THEN
+   OPEN FNAME TO FILE ELSE STOP 201,FNAME
+   DFILE = MD
+  END ELSE
+   OPEN FNAME TO FILE ELSE STOP 201,FNAME
+   OPEN 'DICT',FNAME TO DFILE ELSE STOP 201,'DICT ':FNAME
+  END
+  *COULD THERE BE D-POINTERS IN THE FILE DICT OR MD?
+  DCHK = 0
+*#ADDS#*  IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#AP#*  IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#ENH#*  IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#MD#*  IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#MVBASE#*  IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#NR#*  IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#PICK#*  IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#R83#*  IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#SEQ#*  IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#ULT#*  IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#ULTX#*  IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+*#VIS#*  IF FNAME EQ 'MD' OR FNAME[1,5] EQ 'DICT ' THEN DCHK = 1
+ END
+ PRINT
+END
+*
+**************************************************************************
+*
+* PERFORM TRANSFER
+*
+**************************************************************************
+*
+IF AUTO THEN
+ CALL FTCONECT(STAT,SUBNAME,MAT PARAMS,MAT VARS,MAT CLIENV)
+END ELSE
+ CALL FTMODE(STAT,SUBNAME,MAT PARAMS,MAT VARS,MAT CLIENV)
+END
+ECHO ON
+IF STAT EQ '' THEN STAT='Successful transfer.'
+PRINT
+PRINT 'Transfer status: ':STAT
+IF ICNT THEN PRINT 'Transferred ':ICNT:' items, ':BCNT:' bytes.'
+IF DISC THEN PRINT 'Discarded ':DISC:' bytes.'
+STOP
+*
+**************************************************************************
+*
+* SUBROUTINE TO CHECK FOR STACKED INPUT
+*
+**************************************************************************
+*
+2222 *
+CHKSTKINP=0;*#GENERIC#*
+*#DEFAULT#*CHKSTKINP=SYSTEM(10)
+*#ADDS#*CHKSTKINP=SYSTEM(10)
+*#AP#*CHKSTKINP=SYSTEM(10)
+*#ENH#*CHKSTKINP=SYSTEM(10)
+*#MD#*CHKSTKINP=SYSTEM(10)
+*#MVBASE#*CHKSTKINP=SYSTEM(10)
+*#NR#*CHKSTKINP=SYSTEM(10)
+*#PICK#*CHKSTKINP=SYSTEM(10)
+*#R83#*CHKSTKINP=SYSTEM(10)
+*#SEQ#*CHKSTKINP=SYSTEM(10)
+*#ULT#*CHKSTKINP=SYSTEM(29)
+*#ULTX#*CHKSTKINP=0
+*#VIS#*CHKSTKINP=SYSTEM(10)
+RETURN
+*
+**************************************************************************
+*
+* SUBROUTINE TO CHECK FOR EXIT STRING (CHECKS VARIABLE 'ANS')
+*
+**************************************************************************
+*
+2233 *
+XITSTRS=CLI.CONFIG<1,62>
+NBRXITSTRS=DCOUNT(XITSTRS,' ')
+FOR XITSTRIDX=1 TO NBRXITSTRS
+ XITSTR=TRIM(FIELD(XITSTRS,' ',XITSTRIDX))
+ IF XITSTR<>'' THEN
+  IF ANS=XITSTR THEN STOP
+ END
+NEXT XITSTRIDX
+RETURN
+*
+END

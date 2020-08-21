@@ -1,0 +1,305 @@
+SUBROUTINE SUI.OPEN.WINDOW(Left, Top, Width, Height, Opts, Title, Frame, WinID, RtnCom, MAT TermDef)
+**************************************************************************
+*Copyright (c) 2004 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: SUI.OPEN.WINDOW
+* AUTHOR: PJS
+* VERSION: 1.0.1
+* CREATED: 06/01/2004
+* UPDATED: 01/07/2005
+*
+* MAINTENANCE RECORD:
+*
+* 1.0.1
+*  PJS 01/07/2005
+*   Added code to use new AccuTerm Save/Restore feature for windowing.
+*
+*************************************************************************
+*************************************************************************
+*
+* SMART USER INTERFACE: Open New Window
+*
+*************************************************************************
+*************************************************************************
+*
+*   Input Interface:
+*
+*    Left, Top: upper-left corner of window (absolute screen coordinates)
+*
+*    Width, Height: size of window including title & frame
+*
+*    Opts:  F - fake it on terminals that have no windowing
+*               support or are out of memory. RtnCom will be
+*               TERM.FAKEWIN$ if screen will not be restored
+*               when window is closed, and must be refreshed.
+*
+*    Title: window title (may be null)
+*
+*    Frame: window frame style
+*            0 = no frame
+*            1 = single frame
+*            2 = double frame
+*
+*    TermDef: terminal definitions as set up by SUI.GET.TERM
+*
+*
+*   Output Interface:
+*
+*    WinID:  Window ID (pass to SUI.CLOSE.WINDOW)
+*
+*    RtnCom: zero if success, TERM.FAKEWIN$ if true windowing is
+*            not available and F option specified, else error code.
+*
+*    TERM.WINDOW element in TermDef array updated with new window.
+*
+*************************************************************************
+*
+$INCLUDE SUI.TERMDEF
+$INCLUDE SUI.WINDEF
+$INCLUDE SUI.CONFIG
+*
+EQU VM TO CHAR(253), SVM TO CHAR(252)
+EQU ESC TO CHAR(27), STX TO CHAR(2), EM TO CHAR(25), CR TO CHAR(13)
+*
+* Substitution variable strings for CPYBLK command
+EQU varSrc TO 'SRC'
+EQU varLeft TO 'LEFT'
+EQU varTop TO 'TOP'
+EQU varRight TO 'RIGHT'
+EQU varBottom TO 'BOTTOM'
+EQU varDest TO 'DEST'
+EQU varCol TO 'COL'
+EQU varRow TO 'ROW'
+EQU varPg TO 'PG'
+*
+WinID = 0
+*
+IF Frame < 0 OR Frame > 2 THEN
+ RtnCom = SUI.ERROR.INVSTYLE$
+ RETURN
+END
+*
+RtnCom = SUI.ERROR.NOTSUPPORTED$ ;* Assume windowing not supported
+*
+* Sort out window sizes & positions
+IF Left < 0 OR Top < 0 THEN
+ RtnCom = SUI.ERROR.INVPOS$ ;* Invalid position
+ RETURN
+END
+WinWd = Width
+IF Left + WinWd > TERM.WIDTH THEN
+ WinWd = TERM.WIDTH - Left
+ IF WinWd < 1 THEN
+  RtnCom = SUI.ERROR.INVSIZE$ ;* Invalid size
+  RETURN
+ END
+END
+WinHt = Height
+IF Top + WinHt > TERM.HEIGHT THEN
+ WinHt = TERM.HEIGHT - Top
+ IF WinHt < 1 THEN
+  RtnCom = SUI.ERROR.INVSIZE$ ;* Invalid size
+  RETURN
+ END
+END
+CliWd = WinWd
+CliHt = WinHt
+IF Frame THEN
+ CliLeft = 1
+ CliTop = 1
+ CliWd = CliWd - 2
+ CliHt = CliHt - 2
+END ELSE
+ CliLeft = 0
+ CliTop = 0
+END
+IF Title NE '' THEN
+ CliTop = CliTop + 1
+ CliHt = CliHt - 1
+END
+IF CliWd < 1 OR CliHt < 1 THEN
+ RtnCom = SUI.ERROR.INVSIZE$ ;* Invalid size
+ RETURN
+END
+*
+* Use AccuTerm save/restore function to open window?
+IF INDEX(TERM.SPECIAL,'J',1) THEN
+ WinID = TERM.WINDOW<1,1,1> + 1
+ PRINT ESC : STX : 'jS,' : WinID : CR : ;* Save screen contents & terminal state
+ RtnCom = 0 ;* Current screen saved = success
+END ELSE
+ *
+ * Use AccuTerm script to open window?
+ IF INDEX(TERM.SPECIAL,'S',1) THEN
+  *
+  * Build Script to save current Screen contents
+  WinID = TERM.WINDOW<1,1,1> + 1
+  Scr = ''
+  Scr = Scr : 'Dim sID as String' : EM
+  Scr = Scr : 'Dim wd as Integer' : EM
+  Scr = Scr : 'Dim ht as Integer' : EM
+  Scr = Scr : 'sID = "SUIWID" & CStr(InitSession.ID) & ".' : WinID : '"' : EM
+  Scr = Scr : 'wd = InitSession.Cols' : EM
+  Scr = Scr : 'ht = InitSession.Rows' : EM
+  Scr = Scr : 'Common(sID) = InitSession.GetBlock(0,0,wd-1,ht-1)' : EM
+  Scr = Scr : 'InitSession.Output vbCR'
+  * execute script to save current Screen contents
+  $INCLUDE SUI.TACLEAR
+  PRINT ESC : STX : 'P' : Scr : CR :
+  PROMPT ''
+  INPUT X:
+  RtnCom = 0 ;* Current screen saved = success
+  *
+ END ELSE
+  *
+  * Use native terminal block copy for windowing
+  IF TERM.CPYBLK NE '' AND TERM.SELPAGE NE '' THEN
+   IF TERM.PAGE < TERM.PAGES - 1 THEN
+    RtnCom = 0; * Assume command string format OK
+    WinID = TERM.WINDOW<1,1,1> + 1
+    Cmd = TERM.CPYBLK    
+    varName = varSrc; varVal = TERM.PAGE; GOSUB VARSUBST
+    varName = varDest; varVal = TERM.PAGE + 1; GOSUB VARSUBST
+    varName = varLeft; varVal = 0; GOSUB VARSUBST
+    varName = varTop; varVal = 0; GOSUB VARSUBST
+    varName = varRight; varVal = TERM.WIDTH - 1; GOSUB VARSUBST
+    varName = varBottom; varVal = TERM.HEIGHT - 1; GOSUB VARSUBST
+    varName = varCol; varVal = 0; GOSUB VARSUBST
+    varName = varRow; varVal = 0; GOSUB VARSUBST
+    IF RtnCom = 0 THEN PRINT Cmd:
+    Cmd = TERM.SELPAGE
+    varName = varPg; varVal = TERM.PAGE + 1; GOSUB VARSUBST
+    IF RtnCom = 0 THEN
+     PRINT Cmd:
+     TERM.PAGE = TERM.PAGE + 1
+    END
+   END
+  END
+  *
+ END
+END
+*
+IF RtnCom = SUI.ERROR.NOTSUPPORTED$ AND INDEX(Opts,'F',1) THEN
+ FakeWindow = 1
+ RtnCom = 0
+END ELSE
+ FakeWindow = 0
+END
+*
+IF RtnCom = 0 THEN
+ * Save new window in TERM.WINDOW structure with Client size = Window size
+ TERM.WINDOW<1,1,1> = WinID
+ WinInf = ''
+ WinInf<1,1,SUI.WINID$> = WinID
+ WinInf<1,1,SUI.WINMODE$> = 'F'[1,FakeWindow]
+ WinInf<1,1,SUI.WINLEFT$> = Left
+ WinInf<1,1,SUI.WINTOP$> = Top
+ WinInf<1,1,SUI.WINWIDTH$> = WinWd
+ WinInf<1,1,SUI.WINHEIGHT$> = WinHt
+ WinInf<1,1,SUI.CLILEFT$> = 0
+ WinInf<1,1,SUI.CLITOP$> = 0
+ WinInf<1,1,SUI.CLIWIDTH$> = WinWd
+ WinInf<1,1,SUI.CLIHEIGHT$> = WinHt
+ TERM.WINDOW = INSERT(TERM.WINDOW,1,2;WinInf) ;* add to beginning of window list (current window)
+ *
+ * Clear entire new window
+ CALL SUI.CLEAR.RECT(0, 0, WinWd, WinHt, RtnCom, MAT TermDef)
+ *
+ Dsp = ''
+ *
+ * Draw border
+ IF SUICFG.WINDOW.BORDER AND INDEX(TERM.SPECIAL,'B',1) THEN
+  * Draw window border using AccuTerm Visual Styles
+  Dsp = Dsp:ESC:STX:'r':Left:',':Top:',':(Left+WinWd-1):',':(Top+WinHt-1):',N,':'NIRB'[SUICFG.WINDOW.BORDER+1,1]:CR
+  Bdr = 1
+ END ELSE
+  Bdr = 0
+ END
+ *
+ * Display Title
+ IF Title NE '' THEN
+  IF TERM.ATTRTYPE = 1 THEN
+   TitWd = WinWd - 2
+   BegCol = Left + 1
+  END ELSE
+   TitWd = WinWd
+   BegCol = Left
+  END
+  IF Frame > 0 AND Bdr = 0 THEN
+   TitWd = TitWd - 2 ;* Title is inside frame if no window border
+   BegCol = BegCol + 1
+  END
+  EndCol = BegCol + TitWd - 1
+  Mask = 'L#':(TitWd-2)
+  Text = ' ':(Title Mask):' '
+  IF Frame > 0 AND Bdr = 0 THEN   
+   TitRow = Top + 1 ;* Title goes inside frame if no window border
+  END ELSE   
+   TitRow = Top ;* Title goes above frame if we have a window border
+  END
+  IF TERM.ATTRTYPE = 1 THEN
+   IF EndCol >= TERM.WIDTH - 1 THEN
+    Dsp = Dsp:@(0,TitRow+1):TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+   END ELSE
+    Dsp = Dsp:@(EndCol+1,TitRow):TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+   END
+   IF BegCol = 0 THEN
+    IF TitRow > 0 THEN Dsp = Dsp:@(TERM.WIDTH-1,TitRow-1):TermDef(TERM.ATT$+SUICFG.WINDOW.TITLE)
+   END ELSE
+    Dsp = Dsp:@(BegCol-1,TitRow):TermDef(TERM.ATT$+SUICFG.WINDOW.TITLE)
+   END
+   Dsp = Dsp:@(BegCol,TitRow)
+  END ELSE
+   Dsp = Dsp:@(BegCol,TitRow):TermDef(TERM.ATT$+SUICFG.WINDOW.TITLE)
+  END
+  Dsp = Dsp:Text
+ END  
+ IF TERM.ATTRTYPE NE 1 THEN Dsp = Dsp:TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+ PRINT Dsp:
+ *
+ * Draw frame
+ IF Frame > 0 THEN
+  IF Bdr AND Title NE '' THEN
+   FrmTop = 1 ;* Frame below title if using window border
+  END ELSE
+   FrmTop = 0 ;* Frame above title if no window border
+  END
+  CALL SUI.DISPLAY.FRAME(0, FrmTop, WinWd, WinHt - FrmTop, Frame, RtnCom, MAT TermDef)
+ END
+ *
+ * Position cursor at Client (0,0)
+ PRINT @(Left+CliLeft,Top+CliTop):
+ PRINT Dsp:
+ *
+ * Update Window info with actual client size & position
+ WinInf<1,1,SUI.CLILEFT$> = CliLeft
+ WinInf<1,1,SUI.CLITOP$> = CliTop
+ WinInf<1,1,SUI.CLIWIDTH$> = CliWd
+ WinInf<1,1,SUI.CLIHEIGHT$> = CliHt
+ TERM.WINDOW<1,2> = WinInf
+END
+*
+IF RtnCom = 0 AND FakeWindow THEN RtnCom = TERM.FAKEWIN$
+RETURN
+!
+VARSUBST: *
+*
+varx = SVM:varName:SVM
+K = INDEX(Cmd,varx,1)
+IF K = 0 THEN
+ varx = SVM:varName:'+1':SVM
+ K = INDEX(Cmd,varx,1)
+ varVal = varVal + 1
+END
+IF K THEN
+ Cmd = Cmd[1,K-1]:varVal:Cmd[K+LEN(varx),9999]
+END ELSE
+ RtnCom = SUI.ERROR.BADVAR$
+END
+RETURN
+END

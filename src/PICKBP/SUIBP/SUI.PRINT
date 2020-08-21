@@ -1,0 +1,51 @@
+SUBROUTINE SUI.PRINT(Left, Top, Width, Height, Value, MAT TermDef)
+**************************************************************************
+*Copyright (c) 2005 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: SUI.PRINT
+* AUTHOR: PJS
+* VERSION: 1.0.0
+* CREATED: 02/15/2005
+*
+* MAINTENANCE RECORD:
+*
+*************************************************************************
+*************************************************************************
+*
+* SMART USER INTERFACE: Print Text Field
+*
+*************************************************************************
+*************************************************************************
+*
+* This routine is a wrapper for SUI.DISPLAY.TEXT and is designed to be
+* a drop-in replacement for PRINT statements used to display data values.
+* Call SUI.DISPLAY.LABEL to display text other than data values, such as
+* titles or field labels.
+*
+*   Input Interface:
+*
+*    Left, Top: upper-left corner of label (relative to current window)
+*
+*    Width, Height: size of text field
+*
+*    Value:   current value of text field (multiline may include line breaks)
+*
+*    TermDef: terminal definitions as set up by SUI.GET.TERM
+*
+*
+*   Output Interface:
+*
+*    None
+*
+*************************************************************************
+*
+$INCLUDE SUI.TERMDEF
+*
+CALL SUI.DISPLAY.TEXT(Left, Top, Width, Height, 0, '', Value, 0, 0, MAT TermDef)
+RETURN
+END

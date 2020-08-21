@@ -1,0 +1,2 @@
+* Shutdown GUI system
+CALL ATGUISHUTDOWN

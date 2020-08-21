@@ -1,0 +1,142 @@
+SUBROUTINE SUI.INPUT.CHAR(Chr, RtnCom, MAT TermDef)
+**************************************************************************
+*Copyright (c) 2004 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: SUI.INPUT.CHAR
+* AUTHOR: PJS
+* VERSION: 1.0.1
+* CREATED: 06/01/2004
+* UPDATED: 07/20/2004
+*
+* MAINTENANCE RECORD:
+*
+* 1.0.1
+*  PJS 07/20/2004
+*   Added ability to recognize ESCAPE key (or other ambiguous keys
+*   which are used as lead-ins). This ability requires a new INCLUDE,
+*   SUI.INPELSE, which returns the next character if its already in the
+*   typeahead buffer (or arrives in the next fraction of a second).
+*
+*************************************************************************
+*************************************************************************
+*
+* SMART USER INTERFACE Keyboard Input
+*
+* Input a single character or keyboard command:
+*
+*  - Keyboard commands can be single control characters
+*    or multi-byte sequences that begin with a control
+*    character.
+*
+*  - Single characters are returned in Chr with RtnCom = 0.
+*
+*  - Keyboard commands are decoded and returned in
+*    RtnCom with Chr = ''.
+*
+*  - Mouse clicks are returned as keyboard commands; the
+*    mouse address is returned in TERM.MOUSEADDR in the
+*    TermDef array.
+*
+* NOTE: this subroutine must be called with ECHO DISABLED!
+*
+*************************************************************************
+*************************************************************************
+*
+$INCLUDE SUI.CASING ;* Keystroke decoding is case-sensitive
+*
+$INCLUDE SUI.TERMDEF
+*
+EQU ESC TO CHAR(27)
+EQU CSI TO CHAR(155)
+EQU VM TO CHAR(253)
+*
+RtnCom = 0
+Chr = ''
+TERM.MOUSEADDR = ''
+LOOP
+ * GET NEXT RAW CHARACTER
+ $INCLUDE SUI.INPCHR
+ * SORT OUT CONTROL CODES
+ IF TERM.HICTL THEN
+  IF (SQ > 31 AND SQ < 127) OR (SQ > 159) THEN
+   * RETURN PRINTABLE CHARACTERS
+   Chr = Q
+   RETURN
+  END ELSE
+   IF SQ >= 128 AND SQ <= 159 THEN
+    * TRANSLATE 8-BIT CONTROL CODES TO 7-BIT CODES
+    BEGIN CASE
+     CASE SQ EQ 155; Q = ESC : ']' ;* CSI
+     CASE SQ EQ 143; Q = ESC : 'O' ;* SS3
+     CASE SQ EQ 144; Q = ESC : 'P' ;* DCS
+     CASE SQ EQ 156; Q = ESC : '\' ;* ST
+    END CASE
+   END
+  END
+ END ELSE
+  IF SQ >= 32 AND SQ NE 127 THEN
+   * RETURN PRINTABLE CHARACTERS
+   Chr = Q
+   RETURN
+  END
+ END
+ * FIRST CHARACTER IS A CONTROL CODE SO TRANSLATE IT TO COMMAND
+ OK = 0
+ Cmd = Q
+ LOOP
+  IF NOT(OK) THEN
+   IF INDEX(TERM.INPSTR, VM : Cmd, 1) = 0 THEN
+    * NOT A RECOGNIZED COMMAND - DISCARD & START OVER
+    OK = 1
+    Cmd = ''
+   END ELSE
+    LOCATE(Cmd, TERM.INPSTR, 1; Val) THEN
+     * COMMAND RECOGNIZED
+     RtnCom = TERM.CMDSTR<1,Val> + 0
+     IF RtnCom > 0 THEN OK = 1 ;* UNAMBIGUOUS COMMAND
+    END
+   END
+  END
+ UNTIL OK DO
+  IF RtnCom < 0 THEN
+   * RECOGNIZED AMBIGUOUS COMMAND, LIKE ESC, WHICH MAY BE A LEAD-IN FOR OTHER COMMANDS
+   * GET NEXT RAW CHARACTER FROM TYPEAHED
+   $INCLUDE SUI.INPELSE
+   IF SQ < 0 THEN   
+    * NOTHING IN TYPEAHEAD - RETURN COMMAND   
+    RtnCom = -RtnCom
+    OK = 1 ;* DISAMBIGUATED COMMAND
+   END ELSE
+    RtnCom = 0
+   END
+  END ELSE
+   * GET NEXT RAW CHARACTER
+   $INCLUDE SUI.INPCHR
+  END
+  Cmd = Cmd : Q
+ REPEAT
+UNTIL RtnCom DO
+REPEAT
+IF (RtnCom >= TERM.LEFTBUTTON$ AND RtnCom <= TERM.MIDBUTTON$) OR (RtnCom >= TERM.DBLLEFTBUTTON$ AND RtnCom <= TERM.DBLMIDBUTTON$) THEN
+ * GET MOUSE CLICK ADDRESS
+ IF Q EQ '[' OR Q EQ CSI THEN
+  * ANSI STYLE MOUSE ADDRESS: rrr ';' ccc 'R'
+  Cmd = ''
+  LOOP
+   $INCLUDE SUI.INPCHR
+  UNTIL Q EQ 'R' DO
+   Cmd = Cmd : Q
+  REPEAT
+  TERM.MOUSEADDR = FIELD(Cmd,';',2) - 1 : '.' : FIELD(Cmd,';',1) - 1
+ END ELSE
+  * ASCII STYLE MOUSE ADDRESS: ccc '.' rr CR
+  INPUT TERM.MOUSEADDR:
+ END
+END
+RETURN
+END

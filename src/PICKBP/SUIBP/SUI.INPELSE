@@ -1,0 +1,103 @@
+*INCLUDE
+*
+* SMART USER INTERFACE Single Character Input If Available
+*
+*   This INCLUDE item is platform-dependant!
+* 
+*   Perform raw single-character (non-echoed) input
+*   with timeout. If no character is ready before the
+*   timeout, Q is set to NULL and SQ is set to -1.
+*   Otherwise, the character input is returned in
+*   Q and the ASCII value in SQ.
+*
+* Platforms that support SYSTEM(14):
+IF SYSTEM(14) > 0 THEN;*#DEFAULT#*
+ $INCLUDE SUI.INPCHR ;*#DEFAULT#*
+END ELSE;*#DEFAULT#*
+ Q = '';*#DEFAULT#*
+ SQ = -1;*#DEFAULT#*
+END;*#DEFAULT#*
+*
+* D3/AP:
+*#PICK#*IN SQ FOR 0.5 THEN Q = CHAR(SQ) ELSE Q = ''; SQ = -1
+*#AP#*IN SQ FOR 0.5 THEN Q = CHAR(SQ) ELSE Q = ''; SQ = -1
+*
+* Cache:
+*#CACHE#*INPUT Q,-1
+*#CACHE#*IF Q = 0 THEN
+*#CACHE#* NAP 200
+*#CACHE#* INPUT Q,-1
+*#CACHE#*END
+*#CACHE#*IF Q > 0 THEN
+*#CACHE#* Q = KEYIN()
+*#CACHE#* SQ = SEQ(Q)
+*#CACHE#*END ELSE
+*#CACHE#* Q = ''
+*#CACHE#* SQ = -1
+*#CACHE#*END
+*
+* jBase:
+*#JB#*IN SQ FOR 3 THEN Q = CHAR(SQ) ELSE Q = ''; SQ = -1
+*
+* mvBase:
+*#MVBASE#*GET Q,1 FROM SYSTEM(18) WAITING 0.3 THEN SQ = SEQ(Q) ELSE Q = ''; SQ = -1
+*
+* MVON#:
+*#MVON#*INPUT Q,-1
+*#MVON#*IF Q = 0 THEN
+*#MVON#* NAP 200
+*#MVON#* INPUT Q,-1
+*#MVON#*END
+*#MVON#*IF Q > 0 THEN
+*#MVON#* Q = KEYIN()
+*#MVON#* SQ = SEQ(Q)
+*#MVON#*END ELSE
+*#MVON#* Q = ''
+*#MVON#* SQ = -1
+*#MVON#*END
+*
+* Northgate Reality
+*#NR#*IN SQ FOR 5 THEN Q = CHAR(SQ) ELSE Q = ''; SQ = -1
+*
+* ONWare:
+*#ON#*INPUT Q,-1
+*#ON#*IF Q = 0 THEN
+*#ON#* SLEEP .2
+*#ON#* INPUT Q,-1
+*#ON#*END
+*#ON#*IF Q = 0 THEN
+*#ON#* Q = ''
+*#ON#* SQ = -1
+*#ON#*END ELSE
+*#ON#* Q = IN()
+*#ON#* SQ = SEQ(Q)
+*#ON#*END
+*
+* QM:
+*#QM#*Q = KEYREADY()
+*#QM#*IF Q = 0 THEN
+*#QM#* NAP 200
+*#QM#* Q = KEYREADY()
+*#QM#*END
+*#QM#*IF Q = 0 THEN
+*#QM#* Q = ''
+*#QM#* SQ = -1
+*#QM#*END ELSE
+*#QM#* Q = KEYINR()
+*#QM#* SQ = SEQ(Q)
+*#QM#*END
+*
+* UniVerse:
+*#UV#*INPUT Q,-1
+*#UV#*IF Q = 0 THEN
+*#UV#* NAP 200
+*#UV#* INPUT Q,-1
+*#UV#*END
+*#UV#*IF Q > 0 THEN
+*#UV#* Q = KEYIN()
+*#UV#* SQ = SEQ(Q)
+*#UV#*END ELSE
+*#UV#* Q = ''
+*#UV#* SQ = -1
+*#UV#*END
+*

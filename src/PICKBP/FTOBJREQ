@@ -1,0 +1,104 @@
+SUBROUTINE FTOBJREQ(SVR, REQUEST, RESPONSE, Xlate, MAT PARAMS, MAT CLIENV)
+**************************************************************************
+*Copyright (c) 1998-2006 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTOBJREQ
+* AUTHOR: PJS
+* VERSION: 5.3.2
+* CREATED: 01/01/1998
+* UPDATED: 06/12/2006
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.2
+*  PJS 06/12/2006
+*   Call FTCLISVR routine to handle client/server protocol
+*   with enhanced error detection & recovery.
+*
+* 5.3.1
+*  PJS 04/12/2006
+*   Check for "optional final ack" feature ('1' in CLI.CAPAS string)
+*   and if found, do not ack the final packet of a message. This should
+*   reduce the incidence of "TCP delayed ack" slowing down throughput.
+*
+* 5.2.1
+*  PJS 01/06/2005
+*   Added support for tagged system delimiters when calling FTENCODE or
+*   FTDECODE, which are useful when passing DBCS characters to Windows apps.
+*  
+* 5.0.4
+*  PJS 09/29/2004
+*   Changed max string length from 9999999 to 999999999
+*
+* 5.0.3
+*  PJS 10/24/2003
+*   Integrated QM platform specific code per mods from Martin
+*   Phillips.
+*
+* 5.0.2
+*  PJS 09/11/2003
+*   Modified PRINT expressions for UniVerse because concatenated
+*   expressions are sent in separate packets in NT version of
+*   UniVerse causing TCP "delayed ack" performance issues.
+*
+* 5.0.1
+*  PJS 02/17/2002
+*  Added new element to CLIENV() array for FTBP library version number.
+*
+* 4.0.3
+*  PJS 05/11/2001
+*   Added new platform types: SEQ (Sequoia/mvEnterprise) & VIS (UniVision)
+*
+* 4.0.2
+*  PJS 02/02/2001
+*   Improved reliability by discarding "fluff" characters that might
+*   precede a valid packet (since keyboard is "live" between requests).
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*   NEW ARGUMENT: MAT CLIENV CONTAINS INFORMATION ABOUT ACCUTERM
+*   NEW STREAMING PROTOCOL ADDED FOR FASTER TRANSACTION THRUPUT
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM OBJECT REQUESTOR
+*
+**************************************************************************
+**************************************************************************
+*
+EQU REL TO '1.6'
+*
+DIM PARAMS(30)
+DIM CLIENV(10)
+EQU CLI.PLATFORM TO CLIENV(1)
+EQU CLI.PRODUCT TO CLIENV(2)
+EQU CLI.RELEASE TO CLIENV(3)
+EQU CLI.CAPAS TO CLIENV(4)
+EQU CLI.SVCS TO CLIENV(5)
+EQU CLI.SERIAL TO CLIENV(6)
+EQU CLI.LICENSE TO CLIENV(7)
+EQU CLI.USER TO CLIENV(8)
+EQU CLI.VERSION TO CLIENV(9)
+EQU CLI.CONFIG TO CLIENV(10)
+*
+IF INDEX(CLI.SVCS,SVR,1) = 0 THEN
+ RESPONSE = 'ERR: -1 No server has been configured for request type "' : SVR : '"'
+ RETURN
+END
+* SEND REQUEST TO & GET RESPONSE FROM AUTOMATION SERVER
+CALL FTCLISVR(SVR,0,REQUEST,RESPONSE,Xlate,ERRCD,ERRMSG,MAT PARAMS,MAT CLIENV)
+IF ERRCD THEN
+ RESPONSE = 'ERR: ':ERRCD:' ':ERRMSG
+END
+RETURN
+*
+END

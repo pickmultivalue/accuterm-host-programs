@@ -1,0 +1,1101 @@
+      PROGRAM PHINSTALL
+      !****************************************************************
+      !* Copyright (c) 2019 - 3phi Solutions, Inc. - phiReport
+      !* Build Date....: 12/06/2019
+      !* Build Version.: 3.1.12.2
+      !****************************************************************
+      * 04-16-08 pt; initial creation
+      *****************************************************************
+      *
+      
+      CRT 'This version of phiReport is not supported on your MV platform.'         ;*#GENERIC#*
+      CRT 'Please contact phiReport support for more information.'                  ;*#GENERIC#*
+      SLEEP 3                                                                       ;*#GENERIC#*
+      STOP                                                                          ;*#GENERIC#*
+
+*#PICK#*      DBType = "D3"  
+*#JB#*      DBType = "JB"  
+*#QM#*      DBType = "QM"  
+*#UV#*      DBType = "UV"  
+*#UD#*      DBType = "UD"  
+      OSType = ""
+      DLType = ""
+*#JB#*      JBSKIP = ""    
+*#--#*      DLMeth = "AT"  
+*#UV#*      DLMeth = "PH"  
+*#PICK#*      DLMeth = "PH"  
+*#QM#*      DLMeth = "PH"  
+*#JB#*      DLMeth = "PH"  
+*#UD#*      DLMeth = "PH"  
+      
+      OPEN "DICT","PHIBP" TO d.PHIBP ELSE
+*#--#*   BEGIN CASE                                            
+*#--#*      CASE DBType = "UV"                                 
+*#UV#*         EXECUTE "CREATE.FILE PHIBP 1,1,19 3,1,19 " CAPTURING CAP
+*#--#*      CASE DBType = "UD"                                 
+*#UD#*         EXECUTE "CREATE.FILE DIR PHIBP 1 3" CAPTURING CAP
+*#--#*      CASE DBType = "QM"                                 
+*#QM#*         EXECUTE "CREATE.FILE PHIBP DIRECTORY" CAPTURING CAP
+*#--#*      CASE DBType = "JB"                                 
+*#JB#*         EXECUTE "CREATE.FILE PHIBP TYPE=UD" CAPTURING CAP
+*#--#*      CASE 1                                             
+*#PICK#*       EXECUTE "CREATE-FILE PHIBP 1 3" CAPTURING CAP
+*#--#*      END CASE          
+         OPEN "DICT","PHIBP" TO d.PHIBP ELSE
+            CRT "Unable to open DICT PHIBP!"
+            STOP
+         END
+      END
+      READ Version FROM d.PHIBP,"Version" ELSE Version = "##VERSION##"
+      
+*#JB#*      OSType = SYSTEM(1017)                                                         
+*#JB#*      IF OSType = "UNIX" THEN slash="/" ELSE slash="\"                              
+*#JB#*      MDPATH = SYSTEM(1009)                                                         
+*#JB#*      N=DCOUNT(MDPATH,slash)                                                        
+*#JB#*            UserAccount = FIELD(MDPATH,slash,N-1)                                         
+*#JB#*      READ JBSKIP FROM d.PHIBP,"JBSKIP" THEN                                        
+*#JB#*         IF JBSKIP="STOP" THEN                                                      
+*#JB#*            DELETE d.PHIBP,"JBSKIP"                                                 
+*#JB#*            STOP                                                                    
+*#JB#*         END                                                                        
+*#JB#*         OPEN "SYSTEM" TO f.SYSTEM ELSE CRT "Unable to open SYSTEM file!";STOP      
+*#JB#*         ATNAME = JBSKIP                                                            
+*#JB#*         READ PHISYS FROM f.SYSTEM,UserAccount THEN                                 
+*#JB#*            PHISYS<32> = ""                                                         
+*#JB#*            WRITE PHISYS ON f.SYSTEM,UserAccount                                    
+*#JB#*         END                                                                        
+*#JB#*      END ELSE                                                                      
+*#JB#*         JBSKIP = ""                                                                
+*#JB#*      END                                                                           
+*#JB#*      DELETE d.PHIBP,"JBSKIP"                                                       
+      DELETE d.PHIBP,"DLType"
+      DELETE d.PHIBP,"OSType"
+      DELETE d.PHIBP,"DBType"
+      DELETE d.PHIBP,"UserAccount"
+      READ PREVATNAME FROM d.PHIBP,"ATNAME" ELSE PREVATNAME = ""
+      DELETE d.PHIBP,"ATNAME"      
+      *
+*#--#*      S100   = SYSTEM(100)                                              
+*#--#*      * Check D3                                                        
+*#--#*      IF DBType = "" THEN                                               
+*#--#*         IF S100[1,2] = "D3" THEN                                       
+*#PICK#*            sys$host = 1                                                
+*#PICK#*            sys$imp  = 3                ;* implementation               
+*#PICK#*            sys$unix = 2                ;* Unix                         
+*#PICK#*            sys$nt   = 12                                               
+*#PICK#*            imp.info = SYSTEM(38)                                       
+*#PICK#*            unix = (imp.info<sys$host> = sys$unix)                      
+*#PICK#*            win  = (imp.info<sys$imp> = sys$nt)                         
+*#PICK#*            BEGIN CASE                                                  
+*#PICK#*               CASE unix = 1 AND win = 0     ;* Linux systems           
+*#PICK#*                  OSType = "UNIX"                                       
+*#PICK#*               CASE unix = 0 AND win = 1     ;* Windows systems         
+*#PICK#*                  OSType = "WINNT"                                      
+*#PICK#*               CASE 1                                                   
+*#PICK#*                  CRT "Unknown OS platform!"                            
+*#PICK#*                  STOP                                                  
+*#PICK#*            END CASE                                                    
+*#--#*            DBType = "D3"                                               
+*#PICK#*            UserAccount = @ACCOUNT                                      
+*#PICK#*            IF UserAccount = "dm" THEN                                  
+*#PICK#*               CRT 'Account "dm" is a system account.  Please install phiReport in a different account.'    
+*#PICK#*               EXECUTE "DELETE-FILE PHIBP" CAPTURING CAP                
+*#PICK#*               STOP                                                     
+*#PICK#*            END                                                         
+*#--#*         END                                                            
+*#--#*      END                                                               
+*#--#*      * Check JB                                                        
+*#--#*      IF S100[1,3] = "jBC" THEN                                         
+*#JB#*         EXECUTE "jdiag" CAPTURING DIAG                                 
+*#JB#*         N=DCOUNT(DIAG,@AM)                                             
+*#JB#*         vInfo = ""                                                     
+*#JB#*         jInfo = ""                                                     
+*#JB#*         FOR X=1 TO N                                                   
+*#JB#*            ENV = TRIM(FIELD(TRIM(DIAG<X>),":",1))                      
+*#JB#*            IF ENV = "RELEASE Information" THEN                         
+*#JB#*               vInfo = TRIM(FIELD(TRIM(DIAG<X>),":",2))                 
+*#JB#*               IF jInfo # "" AND vInfo # "" THEN EXIT                   
+*#JB#*            END                                                         
+*#JB#*            IF ENV = "JBCRELEASEDIR" THEN                               
+*#JB#*               jInfo = TRIM(FIELD(TRIM(DIAG<X>),"'",2))                 
+*#JB#*               IF jInfo # "" AND vInfo # "" THEN EXIT                   
+*#JB#*            END                                                         
+*#JB#*         NEXT X                                                         
+*#JB#*         JBVERSION = SYSTEM(1021)<1,1>                                  
+*#JB#*         IF JBVERSION # "5.6" AND JBVERSION # "5.7" THEN                
+*#JB#*            CRT "phiReport requires jBase 5.6 or 5.7."                  
+*#JB#*            STOP                                                        
+*#JB#*         END                                                            
+*#--#*      END                                                               
+*#--#*      *Check UV                                                         
+*#--#*      IF DBType = "" THEN                                               
+*#UV#*         S9010 = SYSTEM(9010)                                           
+*#UV#*         IF S9010[1,2] = "UV" THEN                                      
+*#--#*            DBType = "UV"                                               
+*#UV#*            UserAccount = OCONV(@WHO,"MCU")  ;* UV                      
+*#UV#*            IF UserAccount = "UV" THEN                                  
+*#UV#*               CRT 'Account "UV" is a system account.  Please install phiReport in a different account.'    
+*#UV#*               EXECUTE "DELETE.FILE PHIBP" CAPTURING CAP                
+*#UV#*               STOP                                                     
+*#UV#*            END                                                         
+*#UV#*            IF SYSTEM(91) = 1 THEN       ;* 1 = Windows else Linux      
+*#UV#*               OSType = "WINNT"                                         
+*#UV#*            END ELSE                                                    
+*#UV#*               OSType = "UNIX"                                          
+*#UV#*            END                                                         
+*#UV#*         END ELSE                                                       
+*#UV#*            CRT "Unsupported platform!"                                 
+*#UV#*            STOP                                                        
+*#UV#*         END                                                            
+*#--#*      END                                                               
+*#--#*      * Check UD                                                        
+*#--#*      IF DBType = "" THEN                                               
+*#UD#*         S9010 = SYSTEM(9010)                                           
+*#UD#*         IF S9010[1,2] = "UD" THEN                                      
+*#--#*            DBType = "UD"                                               
+*#UD#*            OSType = SYSTEM(33)                                         
+*#UD#*            IF OSType = "UNIX" THEN                                     
+*#UD#*               OSType = "UNIX"                                          
+*#UD#*               slash="/"                                                
+*#UD#*            END ELSE                                                    
+*#UD#*               OSType = "WINNT"                                         
+*#UD#*               slash="\"                                                
+*#UD#*            END                                                         
+*#UD#*            UserAccount = @WHO                                          
+*#UD#*            IF UserAccount = "SYS" THEN                                 
+*#UD#*               CRT 'Account "sys" is a system account.  Please install phiReport in a different account.'    
+*#UD#*               EXECUTE "DELETE.FILE PHIBP" CAPTURING CAP                
+*#UD#*               STOP                                                     
+*#UD#*            END                                                         
+*#UD#*            UDTHome = SYSTEM(31)                                        
+*#UD#*         END ELSE                                                       
+*#UD#*            CRT "Unsupported platform!"                                 
+*#UD#*            STOP                                                        
+*#UD#*         END                                                            
+*#--#*      END                                                               
+*#--#*      * Check QM                                                        
+*#--#*      IF DBType = "" THEN                                               
+*#QM#*         OPEN "QM.ACCOUNTS" TO F THEN                                   
+*#QM#*            CLOSE F                                                     
+*#--#*            DBType      = "QM"                                          
+*#QM#*            UserAccount = @ACCOUNT                                      
+*#QM#*            IF UserAccount = "QMSYS" THEN                               
+*#QM#*               CRT 'Account "QMSYS" is a system account.  Please install phiReport in a different account.'    
+*#QM#*               EXECUTE "DELETE.FILE PHIBP" CAPTURING CAP                
+*#QM#*               STOP                                                     
+*#QM#*            END                                                         
+*#QM#*            OSType      = SYSTEM(1010)                                  
+*#QM#*         END ELSE                                                       
+*#QM#*            CRT "Unsupported platform!"                                 
+*#QM#*            STOP                                                        
+*#QM#*         END                                                            
+*#--#*      END                                                               
+*#--#*      IF DBType = "" THEN                                               
+*#--#*         CRT "Unable to determine platform type."                       
+*#--#*         STOP                                                           
+*#--#*      END                                                               
+      *
+      GOSUB CheckDL
+      BEGIN CASE
+         CASE DLType = "WG";  CRT "Download method : wget"
+         CASE DLType = "CU";  CRT "Download method : curl"
+         CASE DLType = "PS";  CRT "Download method : powershell"
+         CASE 1         
+            CRT "No Supported Download method found!"
+            STOP
+      END CASE
+      WRITE DLType ON d.PHIBP,"DLType"
+      WRITE OSType ON d.PHIBP,"OSType"
+      WRITE DBType ON d.PHIBP,"DBType"
+      WRITE UserAccount ON d.PHIBP,"UserAccount"
+      *
+*#--#*      IF DBType = "QM" OR DBType = "UD" OR DBType = "UV" THEN           
+*#QM#*         MD = "VOC"                                                     
+*#UV#*         MD = "VOC"                                                     
+*#UD#*         MD = "VOC"                                                     
+*#--#*      END ELSE                                                          
+*#PICK#*         MD = "MD"                                                      
+*#JB#*         MD = "MD"                                                      
+*#--#*      END                                                               
+      OPEN MD TO f.MD ELSE
+         CRT "Unable to open ":MD:" file!"
+         CRT "Log to your install account and run PHINST from TCL to rerun the installation."
+         STOP
+      END
+       PHINST = "PA"
+*#QM#* PHINST<-1> = "PTERM CASE NOINVERT"
+*#UV#* PHINST<-1> = "PTERM CASE NOINVERT"
+       PHINST<-1> = "BASIC PHIBP phiBOOTSTRAP"
+       PHINST<-1> = "RUN PHIBP phiBOOTSTRAP"
+       WRITE PHINST ON f.MD,"PHINST"
+	  
+*#--#*      IF DBType = "UV" THEN                                                
+*#UV#*         READ RELLEVEL FROM f.MD,"RELLEVEL" ELSE RELLEVEL = ""             
+*#UV#*         IF RELLEVEL<3> # "PICK" THEN                                      
+*#UV#*            CRT "*******************************************************"  
+*#UV#*            CRT "The current account flavor is ":RELLEVEL<3>               
+*#UV#*            CRT "phiReport must be installed in a PICK flavored account."  
+*#UV#*            CRT "Please try again in a different account."                 
+*#UV#*            STOP                                                           
+*#UV#*            CRT "*******************************************************"  
+*#UV#*         END                                                               
+*#--#*      END                                                                  
+      *
+*#--#*      IF DBType = "UD" THEN                                                
+*#UD#*         OPEN "UD.ACCOUNT" TO f.UDA ELSE                                   
+*#UD#*            UDACCT    = "F"                                                
+*#UD#*            UDACCT<2> = UDTHome:slash:"sys":slash:"UD.ACCOUNT"             
+*#UD#*            UDACCT<3> = UDTHome:slash:"sys":slash:"D_UD.ACCOUNT"           
+*#UD#*            WRITE UDACCT ON f.MD,"UDA"                                     
+*#UD#*            OPEN "UDA" TO f.UDA THEN                                       
+*#UD#*               CLOSE f.UDA                                                 
+*#UD#*               WRITE UDACCT ON f.MD,"UD.ACCOUNT"                           
+*#UD#*               DELETE f.MD,"UDA"                                           
+*#UD#*               OPEN "UD.ACCOUNT" TO f.UDA ELSE                             
+*#UD#*                  CRT "Unable to locate UD.ACCOUNT file."                  
+*#UD#*                  CRT "Please create VOC UD.ACCOUNT and try again."        
+*#UD#*                  STOP                                                     
+*#UD#*               END                                                         
+*#UD#*            END ELSE                                                       
+*#UD#*               CRT "Unable to locate UD.ACCOUNT file."                     
+*#UD#*               CRT "Please create VOC UD.ACCOUNT and try again."           
+*#UD#*               STOP
+*#UD#*            END
+*#UD#*         END
+*#--#*      END                                                                  
+*#JB#*      IF JBSKIP="" THEN                                                                      
+         ATNAME  = ""
+         IF PREVATNAME = "" THEN             
+            READ ATMD FROM f.MD,"ACCUTERMCTRL" THEN
+               IF ATMD<1> = "Q" AND ATMD<3> = "ACCUTERMCTRL" THEN
+                  ATNAME = ATMD<2>
+               END
+            END
+         END ELSE
+            ATNAME = PREVATNAME
+         END
+         IF ATNAME = "" THEN
+            PREVATNAME = "ACCUTERM"
+            CRT "Please enter the account name where AccuTerm is installed."
+            CRT " (default=":PREVATNAME:"), (Q)uit --> ":
+            INPUT ATNAME
+            IF ATNAME="q" OR ATNAME="Q" THEN STOP
+            IF ATNAME = "" THEN ATNAME = PREVATNAME
+         END
+         CRT ""
+*#JB#*      END ELSE                                                                               
+*#JB#*         ATNAME = JBSKIP                                                                     
+*#JB#*      END                                                                                    
+      * Setup AccuTerm
+*#--#*      IF DBType = "UD" THEN                                                                              
+*#UD#*         READ ATACCT FROM f.UDA,ATNAME THEN                                                              
+*#UD#*            MD = "DIR"; MD<2> = ATACCT<1>:slash:"FTBP"        ; MD<3> = ATACCT<1>:slash:"D_FTBP";          WRITE MD ON f.MD,"FTBP"         
+*#UD#*            MD = "DIR"; MD<2> = ATACCT<1>:slash:"GUIBP"       ; MD<3> = ATACCT<1>:slash:"D_GUIBP";         WRITE MD ON f.MD,"GUIBP"        
+*#UD#*            MD = "DIR"; MD<2> = ATACCT<1>:slash:"OBJBP"       ; MD<3> = ATACCT<1>:slash:"D_OBJBP";         WRITE MD ON f.MD,"OBJBP"        
+*#UD#*            MD = "F"  ; MD<2> = ATACCT<1>:slash:"ACCUTERMCTRL"; MD<3> = ATACCT<1>:slash:"D_ACCUTERMCTRL";  WRITE MD ON f.MD,"ACCUTERMCTRL" 
+*#UD#*         END ELSE                                                                                        
+*#UD#*            CRT "Account ":ATNAME:" is not defined in UD.ACCOUNT file."                                  
+*#UD#*            CRT "Please create item ":ATNAME:" in UD.ACCOUNT and try again."                             
+*#UD#*            STOP                                                                                         
+*#UD#*         END                                                                                             
+*#--#*      END ELSE                                                                                  
+*#PICK#*         MD = "Q"; MD<2> = ATNAME; MD<3> = "FTBP"        ; WRITE MD ON f.MD,"FTBP"              
+*#PICK#*         MD = "Q"; MD<2> = ATNAME; MD<3> = "GUIBP"       ; WRITE MD ON f.MD,"GUIBP"             
+*#PICK#*         MD = "Q"; MD<2> = ATNAME; MD<3> = "OBJBP"       ; WRITE MD ON f.MD,"OBJBP"             
+*#PICK#*         MD = "Q"; MD<2> = ATNAME; MD<3> = "ACCUTERMCTRL"; WRITE MD ON f.MD,"ACCUTERMCTRL"      
+*#JB#*         MD = "Q"; MD<2> = ATNAME; MD<3> = "FTBP"        ; WRITE MD ON f.MD,"FTBP"              
+*#JB#*         MD = "Q"; MD<2> = ATNAME; MD<3> = "GUIBP"       ; WRITE MD ON f.MD,"GUIBP"             
+*#JB#*         MD = "Q"; MD<2> = ATNAME; MD<3> = "OBJBP"       ; WRITE MD ON f.MD,"OBJBP"             
+*#JB#*         MD = "Q"; MD<2> = ATNAME; MD<3> = "ACCUTERMCTRL"; WRITE MD ON f.MD,"ACCUTERMCTRL"      
+*#UV#*         MD = "Q"; MD<2> = ATNAME; MD<3> = "FTBP"        ; WRITE MD ON f.MD,"FTBP"              
+*#UV#*         MD = "Q"; MD<2> = ATNAME; MD<3> = "GUIBP"       ; WRITE MD ON f.MD,"GUIBP"             
+*#UV#*         MD = "Q"; MD<2> = ATNAME; MD<3> = "OBJBP"       ; WRITE MD ON f.MD,"OBJBP"             
+*#UV#*         MD = "Q"; MD<2> = ATNAME; MD<3> = "ACCUTERMCTRL"; WRITE MD ON f.MD,"ACCUTERMCTRL"      
+*#QM#*         MD = "Q"; MD<2> = ATNAME; MD<3> = "FTBP"        ; WRITE MD ON f.MD,"FTBP"              
+*#QM#*         MD = "Q"; MD<2> = ATNAME; MD<3> = "GUIBP"       ; WRITE MD ON f.MD,"GUIBP"             
+*#QM#*         MD = "Q"; MD<2> = ATNAME; MD<3> = "OBJBP"       ; WRITE MD ON f.MD,"OBJBP"             
+*#QM#*         MD = "Q"; MD<2> = ATNAME; MD<3> = "ACCUTERMCTRL"; WRITE MD ON f.MD,"ACCUTERMCTRL"      
+*#--#*      END                                                                                       
+      *
+*#--#*      DIM GETENV(1)   ;* Required in order to compile in UV                                  
+*#--#*      BEGIN CASE                                                                             
+*#--#*         CASE DBType = "UV"                                                                  
+*#UV#*            MD = "Q"; MD<2> = ATNAME; MD<3> = "FTBP.O"      ; WRITE MD ON f.MD,"FTBP.O"      
+*#UV#*            MD = "Q"; MD<2> = ATNAME; MD<3> = "GUIBP.O"     ; WRITE MD ON f.MD,"GUIBP.O"     
+*#UV#*            MD = "Q"; MD<2> = ATNAME; MD<3> = "OBJBP.O"     ; WRITE MD ON f.MD,"OBJBP.O"     
+*#--#*         CASE DBType = "QM"                                                                  
+*#QM#*            MD = "Q"; MD<2> = ATNAME; MD<3> = "FTBP.OUT"    ; WRITE MD ON f.MD,"FTBP.OUT"    
+*#QM#*            MD = "Q"; MD<2> = ATNAME; MD<3> = "GUIBP.OUT"   ; WRITE MD ON f.MD,"GUIBP.OUT"   
+*#QM#*            MD = "Q"; MD<2> = ATNAME; MD<3> = "OBJBP.OUT"   ; WRITE MD ON f.MD,"OBJBP.OUT"   
+*#--#*         CASE DBType = "JB"                                                                  
+*#JB#*            OPEN "SYSTEM" TO f.SYSTEM ELSE CRT "Unable to open SYSTEM file!";STOP            
+*#JB#*            READ ATSYS FROM f.SYSTEM,ATNAME THEN                                             
+*#JB#*               ATPATH = ATSYS<2>                                                             
+*#JB#*               * Update account lib and bin path with AccuTerm path                          
+*#JB#*               READ PHISYS FROM f.SYSTEM,UserAccount THEN                                    
+*#JB#*                  isOK = 1                                                                   
+*#JB#*                  FLG1=GETENV("PATH",NEWPATH)                                                
+*#JB#*                  FLG2=GETENV("JBCOBJECTLIST",NEWOBJLIST)                                    
+*#JB#*                  IF OSType = "UNIX" THEN                                                    
+*#JB#*                     IF INDEX(PHISYS<25>,ATPATH:'/bin',1) = 0 THEN                           
+*#JB#*                        PHISYS<25> = PHISYS<25>:":":ATPATH:'/bin'                            
+*#JB#*                        PHISYS<26> = PHISYS<26>:":":ATPATH:'/lib'                            
+*#JB#*                        NEWPATH    = NEWPATH:":":ATPATH:'/bin'                               
+*#JB#*                        NEWOBJLIST = NEWOBJLIST:":":ATPATH:'/lib'                            
+*#JB#*                        isOK = 0                                                             
+*#JB#*                     END                                                                     
+*#JB#*                  END ELSE                                                                   
+*#JB#*                     IF INDEX(PHISYS<25>,ATPATH:'\bin',1) = 0 THEN                           
+*#JB#*                        PHISYS<25> = PHISYS<25>:";":ATPATH:'\bin'                            
+*#JB#*                        PHISYS<26> = PHISYS<26>:";":ATPATH:'\lib'                            
+*#JB#*                        NEWPATH    = NEWPATH:";":ATPATH:'\bin'                               
+*#JB#*                        NEWOBJLIST = NEWOBJLIST:";":ATPATH:'\lib'                            
+*#JB#*                        isOK = 0                                                             
+*#JB#*                     END                                                                     
+*#JB#*                  END                                                                        
+*#JB#*                  IF isOK = 0 THEN                                                           
+*#JB#*                     PHISYS<32> = "phiBOOTSTRAP"                                             
+*#JB#*                     WRITE PHISYS ON f.SYSTEM,UserAccount                                    
+*#JB#*                     WRITE ATNAME ON d.PHIBP,"JBSKIP"                                        
+*#JB#*                     EXECUTE "LOGTO ":UserAccount                                            
+*#JB#*                     STOP                                                                    
+*#JB#*                  END                                                                        
+*#JB#*               END ELSE                                                                      
+*#JB#*                  CRT "Account ":UserAccount:" does not exist in SYSTEM file!"               
+*#JB#*                  STOP                                                                       
+*#JB#*               END                                                                           
+*#JB#*            END ELSE                                                                         
+*#JB#*               CRT "Account ":ATNAME:" does not exist in SYSTEM file!"                       
+*#JB#*               CRT "Please install AccuTerm!"                                                
+*#JB#*               STOP                                                                          
+*#JB#*            END                                                                              
+*#--#*      END CASE                                                                               
+      *
+      OPEN "FTBP" TO f.FTBP THEN
+         READ dummy FROM f.FTBP,"FTRECV" ELSE
+            CRT "Account ":ATNAME:" appears to have an invalid FTBP file."
+            STOP
+         END
+      END ELSE
+         CRT "Account ":ATNAME:" does not appear to be a valid AccuTerm account or FTBP is missing."
+         STOP
+      END
+      CLOSE f.FTBP
+      *
+      OPEN "GUIBP" TO f.GUIBP THEN
+         READ dummy FROM f.GUIBP,"ATGUIINIT2" ELSE
+            CRT "Account ":ATNAME:" appears to have an invalid GUIBP file or incorrect AccuTerm version."
+            CRT 'Make sure to select option "GUI support programs" at the AccuTerm Host Program Installation Options'
+            STOP
+         END
+      END ELSE
+         CRT "Account ":ATNAME:" does not appear to be a valid AccuTerm account."
+         CRT 'Make sure to select option "GUI support programs" at the AccuTerm Host Program Installation Options'
+         STOP
+      END
+      CLOSE f.GUIBP
+      *
+      OPEN "OBJBP" TO f.OBJBP THEN
+         READ dummy FROM f.OBJBP,"ATINITOBJMGR" ELSE
+            CRT "Account ":ATNAME:" appears to have an invalid OBJBP file."
+            STOP
+         END
+      END ELSE
+         CRT "Account ":ATNAME:" does not appear to be a valid AccuTerm account."
+         CRT 'Make sure to select option "ObjectBridge support" at the AccuTerm Host Program Installation Options'
+         STOP
+      END
+      CLOSE f.OBJBP
+      *
+      OPEN "ACCUTERMCTRL" TO f.ACCUTERMCTRL ELSE
+         CRT "Account ":ATNAME:" does not appear to be a valid AccuTerm account."
+         STOP
+      END
+      CLOSE f.ACCUTERMCTRL
+      *
+      WRITE ATNAME ON d.PHIBP,"ATNAME"
+      *
+*#--#*      BEGIN CASE                                                           
+*#--#*         CASE DBType = "UV"                                                
+*#UV#*            EXECUTE "CATALOG FTBP *" CAPTURING CAP                         
+*#UV#*            EXECUTE "CATALOG OBJBP *" CAPTURING CAP                        
+*#UV#*            EXECUTE "CATALOG GUIBP *" CAPTURING CAP                        
+*#--#*         CASE DBType = "UD"                                                
+*#UD#*            EXECUTE 'SELECT  FTBP WITH @ID # "_]"' CAPTURING CAP           
+*#UD#*            DATA "Y"                                                       
+*#UD#*            EXECUTE "CATALOG FTBP FORCE LOCAL" CAPTURING CAP               
+*#UD#*            EXECUTE 'SELECT  OBJBP  WITH @ID # "_]"' CAPTURING CAP         
+*#UD#*            DATA "Y"                                                       
+*#UD#*            EXECUTE "CATALOG OBJBP FORCE LOCAL" CAPTURING CAP              
+*#UD#*            EXECUTE 'SELECT  GUIBP  WITH @ID # "_]"' CAPTURING CAP         
+*#UD#*            DATA "Y"                                                       
+*#UD#*            EXECUTE "CATALOG GUIBP FORCE LOCAL" CAPTURING CAP              
+*#--#*         CASE DBType = "QM"                                                
+*#QM#*            EXECUTE "CATALOG FTBP * LOCAL NO.PAGE NO.QUERY" CAPTURING CAP  
+*#QM#*            EXECUTE "CATALOG OBJBP * LOCAL NO.PAGE NO.QUERY" CAPTURING CAP 
+*#QM#*            EXECUTE "CATALOG GUIBP * LOCAL NO.PAGE NO.QUERY" CAPTURING CAP 
+*#--#*         CASE DBType = "JB"                                                
+*#JB#*            EXECUTE "CATALOG FTBP" CAPTURING CAP                           
+*#JB#*            EXECUTE "CATALOG OBJBP" CAPTURING CAP                          
+*#JB#*            EXECUTE "CATALOG GUIBP" CAPTURING CAP                          
+*#--#*         CASE DBType = "D3"                                                
+*#PICK#*            EXECUTE "CATALOG FTBP" CAPTURING CAP                           
+*#PICK#*            EXECUTE "CATALOG OBJBP" CAPTURING CAP                          
+*#PICK#*            EXECUTE "CATALOG GUIBP" CAPTURING CAP                          
+*#--#*      END CASE                                                             
+      *
+      CALL FTVSINF(PLATFORM, PRODUCT, Release, CAPABILITIES, SERVICES, SERIALNUM, LICENSE, USER)
+      IF PLATFORM = 0 THEN CRT "phiReport requires AccuTerm Client.";STOP
+      IF PRODUCT # "4" THEN CRT "phiReport requires AccuTerm Windows 32";STOP
+      IF FIELD(Release,".",1) < 7 THEN CRT "phiReport requires AccuTerm 7 or better."; STOP
+      IF INDEX(SERVICES,"a",1) = 0 THEN CRT "phiReport requires AccuTerm's Object Brigdge feature.";STOP
+      IF INDEX(SERVICES,"g",1) = 0 THEN CRT "phiReport requires AccuTerm's GUI runtine.";STOP
+      IF INDEX(CAPABILITIES,"O",1) = 0 THEN CRT "Object Brigdge is not supported on your workstation!";STOP
+      IF INDEX(CAPABILITIES,"G",1) = 0 THEN CRT "GUI runtime is not supported on your workstation!";STOP
+      IF INDEX(CAPABILITIES,"K",1) = 0 THEN CRT "Kermit Protocol is not supported on your workstation!";STOP
+      *
+      EXE = ""
+*#--#*      BEGIN CASE                                            
+*#--#*         CASE DBType = "UV"                                 
+*#UV#*            EXE<-1> = "PTERM CASE NOINVERT"                 
+*#UV#*            EXE<-1> = "CREATE.FILE INSTBP 1,1,19 3,1,19 "   
+*#UV#*            EXE<-1> = "PHICREATE-FILE AppWF 1 13"           
+*#--#*         CASE DBType = "UD"                                 
+*#UD#*            EXE<-1> = "CREATE.FILE DIR INSTBP 1 3"          
+*#UD#*            EXE<-1> = "CREATE.FILE MULTIFILE AppWF 1 13"    
+*#--#*         CASE DBType = "QM"                                 
+*#QM#*            EXE<-1> = "PTERM CASE NOINVERT"                 
+*#QM#*            EXE<-1> = "CREATE.FILE INSTBP DIRECTORY"        
+*#QM#*            EXE<-1> = "CREATE.FILE AppWF MULTIFILE"         
+*#--#*         CASE DBType = "JB"                                 
+*#JB#*            EXE<-1> = "CREATE.FILE INSTBP TYPE=UD"          
+*#JB#*            EXE<-1> = "CREATE.FILE AppWF 1 13"              
+*#--#*         CASE 1                                             
+*#PICK#*            EXE<-1> = "CREATE-FILE INSTBP 1 3"              
+*#PICK#*            EXE<-1> = "CREATE-FILE AppWF 1 13"              
+*#--#*      END CASE                                              
+      *
+      nEXE = DCOUNT(EXE,@AM)
+      FOR xEXE=1 TO nEXE
+         EXECUTE EXE<xEXE>  CAPTURING CAP
+      NEXT xEXE
+      * Download code
+      SourceURL = "http://3phi.cloud/phiReport/obj/"
+      FileName  = "INSTBP"
+      SubPath   = "phiInstall_":DBType:"_":FileName
+      GOSUB PrepTemp
+      IF VBA.Result[1,6] = "Error:" THEN
+         CRT VBA.Result
+         STOP
+      END
+      Folder = VBA.Result
+
+      * Check avail version
+      SourceFile = SourceURL:DBType:"/Version"
+      TargetFile = Folder:"\Version"
+      VBA.Result = ""
+      RetRes     = 1
+      GOSUB URLDownloadSave
+      IF VBA.Result[1,5] # "Error" AND VBA.Result # "" THEN
+         NewVersion = VBA.Result 
+         IF Version = "##VERSION##" THEN Version = NewVersion
+         IF NewVersion # Version  THEN
+            CRT "Current Version.. : ":Version
+            CRT "Available Version : ":NewVersion
+            LOOP
+               CRT "Select the follwing options:"
+               CRT "   (1) Install new version"
+               CRT "   (2) Re-Install current version"
+               CRT "   (C)ancel"
+               INPUT Ans
+               Ans = OCONV(Ans,"MCU")
+               IF Ans = "C" THEN STOP
+               IF Ans = "1" THEN Version = NewVersion
+            UNTIL Ans = "1" OR Ans = "2" DO REPEAT
+            CRT 
+         END
+      END
+      CRT "Installing phiReport ":Version
+      ProgName   = "phiINSTALL"
+      SourcePath = SourceURL:DBType:"_":Version:"/"
+      Tries      = 0
+      Tries2     = 0
+      Tries3     = 0
+      LF = "<":"lf>"
+Download:
+      CRT "Downloading installation program..."
+      DLOK = 0
+      IF DLMeth = "PH" THEN
+         ******************************
+         ******** VBA Download ********
+         ******************************
+         * Download check record
+         RetRes     = 1
+         SourceFile = SourcePath:FileName:"/":ProgName:".0"
+         TargetFile = ""
+         GOSUB URLDownloadSave
+         IF VBA.Result = "" THEN
+            INPUTCLEAR
+            Tries2 = Tries2 + 1
+            IF Tries2 > 3 THEN
+               CRT "[b9] Error downloading installation program.  Please enter PHINST at TCL to try again"
+               STOP
+            END ELSE
+               GO Download
+            END
+         END
+         IF VBA.Result[1,5] = "Error" THEN
+            CRT "Download from : ":SourceFile
+            CRT "Download Msg  : ":VBA.Result
+            CRT "[b7] Unable to download installation program!"
+            STOP
+         END
+         LF = "<":"lf>"
+         VBA.Result = CHANGE(VBA.Result,LF,"")
+         CHUNK = FIELD(VBA.Result,"|",1)
+         CHECK = FIELD(VBA.Result,"|",2)
+         IF CHUNK > 0 THEN
+            SRC = ""
+            FOR x=1 TO CHUNK
+               CRT "*":
+               SourceFile = SourcePath:FileName:"/":ProgName:".":x
+               GOSUB URLDownloadSave
+               SRC = SRC:VBA.Result
+            NEXT x
+            CRT ""
+            IF LEN(SRC) = CHECK THEN
+               SRC = CHANGE(SRC,LF,@AM)
+               DLOK = 1
+            END ELSE
+               Tries = Tries + 1
+               IF Tries > 3 THEN
+                  CRT "[b1] ERROR : Unable to download installation file!"
+               END ELSE
+                  CRT "[b2] Error downloading installation program, press <ENTER> to try again, (Q)uit."
+                  CRT "    File :":SourceFile
+                  CRT " Expected Size : ":CHECK
+                  CRT " Received Size : ":LEN(SRC)
+                  INPUT xx
+                  IF xx#"Q" AND xx#"q" THEN GO Download
+               END
+            END
+         END ELSE
+            * NO CHUNKING
+            SourceFile = SourcePath:FileName:"/":ProgName
+            TargetFile = ""
+            GOSUB URLDownloadSave
+            IF VBA.Result = "" THEN
+               Tries3 = Tries3 + 1
+               IF Tries3 > 3 THEN
+                  CRT "[b10] Error downloading installation program.  Please enter PHINST at TCL to try again"
+                  STOP
+               END ELSE
+                  GO Download
+               END
+            END         
+            IF VBA.Result[1,5] = "Error" THEN
+               CRT "Download from : ":SourceFile
+               CRT "Download Msg  : ":VBA.Result
+               CRT "[b8] Unable to download installation program!"
+               STOP
+            END
+            IF LEN(VBA.Result) = CHECK THEN
+               SRC = CHANGE(VBA.Result,LF,@AM)
+               DLOK = 1
+            END ELSE
+               Tries = Tries + 1
+               IF Tries > 3 THEN
+                  CRT "[b3] ERROR : Unable to download installation file!"
+               END ELSE
+                  CRT "[b4] Error downloading installation program, press <ENTER> to try again, (Q)uit."
+                  CRT "    File :":SourceFile
+                  CRT " Expected Size : ":CHECK
+                  CRT " Received Size : ":LEN(VBA.Result)
+                  INPUT xx
+                  IF xx#"Q" AND xx#"q" THEN GO Download
+               END
+            END   
+         END
+         IF DLOK THEN
+            OPEN "INSTBP" TO f.INST ELSE
+               CRT "Unable to open file INSTBP!"
+               STOP
+            END
+            WRITE SRC ON f.INST,"phiINSTALL"
+         END
+      END ELSE
+         ******************************
+         ******** AT Download *********
+         ******************************
+         SourceFile = SourcePath:FileName:"/":ProgName
+         TargetFile = Folder:"\":ProgName
+         RetRes = 0
+         GOSUB URLDownloadSave
+         IF VBA.Result[1,5] = "Error" THEN
+            CRT "Download from : ":SourceFile
+            CRT "Download to   : ":TargetFile
+            CRT "Download Msg  : ":VBA.Result
+            CRT "[b5] Unable to download installation program!"
+            STOP
+         END
+         MODE         = "K,T"       ;* Kermit, Text
+         HOST.FILE    = FileName
+         HOST.IDS     = ""
+         REMOTE.PATH  = Folder
+         REMOTE.FILES = "*"         ;* ProgList
+         *
+         CALL FTRECV(MODE,HOST.FILE,HOST.IDS,REMOTE.PATH,REMOTE.FILES,ITEM.COUNT,BYTE.COUNT,STAT)
+         IF STAT = "" THEN
+            CRT "Items downloaded : ":ITEM.COUNT
+            CRT "Bytes downloaded : ":BYTE.COUNT
+            CRT "Attempts         : ":Tries
+            DLOK = 1
+         END ELSE
+            Tries = Tries + 1
+            IF Tries > 3 THEN
+               CRT "ERROR : ":STAT
+            END ELSE
+               CRT "[b6] Error downloading installation program, press <ENTER> to try again, (Q)uit."
+               CRT "    File :":SourceFile
+               INPUT xx
+               IF xx#"Q" AND xx#"q" THEN GO Download
+            END
+         END
+      END
+
+      IF DLOK THEN
+*#--#*         BEGIN CASE                                                              
+*#--#*            CASE DBType = "UV"                                                   
+*#UV#*               EXECUTE "BASIC INSTBP phiINSTALL" CAPTURING CAP                   
+*#--#*            CASE DBType = "UD"                                                   
+*#UD#*               EXECUTE "BASIC INSTBP phiINSTALL" CAPTURING CAP                   
+*#--#*            CASE DBType = "QM"                                                   
+*#QM#*               EXECUTE "BASIC INSTBP phiINSTALL NO.PAGE NO.QUERY" CAPTURING CAP  
+*#--#*            CASE DBType = "JB"                                                   
+*#JB#*               EXECUTE "BASIC INSTBP phiINSTALL" CAPTURING CAP                   
+*#--#*            CASE DBType = "D3"                                                   
+*#PICK#*               EXECUTE "COMPILE INSTBP phiINSTALL" CAPTURING CAP                 
+*#--#*         END CASE                                                                
+         WRITE Version ON d.PHIBP,"Version"
+         EXECUTE "RUN INSTBP phiINSTALL"
+      END
+
+      EXECUTE "CLEAR.FILE AppWF" CAPTURING CAP
+      GOSUB DeleteDir
+*#JB#*      EXECUTE "OFF"                                                              
+      STOP
+      *********************************
+CheckDL:
+      BEGIN CASE
+         CASE OSType = "UNIX" OR OSType = "Linux" OR OSType = "Solaris"
+*#--#*            BEGIN CASE                                                     
+*#--#*               CASE DBType = "UV"                                          
+*#UV#*                  EXECUTE \sh -c "wget --version 2>&1"\ CAPTURING CAP           
+*#--#*               CASE DBType = "JB"                                          
+*#JB#*                  EXECUTE @IM:"kwget --version 2>&1" CAPTURING CAP              
+*#--#*               CASE 1                                                      
+*#PICK#*                  EXECUTE "!wget --version 2>&1" CAPTURING CAP                  
+*#UD#*                  EXECUTE "!wget --version 2>&1" CAPTURING CAP                  
+*#QM#*                  EXECUTE "!wget --version 2>&1" CAPTURING CAP                  
+*#--#*            END CASE                                                       
+				IF INDEX(CAP,"not found",1) > 0 THEN
+				   CRT "wget is not available on your system."
+				END ELSE
+				   DLType = "WG"
+				   RETURN
+				END
+				IF DLType = "" THEN  ;* check curl
+*#--#*            BEGIN CASE                                                     
+*#--#*               CASE DBType = "UV"                                          
+*#UV#*                  EXECUTE \sh -c "curl --version 2>&1"\ CAPTURING CAP           
+*#--#*               CASE DBType = "JB"                                          
+*#JB#*                  EXECUTE @IM:"kcurl --version 2>&1" CAPTURING CAP              
+*#--#*               CASE 1                                                      
+*#PICK#*                  EXECUTE "!curl --version 2>&1" CAPTURING CAP                  
+*#UD#*                  EXECUTE "!curl --version 2>&1" CAPTURING CAP                  
+*#QM#*                  EXECUTE "!curl --version 2>&1" CAPTURING CAP                  
+*#--#*            END CASE                                                       
+				END
+				IF INDEX(CAP,"not found",1) > 0 THEN
+				   CRT "curl is not available on your system."
+				   CRT "phiReport Web Installer requires wget or curl to be available on your server"
+				   CRT "** Installation aborted **"
+				   CRT ""
+				   CRT "See http://3phi.solutions/phiReport/help/Installation.html for installation instructions."
+				   STOP
+				END ELSE
+				   DLType = "CU"
+				   RETURN
+				END
+			
+         CASE OSType = "WINNT" OR OSType = "Windows"
+            IF DLType = "" THEN  ;* check WGET
+*#--#*               BEGIN CASE                                                  
+*#--#*                  CASE DBType = "JB"                                       
+*#JB#*                     EXECUTE @IM:"kwget --version" CAPTURING CAP           
+*#--#*                  CASE DBType = "UV"                                       
+*#UV#*                     EXECUTE "DOS /c wget --version" CAPTURING CAP         
+*#--#*                  CASE 1                                                   
+*#PICK#*                     EXECUTE "!wget --version" CAPTURING CAP               
+*#UD#*                     EXECUTE "!wget --version" CAPTURING CAP               
+*#QM#*                     EXECUTE "!wget --version" CAPTURING CAP               
+*#--#*               END CASE                                                    
+               IF INDEX(CAP,"is not recognized as an internal or external command",1) > 0 OR INDEX(CAP,"GNU Wget",1) = 0 THEN
+                  CRT "WGET is not available on your system."
+               END ELSE
+                  DLType = "WG"
+                  RETURN
+               END
+            END
+            IF DLType = "" THEN  ;* check CURL
+*#--#*               BEGIN CASE                                                  
+*#--#*                  CASE DBType = "JB"                                       
+*#JB#*                     EXECUTE @IM:"kcurl --version" CAPTURING CAP           
+*#--#*                  CASE DBType = "UV"                                       
+*#UV#*                     EXECUTE "DOS /c curl --version" CAPTURING CAP         
+*#--#*                  CASE 1                                                   
+*#PICK#*                     EXECUTE "!curl --version" CAPTURING CAP               
+*#UD#*                     EXECUTE "!curl --version" CAPTURING CAP               
+*#QM#*                     EXECUTE "!curl --version" CAPTURING CAP               
+*#--#*               END CASE                                                    
+               IF INDEX(CAP,"is not recognized as an internal or external command",1) > 0 OR (INDEX(CAP,"Protocols",1) = 0 OR INDEX(CAP,"Features",1) = 0) THEN
+                  CRT "CURL is not available on your system."
+               END ELSE
+                  DLType = "CU"
+                  RETURN
+               END
+            END
+            IF DLType = "" THEN
+               PSVersion = ""
+               OPEN "MD" TO f.MD ELSE
+                  CRT  "Unable to open ":MD:" file!"
+                  STOP
+               END
+               BAT    = "@Echo OFF"
+               BAT<2> = "Echo.Get Powershell version"
+               BAT<3> = "powershell.exe -Command $PSVersionTable"
+*#--#*               BEGIN CASE                                                  
+*#--#*                  CASE DBType = "JB"                                       
+*#JB#*                     EXECUTE "jdiag" CAPTURING DIAG                        
+*#JB#*                     N=DCOUNT(DIAG,@AM)                                    
+*#JB#*                     FOR X=1 TO N                                          
+*#JB#*                        ENV = TRIM(FIELD(TRIM(DIAG<X>),":",1))             
+*#JB#*                        IF ENV = "TEMP file path" THEN                     
+*#JB#*                           TPATH = TRIM(FIELD(TRIM(DIAG<X>),"'",2))        
+*#JB#*                           EXIT                                            
+*#JB#*                        END                                                
+*#JB#*                     NEXT X                                                
+*#JB#*                     IF TPATH[LEN(TPATH),1] # "\" THEN TPATH = TPATH:"\"   
+*#JB#*                     MD = "F"                                              
+*#JB#*                     MD<2> = TPATH                                         
+*#JB#*                     WRITE MD ON f.MD,"TMP"                                
+*#JB#*                     OPEN "TMP" TO f.TMP ELSE                              
+*#JB#*                        CRT "Unable to open ":TPATH:"!"                    
+*#JB#*                        STOP                                               
+*#JB#*                     END                                                   
+*#JB#*                     WRITE BAT ON f.TMP,"PSV.BAT"                          
+*#JB#*                     EXECUTE @IM:"k":TPATH:"PSV.BAT" CAPTURING PSVer       
+*#--#*                  CASE DBType = "UV"                                       
+*#UV#*                     TPATH = ""                                            
+*#UV#*                     EXECUTE "ENV" CAPTURING CAP                           
+*#UV#*                     n=DCOUNT(CAP,@AM)                                     
+*#UV#*                     FOR X=1 TO n                                          
+*#UV#*                        IF FIELD(CAP<X>,"=",1) = "TMP" OR FIELD(CAP<X>,"=",1) = "TEMP" THEN  
+*#UV#*                           TPATH = FIELD(CAP<X>,"=",2)                     
+*#UV#*                           EXIT                                            
+*#UV#*                        END                                                
+*#UV#*                     NEXT X                                                
+*#UV#*                     IF TPATH = "" THEN                                    
+*#UV#*                        CRT "Unable to locate Windows' TEMP folder!"       
+*#UV#*                        STOP                                               
+*#UV#*                     END                                                   
+*#UV#*                     IF TPATH[LEN(TPATH),1] # "\" THEN TPATH = TPATH:"\"   
+*#UV#*                     MD    = "F"                                           
+*#UV#*                     MD<2> = TPATH                                         
+*#UV#*                     MD<3> = "D_VOC"                                       
+*#UV#*                     WRITE MD ON f.MD,"TMP"                                
+*#UV#*                     OPEN "TMP" TO f.TMP ELSE                              
+*#UV#*                        CRT "Unable to open ":TPATH:"!"                    
+*#UV#*                        STOP                                               
+*#UV#*                     END                                                   
+*#UV#*                     WRITE BAT ON f.TMP,"PSV.BAT"                          
+*#UV#*                     EXECUTE \DOS /c "\:TPATH:\PSV.BAT"\ CAPTURING PSVer   
+*#--#*                  CASE DBType = "UD"                                       
+*#UD#*                     EXECUTE "!ECHO %TEMP%" CAPTURING TPATH                
+*#UD#*                     IF TPATH[1,1] = "%" THEN                              
+*#UD#*                        CRT "Unable to locate Windows' TEMP folder!"       
+*#UD#*                        STOP                                               
+*#UD#*                     END                                                   
+*#UD#*                     IF TPATH[LEN(TPATH),1] # "\" THEN TPATH = TPATH:"\"   
+*#UD#*                     MD = "DIR"                                            
+*#UD#*                     MD<2> = TPATH                                         
+*#UD#*                     MD<3> = "D_VOC"                                       
+*#UD#*                     WRITE MD ON f.MD,"TMP"                                
+*#UD#*                     OPEN "TMP" TO f.TMP ELSE                              
+*#UD#*                        CRT "Unable to open ":TPATH:"!"                    
+*#UD#*                        STOP                                               
+*#UD#*                     END                                                   
+*#UD#*                     WRITE BAT ON f.TMP,"PSV.BAT"                          
+*#UD#*                     EXECUTE "!":TPATH:"PSV.BAT" CAPTURING PSVer           
+*#--#*                  CASE 1                                                   
+*#PICK#*                     EXECUTE "!ECHO %TEMP%" CAPTURING TPATH                
+*#PICK#*                     IF TPATH[1,1] = "%" THEN                              
+*#PICK#*                        CRT "Unable to locate Windows' TEMP folder!"       
+*#PICK#*                        STOP                                               
+*#PICK#*                     END                                                   
+*#PICK#*                     IF TPATH[LEN(TPATH),1] # "\" THEN TPATH = TPATH:"\"   
+*#QM#*                     EXECUTE "!ECHO %TEMP%" CAPTURING TPATH                
+*#QM#*                     IF TPATH[1,1] = "%" THEN                              
+*#QM#*                        CRT "Unable to locate Windows' TEMP folder!"       
+*#QM#*                        STOP                                               
+*#QM#*                     END                                                   
+*#QM#*                     IF TPATH[LEN(TPATH),1] # "\" THEN TPATH = TPATH:"\"   
+*#QM#*                     MD = "F"                                              
+*#QM#*                     MD<2> = TPATH                                         
+*#PICK#*                     MD = "Q"                                              
+*#PICK#*                     MD<3> = "dos:":TPATH                                  
+*#PICK#*                     WRITE MD ON f.MD,"TMP"                                
+*#PICK#*                     OPEN "TMP" TO f.TMP ELSE                              
+*#PICK#*                        CRT "Unable to open ":TPATH:"!"                    
+*#PICK#*                        STOP                                               
+*#PICK#*                     END                                                   
+*#PICK#*                     WRITE BAT ON f.TMP,"PSV.BAT"                          
+*#PICK#*                     EXECUTE "!":TPATH:"PSV.BAT" CAPTURING PSVer           
+*#QM#*                     WRITE MD ON f.MD,"TMP"                                
+*#QM#*                     OPEN "TMP" TO f.TMP ELSE                              
+*#QM#*                        CRT "Unable to open ":TPATH:"!"                    
+*#QM#*                        STOP                                               
+*#QM#*                     END                                                   
+*#QM#*                     WRITE BAT ON f.TMP,"PSV.BAT"                          
+*#QM#*                     EXECUTE "!":TPATH:"PSV.BAT" CAPTURING PSVer           
+*#--#*               END CASE                                                    
+               n=DCOUNT(PSVer,@AM)
+               FOR X=1 TO n
+                  IF FIELD(PSVer<X>," ",1) = "PSVersion" THEN
+                     PSVersion = FIELD(TRIM(PSVer<X>)," ",2)
+                     EXIT
+                  END
+               NEXT X
+               IF FIELD(PSVersion,".",1) >= 5 THEN
+                  DLType = "PS"
+               END ELSE
+                  CRT "phiReport requires POWERSHELL version 5 or better or wget or curl."
+               END			   
+            END
+            IF DLType = "" THEN
+               CRT "phiReport Web Installer is currently not supported on your Windows platform."
+               CRT ""
+               CRT "To enable the Web Installer you need to install either wget.exe or curl.exe on your system."
+               CRT "wget.exe and curl.exe can be downloaded from http://3phi.cloud/phiReport/obj/UTILS/"
+               CRT ""
+               CRT "Copy them to \WINDOWS\SYSTEM32 or any folder accessible from the path environment."
+               CRT ""
+               CRT "To rerun the installation program, enter PHINST at TCL."
+               CRT ""
+               CRT "For more information, see http://3phi.solutions/phiReport/help/Installation.html for installation instructions."
+               STOP
+            END
+      END CASE
+      RETURN
+URLDownloadSave:
+      VBA.Result = ""
+      SCR = 'InitSession.Output URLDownload("':SourceFile:'","':TargetFile:'","':RetRes:'") & Chr$(13)'
+      SCR=SCR:CHAR(25):'End Sub'
+      SCR=SCR:CHAR(25):'Function URLDownload(URL,strSavePath,RetRes) As String'
+      SCR=SCR:CHAR(25):'   On Error Goto ErrorHandler'
+      SCR=SCR:CHAR(25):'   Dim oStream As Object'
+      SCR=SCR:CHAR(25):'   Dim WinHttpReq As Object'
+      SCR=SCR:CHAR(25):'   Set WinHttpReq = CreateObject("WinHttp.WinHttpRequest.5.1")'
+      SCR=SCR:CHAR(25):'   WinHttpReq.Option(4) = 13056 ' ;*Ignore SSL Errors
+      SCR=SCR:CHAR(25):'   WinHttpReq.Open "GET", URL, False'
+      SCR=SCR:CHAR(25):'   WinHttpReq.setRequestHeader "Accept", "*/*"'
+      SCR=SCR:CHAR(25):'   WinHttpReq.setRequestHeader "User-Agent", "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.0)"'
+      SCR=SCR:CHAR(25):'   WinHttpReq.setRequestHeader "Proxy-Connection", "Keep-Alive"'
+      SCR=SCR:CHAR(25):'   WinHttpReq.Send'
+      SCR=SCR:CHAR(25):'   If WinHttpReq.Status = 200 Then'
+      SCR=SCR:CHAR(25):'      If strSavePath <> "" Then'
+      SCR=SCR:CHAR(25):'         Set oStream = CreateObject("ADODB.Stream")'
+      SCR=SCR:CHAR(25):'         oStream.Open'
+      SCR=SCR:CHAR(25):'         oStream.Type = 1'
+      SCR=SCR:CHAR(25):'         oStream.Write WinHttpReq.ResponseBody'
+      SCR=SCR:CHAR(25):'         oStream.SaveToFile strSavePath, 2'
+      SCR=SCR:CHAR(25):'         oStream.Close'
+      SCR=SCR:CHAR(25):'      End If'
+      SCR=SCR:CHAR(25):'      If RetRes = "1" Then'      
+      SCR=SCR:CHAR(25):'         URLDownload = Replace(WinHttpReq.ResponseText, Chr(10), "")' 
+      SCR=SCR:CHAR(25):'      Else'      
+      SCR=SCR:CHAR(25):'         URLDownload = "ok"' 
+      SCR=SCR:CHAR(25):'      End If'
+      SCR=SCR:CHAR(25):'   Else'
+      SCR=SCR:CHAR(25):'      URLDownload = "Error: " & WinHttpReq.Status & " Unable to download  "&URL'
+      SCR=SCR:CHAR(25):'   End If'
+      SCR=SCR:CHAR(25):'   Exit Function'
+      SCR=SCR:CHAR(25):'ErrorHandler:'
+      SCR=SCR:CHAR(25):'   URLDownload = "Error: " & Err.Description'
+      SCR=SCR:CHAR(25):'End Function'
+      SCR=SCR:CHAR(25):'Sub Dummy'
+      GOSUB VBAEnd
+      RETURN
+PrepTemp:
+      VBA.Result = ""
+      SCR = 'InitSession.Output PrepTemp("':SubPath:'") & Chr$(13)'
+      SCR=SCR:CHAR(25):'End Sub'
+      SCR=SCR:CHAR(25):'Function PrepTemp(SubPath As String) As String'
+      SCR=SCR:CHAR(25):'   On Error GoTo VBAError'
+      SCR=SCR:CHAR(25):'   Dim Path As String'
+      SCR=SCR:CHAR(25):'   PrepTemp = ""'
+      SCR=SCR:CHAR(25):'   Path = getEnvironment("TEMP")'
+      SCR=SCR:CHAR(25):'   If Path = "" Then'
+      SCR=SCR:CHAR(25):'      PrepTemp = "Error: Unable to get system TEMP folder!"'
+      SCR=SCR:CHAR(25):'   Exit Function'
+      SCR=SCR:CHAR(25):'   End If'
+      SCR=SCR:CHAR(25):'   If Right(Path,1) <> "\" Then Path = Path & "\"'
+      SCR=SCR:CHAR(25):'   Path = Path & SubPath'
+      SCR=SCR:CHAR(25):'   If DirExists(Path) Then'
+      SCR=SCR:CHAR(25):'      DeleteAllFiles(Path)'
+      SCR=SCR:CHAR(25):'   Else'
+      SCR=SCR:CHAR(25):'      If Not CreateDir(Path) Then'
+      SCR=SCR:CHAR(25):'         PrepTemp = "Error: Unable to create folder " & Path'
+      SCR=SCR:CHAR(25):'         Exit Function'
+      SCR=SCR:CHAR(25):'      End If'
+      SCR=SCR:CHAR(25):'   End If'
+      SCR=SCR:CHAR(25):'   PrepTemp = Path'
+      SCR=SCR:CHAR(25):'   Exit Function'
+      SCR=SCR:CHAR(25):'VBAError:'
+      SCR=SCR:CHAR(25):'   PrepTemp = "Error: " & Err.Description'
+      SCR=SCR:CHAR(25):'End Function'
+      SCR=SCR:CHAR(25):'Function getEnvironment(Env As String) As String'
+      SCR=SCR:CHAR(25):'   On Error Goto VBAError'
+      SCR=SCR:CHAR(25):'   getEnvironment = Environ(Env)'
+      SCR=SCR:CHAR(25):'   Exit Function'
+      SCR=SCR:CHAR(25):'VBAError:'
+      SCR=SCR:CHAR(25):'   getEnvironment = ""'
+      SCR=SCR:CHAR(25):'End Function'
+      SCR=SCR:CHAR(25):'Function CreateDir(ByVal DName As String) As Boolean'
+      SCR=SCR:CHAR(25):'   On Error Goto VBAError'
+      SCR=SCR:CHAR(25):'   MkDir DName'
+      SCR=SCR:CHAR(25):'   CreateDir = True'
+      SCR=SCR:CHAR(25):'   Exit Function'
+      SCR=SCR:CHAR(25):'VBAError:'
+      SCR=SCR:CHAR(25):'   CreateDir = False'
+      SCR=SCR:CHAR(25):'End Function'
+      SCR=SCR:CHAR(25):'Function DirExists(ByVal DName As String) As Boolean'
+      SCR=SCR:CHAR(25):'   Dim sDummy As String'
+      SCR=SCR:CHAR(25):'   On Error Resume Next'
+      SCR=SCR:CHAR(25):'   If Right(DName, 1) <> "\" Then DName = DName & "\"'
+      SCR=SCR:CHAR(25):'   sDummy = Dir$(DName & "*.*",vbDirectory)'
+      SCR=SCR:CHAR(25):'   DirExists = Not (sDummy = "")'
+      SCR=SCR:CHAR(25):'End Function'
+      SCR=SCR:CHAR(25):'Function DeleteAllFiles(Path As String) As Boolean'
+      SCR=SCR:CHAR(25):'   On Error Resume Next'
+      SCR=SCR:CHAR(25):'   Dim FSO As Object'
+      SCR=SCR:CHAR(25):'    Set FSO = CreateObject("scripting.filesystemobject")'
+      SCR=SCR:CHAR(25):'   Dim f As Object'
+      SCR=SCR:CHAR(25):'    If FSO.FolderExists(Path) Then'
+      SCR=SCR:CHAR(25):'        For Each f In FSO.GetFolder(Path).Files'
+      SCR=SCR:CHAR(25):'            f.Delete Force = True'
+      SCR=SCR:CHAR(25):'        Next'
+      SCR=SCR:CHAR(25):'    End If'
+      SCR=SCR:CHAR(25):'    DeleteFiles = True'
+      SCR=SCR:CHAR(25):'End Function'
+      SCR=SCR:CHAR(25):'Sub Dummy'
+      GOSUB VBAEnd
+      RETURN
+DeleteDir:
+      * Delete a Folder and all files and folders in it
+      VBA.Result = ""
+      SCR = 'InitSession.Output DeleteDir("':Folder:'") & Chr$(13)'
+      SCR=SCR:CHAR(25):'End Sub'
+      SCR=SCR:CHAR(25):'Function  DeleteDir(MyPath As String) As Boolean'
+      SCR=SCR:CHAR(25):'   On Error GoTo DelError'
+      SCR=SCR:CHAR(25):'   Dim FSO As Object'
+      SCR=SCR:CHAR(25):'   Set FSO = CreateObject("scripting.filesystemobject")'
+      SCR=SCR:CHAR(25):'   If Right(MyPath, 1) = "\" Then'
+      SCR=SCR:CHAR(25):'     MyPath = Left(MyPath, Len(MyPath) - 1)'
+      SCR=SCR:CHAR(25):'   End If'
+      SCR=SCR:CHAR(25):'   If FSO.FolderExists(MyPath) = False Then'
+      SCR=SCR:CHAR(25):'     DeleteDir = False'
+      SCR=SCR:CHAR(25):'     Exit Function'
+      SCR=SCR:CHAR(25):'   End If'
+      SCR=SCR:CHAR(25):'   FSO.deletefolder MyPath , True'
+      SCR=SCR:CHAR(25):'   DeleteDir = True'
+      SCR=SCR:CHAR(25):'   Exit Function'
+      SCR=SCR:CHAR(25):'DelError:'
+      SCR=SCR:CHAR(25):'   DeleteDir = False'
+      SCR=SCR:CHAR(25):'End Function'
+      SCR=SCR:CHAR(25):'Sub Dummy'
+      GOSUB VBAEnd
+      RETURN
+ReadFile:
+      VBA.Result = ""
+      SCR = 'InitSession.Output ReadFile("':TargetFile:'") & Chr$(13)'
+      SCR=SCR:CHAR(25):'End Sub'
+      SCR=SCR:CHAR(25):'Function  ReadFile(FileName  As String) As String'
+      SCR=SCR:CHAR(25):'   Dim lFile As Long'
+      SCR=SCR:CHAR(25):'   Dim szLine As String'
+      SCR=SCR:CHAR(25):'   Dim MyText As String'
+      SCR=SCR:CHAR(25):'   MyText = ""'
+      SCR=SCR:CHAR(25):'   On Error GoTo ReadError'
+      SCR=SCR:CHAR(25):'   lFile = FreeFile()'
+      SCR=SCR:CHAR(25):'   Open FileName For Input As lFile'
+      SCR=SCR:CHAR(25):'   While Not EOF(lFile)'
+      SCR=SCR:CHAR(25):'      Line Input #lFile, szLine'
+      SCR=SCR:CHAR(25):'      If MyText = "" Then'
+      SCR=SCR:CHAR(25):'         MyText = szLine'
+      SCR=SCR:CHAR(25):'      Else'
+      SCR=SCR:CHAR(25):'         MyText = MyText & "|" & szLine'
+      SCR=SCR:CHAR(25):'      End If'
+      SCR=SCR:CHAR(25):'   Wend'
+      SCR=SCR:CHAR(25):'   Close lFile'
+      SCR=SCR:CHAR(25):'   ReadFile = MyText'
+      SCR=SCR:CHAR(25):'   Exit Function'
+      SCR=SCR:CHAR(25):'ReadError:'
+      SCR=SCR:CHAR(25):'   ReadFile = ""'
+      SCR=SCR:CHAR(25):'End Function'
+      SCR=SCR:CHAR(25):'Sub Dummy'
+      GOSUB VBAEnd
+      RETURN
+VBAEnd:
+      * Execute the VBA macro
+      INPUTCLEAR
+      CRT CHAR(27):CHAR(2):'P':SCR:CHAR(13):
+      ECHO OFF
+      PROMPT ''
+      
+*#--#*      IF DBType = "UV" THEN                              
+*#UV#*         NAP 10                                          
+*#UV#*         VBA.Result = ''                                 
+*#UV#*         DONE = 0                                        
+*#UV#*         K = 0                                           
+*#UV#*         T1 = TIME()                                     
+*#UV#*         LOOP                                            
+*#UV#*            T2 = TIME()                                  
+*#UV#*            IF T2 < T1 THEN T1 = T2                      
+*#UV#*            INPUT N,-1                                   
+*#UV#*            IF N > 0 THEN                                
+*#UV#*               INPUT X,1:                                
+*#UV#*               IF X = '' THEN                            
+*#UV#*                  DONE = 1                               
+*#UV#*               END ELSE                                  
+*#UV#*                  VBA.Result = VBA.Result : X            
+*#UV#*                  T1 = T2                                
+*#UV#*               END                                       
+*#UV#*            END                                          
+*#UV#*         UNTIL DONE OR T2 >= T1 + 5 DO                   
+*#UV#*            IF N = 0 THEN NAP 50                         
+*#UV#*         REPEAT                                          
+*#UV#*         IF K > 1 THEN VBA.Result = VBA.Result[K,999]    
+*#--#*      END ELSE                                           
+*#PICK#*         INPUT VBA.Result: FOR 30 ELSE VBA.Result = ""   
+*#QM#*         INPUT VBA.Result: FOR 30 ELSE VBA.Result = ""   
+*#UD#*         INPUT VBA.Result: FOR 30 ELSE VBA.Result = ""   
+*#JB#*         INPUT VBA.Result: FOR 30 ELSE VBA.Result = ""   
+*#--#*      END                                                
+      
+      PROMPT '?'
+      ECHO ON
+      
+      RETURN
+      
+      
+      END

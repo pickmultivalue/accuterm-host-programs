@@ -1,0 +1,816 @@
+*
+**************************************************************************
+*Copyright (c) 1996-2020 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTSETUP
+* AUTHOR: PJS
+* VERSION: 8.0.2
+* CREATED: 01/01/1996
+* UPDATED: 02/11/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.2
+*  PJS 02/11/2020
+*   Added support for MVON# platform (MVON).
+*
+* 8.0.1
+*  PJS 12/10/2019
+*   Updated Unidata account setup to read account path from UD.ACCOUNT
+*   file in @UDTHOME/sys/UD.ACCOUNT, allowing account name instead of
+*   path to account (path will still work).
+*
+* 7.2.3
+*  PJS 10/07/2016
+*   Updated jBASE account setup to add ACCUTERM account 'bin' and 'lib'
+*   paths to target account PATH and JBCOBJECTLIST fields in the target
+*   account SYSTEM record. This provides the same functionality as
+*   copying catalog pointers on other MV platforms.
+*
+* 7.2.2
+*  PJS 03/19/2014
+*   Added support for OASYS platform.
+*
+* 7.2.1
+*  PJS 10/08/2013
+*   Added new miscellaneous settings section. New miscellaneous setting
+*   "exit string" added to allow user to specify string used to exit from
+*   any command-line utility prompt. Added CLEARSELECT for QM platform.
+*
+* 7.0.3
+*  PJS 05/29/2012
+*   Fixed account setup for jBase (jBase does not store "real" file
+*   pointer item in the MD). Fixed message to indicate failure if
+*   setup not successful. Skip optional files if FTBP setup fails.
+*
+* 7.0.2
+*  PJS 07/13/2011
+*   Fixed problem on Universe where special @@SELECT verb was not being
+*   copied into VOC of account being activated.
+*
+* 7.0.1
+*  PJS 07/09/2010
+*   Fixed problem with "replace existing pointer (Yes/No/All/Cancel)"
+*   when ALL is selected. Bug caused only the current item to be replaced.
+*   all other existing items were skipped.
+*
+* 5.3.8
+*  PJS 04/10/2007
+*   Added test for existing catalog pointer when setting up accounts.
+*   If catalog pointer exists and is different from the pointer in
+*   the ACCUTERM account, the user is prompted to replace the pointer.
+*   This change will allow changes in the catalog pointer format or
+*   changes in the object code path to easily be applied to accounts
+*   which were previously set up.
+*
+* 5.3.7
+*  PJS 03/12/2007
+*   Fixed typo in JB platform (*#JB#PRINT...)
+*
+* 5.3.6
+*  PJS 11/08/2006
+*   Added support for ON (ONWare MVON) platform. Fixed bug that
+*   caused GED and GUISHUTDOWN not to be catalogged in target
+*   account by allowing multple prefixes in subroutine 300. Add
+*   SUIBP Q-pointer and catalogged programs to account setup
+*   function. Added NO.PAGE=@(0,0) to disable pagination for QM,
+*   ON, etc.
+*
+* 5.3.5
+*  PJS 10/24/2006
+*   Updated jBase platform to display message about object code
+*   sharing under jBase (catalog pointers are not supported under
+*   jBase).
+*
+* 5.3.4
+*  PJS 07/31/2006
+*   Updated OI platform code to properly set up Q-pointers and
+*   catalogged programs.
+*
+* 5.3.3
+*  PJS 07/24/2006
+*   Added support for NR platform using @ACCOUNT instead of U50BB.
+*   Added support for OI (OpenInsight CTO) platform.
+*
+* 5.3.2
+*  PJS 06/12/2006
+*   When setting up Q-pointers for OBJBP & GUIBP, also set up Q-
+*   pointers for OBJBP.O (OBJBP.OUT) & GUIBP.O (GUIBP.OUT) for UV
+*   and QM platforms.
+*
+* 5.3.1
+*  PJS 05/10/2006
+*   Added sanity check for catalog entries when setting up accounts
+*   to use AccuTerm host programs, so that catalog pointers to demo
+*   programs do not get added to target account.
+*
+* 5.0.5
+*  PJS 08/16/2005
+*   Changed U50BB to @ACCOUNT for PICK (D3) platform type because of
+*   unpredictable format of U50BB result: "WHO (A" vs. "WHO (C".
+*
+* 5.0.4
+*  PJS 03/02/2005
+*   Updated catalogged program copy routine to pass program name
+*   through the MC/N conversion to remove numeric parts of name
+*   before checking with the ALPHA() function. This corrects problem
+*   of not copying program names like ATGUIINIT2 to the target. Fixed
+*   problem with account names beginning with 'X' or 'E' being
+*   confused with 'EXIT'.
+*
+* 5.0.3
+*  PJS 09/17/2004
+*   Update account setup function to setup OBJBP & GUIBP Q-pointers
+*   and catalogged programs.
+*
+* 5.0.2
+*  PJS 12/29/2003
+*   Initialize LST variable to 1 for UV Ideal & QM platforms.
+*
+* 5.0.1
+*  PJS 10/24/2003
+*   Integrated QM platform specific code per mods from Martin
+*   Phillips. Fixed missing END statement for JB & UV sections.
+*
+* 4.1.2
+*  PJS 09/14/2001
+*   Allow user to change FTBP file name if necessary.
+*
+* 4.1.1
+*  PJS 06/04/2001
+*   Add option to setup user account by setting up required
+*   Q-pointers and cataloged program items.
+*
+* 4.0.2
+*  PJS 11/27/2000
+*   Add OEM/ANSI conversion option in FT/FTD configuaration
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM ACCOUNT, FILE TRANSFER & SERVER CONFIGURATION
+*
+**************************************************************************
+**************************************************************************
+*
+DIM PARAMS(30), DUMMY(30)
+EQU SETTINGS TO DUMMY(1)
+EQU AM TO CHAR(254)
+*
+NO.PAGE=@(0,0);* DISABLE PAGINATION (QM, ON)
+*
+**************************************************************************
+*
+* UPDATE CONFIGURATION
+*
+**************************************************************************
+*
+OPEN 'MD' TO MD ELSE
+ OPEN 'VOC' TO MD ELSE PRINT 'Unable to open MD (or VOC) file!'; STOP
+END
+*#JB#*IF NOT(GETENV('JEDIFILENAME_SYSTEM',SYSFILEPATH)) THEN SYSFILEPATH='SYSTEM'
+*#JB#*OPEN SYSFILEPATH TO SYSFILE ELSE
+*#JB#* PRINT 'Unable to open SYSTEM file!'; STOP
+*#JB#*END
+*#OI#*OPEN 'SYSOBJ' TO SYSOBJ ELSE
+*#OI#* PRINT 'Unable to open SYSOBJ file!'; STOP
+*#OI#*END
+*
+CALL FTINIT(MAT PARAMS,FV)
+*
+**************************************************************************
+*
+* PROMPT FOR DESIRED ACTION
+*
+**************************************************************************
+*
+PROMPT ''
+MODE = 0
+LOOP
+ IF NUM(MODE) THEN
+  PRINT
+  PRINT
+  PRINT
+  PRINT 'AccuTerm Account, File Transfer & Server Configuration'
+  PRINT
+  PRINT
+  PRINT
+  PRINT '(1) Account Setup'
+  PRINT
+  PRINT '(2) Kermit Configuration'
+  PRINT
+  PRINT '(3) FT File Transfer Configuration'
+  PRINT
+  PRINT '(4) FTD Data Transfer Configuration'
+  PRINT
+  PRINT '(5) Pick-to-Pick File Transfer Configuration'
+  PRINT
+  PRINT '(6) Server Configuration'
+  PRINT
+  PRINT '(7) Miscellaneous Settings'
+  PRINT
+  PRINT
+ END
+ PRINT 'Enter option (1-7) or X to exit: ':
+ INPUT MODE
+ ANS = OCONV(MODE, 'MCU')
+UNTIL ANS = '' OR ANS = 'X' OR ANS = 'E' OR ANS = 'EX' OR ANS = 'EXIT' DO
+ BEGIN CASE
+  CASE MODE EQ 1
+   GOSUB 100
+  CASE MODE EQ 2
+   CALL FTCONFIG('1-15,17',MAT PARAMS,FV)
+  CASE MODE EQ 3
+   CALL FTCONFIG('13-15,17,24',MAT PARAMS,FV)
+  CASE MODE EQ 4
+   CALL FTCONFIG('14,16,17,18,24',MAT PARAMS,FV)
+  CASE MODE EQ 5
+   CALL FTCONFIG('19',MAT PARAMS,FV)
+  CASE MODE EQ 6
+   CALL FTCONFIG('26-30',MAT PARAMS,FV)
+  CASE MODE EQ 7
+   MAT DUMMY = ''
+   CALL FTCONFIG('62',MAT DUMMY,FV)
+ END CASE
+REPEAT
+STOP
+*
+100 * Setup account to use accuterm host programs
+PRINT 'Account setup is not supported for "GENERIC" platform type.';*#GENERIC#*
+PRINT 'Please RUN FTBP FTCHK and select the correct platform type.';*#GENERIC#*
+RETURN;*#GENERIC#*
+*#DEFAULT#*WHO = OCONV('','U50BB')
+*#DEFAULT#*MY.ACCT = FIELD(WHO,' ',3); IF MY.ACCT = '' THEN MY.ACCT = FIELD(WHO,' ',2)
+*#JB#*MY.ACCT = @WHO
+*#MVON#*MY.ACCT = @WHO
+*#NR#*MY.ACCT = @ACCOUNT
+*#OAS#*MY.ACCT = @WHO
+*#OAS#*IF INDEX(@PATH,'\',1) THEN DSEP = '\' ELSE DSEP = '/'
+*#OI#*MY.ACCT = @APPID<1>
+*#ON#*MY.ACCT = @WHO
+*#PICK#*MY.ACCT = @ACCOUNT
+*#QM#*MY.ACCT = @WHO
+*#UD#*MY.ACCT = @WHO
+*#UD#*IF INDEX(@PATH,'\',1) THEN DSEP = '\' ELSE DSEP = '/'
+*#UV#*MY.ACCT = @WHO
+*
+FTBPNAME='FTBP'
+DONE=0
+LOOP
+ OPEN FTBPNAME TO SOURCE THEN
+  DONE=1
+ END ELSE
+  PRINT 'Unable to open ':FTBPNAME:' file':
+  IF FTBPNAME='FTBP' THEN PRINT ', where AccuTerm programs normally exist.' ELSE PRINT '.'
+  PRINT 'Please enter the correct file name:':
+  INPUT ANS
+  IF ANS = '' THEN PRINT 'AccuTerm account setup is not complete!'; STOP
+  FTBPNAME=ANS
+ END
+UNTIL DONE DO NULL REPEAT
+*
+PRINT
+PRINT 'This option will create the necessary file pointers'
+PRINT 'and copy the cataloged program items to the account'
+PRINT 'you specify.'
+PRINT
+LOOP
+ PRINT
+ PRINT 'Enter the name of the account you want to set up: ':
+ INPUT TARGET.ACCT
+ ANS = OCONV(TARGET.ACCT, 'MCU')
+UNTIL ANS = '' OR ANS = 'X' OR ANS = 'E' OR ANS = 'EX' OR ANS = 'EXIT' DO
+ PRINT
+* set up Q-pointers
+ FILENAME = FTBPNAME
+ OPEN FILENAME TO SOURCE THEN
+  GOSUB 200
+  FTBPSTAT = STAT
+  BEGIN CASE
+   CASE FTBPSTAT = 0
+    PRINT 'Unable to open the target account MD (or VOC) file!'
+   CASE FTBPSTAT = 1
+    PRINT 'Unable to read ':FILENAME:' file definition!'
+   CASE FTBPSTAT < 3
+    PRINT 'Unable to create Q-pointer to the FTBP file in the target'
+    PRINT 'account. The file may already exist.'
+  END CASE
+  IF FTBPSTAT > 2 THEN
+*#QM#*   FILENAME = FTBPNAME:'.OUT'; GOSUB 200
+*#UV#*   FILENAME = FTBPNAME:'.O'; GOSUB 200
+   FILENAME = 'ACCUTERMCTRL'; GOSUB 200
+  END
+  IF FTBPSTAT > 2 THEN
+* clean up Viaduct FT proc
+   READ X FROM TARGET,'FT' THEN
+    IF X<1> = 'PQ' AND X<2>[1,8] = '(PCPROGS' THEN
+     PRINT 'OK to rename ViaDuct FT command as FT.VIADUCT (Yes/No)?':
+     INPUT ANS
+     ANS = OCONV(ANS[1,1],'MCU')
+     IF ANS = 'Y' THEN
+      WRITE X ON TARGET,'FT.VIADUCT'
+      DELETE TARGET,'FT'
+     END
+    END
+   END
+*
+* setup FTBP catalog items
+   OVR = 0
+   CAN = 0
+   PREFIX = ''
+   FILENAME = 'FTBP'
+   GOSUB 300
+   IF CAN THEN RETURN
+*
+* setup special @@SELECT verb
+*#UV#*   READ X FROM TARGET,'@@SELECT' ELSE
+*#UV#*    READ X FROM MD,'@@SELECT' THEN
+*#UV#*     WRITE X ON TARGET,'@@SELECT'
+*#UV#*    END
+*#UV#*   END
+*
+* setup OBJBP catalog items
+   IF FTBPSTAT > 2 THEN
+    FILENAME = 'OBJBP'
+    OPEN FILENAME TO SOURCE THEN
+     GOSUB 200
+     IF STAT > 2 THEN
+*#QM#*     FILENAME = 'OBJBP.OUT'; GOSUB 200
+*#UV#*     FILENAME = 'OBJBP.O'; GOSUB 200
+      PREFIX = 'AT'
+      GOSUB 300
+      IF CAN THEN RETURN
+     END
+    END
+   END
+*
+* setup GUIBP catalog items
+   IF FTBPSTAT > 2 THEN
+    FILENAME = 'GUIBP'
+    OPEN FILENAME TO SOURCE THEN
+     GOSUB 200
+     IF STAT > 2 THEN
+*#QM#*     FILENAME = 'GUIBP.OUT'; GOSUB 200
+*#UV#*     FILENAME = 'GUIBP.O'; GOSUB 200
+      PREFIX = 'ATGUI;GED;GUISHUTDOWN'
+      GOSUB 300
+      IF CAN THEN RETURN
+     END
+    END
+   END
+*
+* setup SUIBP catalog items
+   IF FTBPSTAT > 2 THEN
+    FILENAME = 'SUIBP'
+    OPEN FILENAME TO SOURCE THEN
+     GOSUB 200
+     IF STAT > 2 THEN
+*#QM#*     FILENAME = 'SUIBP.OUT'; GOSUB 200
+*#UV#*     FILENAME = 'SUIBP.O'; GOSUB 200
+      PREFIX = 'SUI.'
+      GOSUB 300
+      IF CAN THEN RETURN
+     END
+    END
+   END
+  END
+*
+  PRINT
+  IF FTBPSTAT > 2 THEN
+   PRINT 'Setup of ':TARGET.ACCT:' complete.'
+*#JB#*   PRINT 'Next time you log in to ':TARGET.ACCT:' you can use the AccuTerm programs.'
+  END
+  DELETE MD,'%ACCUTERMQPTR%'
+ END ELSE
+  PRINT 'Unable to open ':FILENAME:' file!'
+ END
+ PRINT 'Press <Enter> to continue':
+ INPUT ANS
+REPEAT
+RETURN
+*
+200 * Create Q-pointer
+STAT = 0; * failure
+*
+* Default (AP/R83/mvBase/mvEnterprise/ADDS)
+*#DEFAULT#*QPTR = 'Q':AM:TARGET.ACCT:AM:AM:AM:AM:AM:AM:AM:'L':AM:'10'
+*#DEFAULT#*WRITE QPTR ON MD,'%ACCUTERMQPTR%'
+*#DEFAULT#*OPEN '%ACCUTERMQPTR%' TO TARGET ELSE
+*#DEFAULT#* RETURN
+*#DEFAULT#*END
+*#DEFAULT#*STAT = 1; * Q-POINTER TO TARGET OPENED
+*#DEFAULT#*READ FILEPTR FROM MD,FILENAME ELSE
+*#DEFAULT#* RETURN
+*#DEFAULT#*END
+*#DEFAULT#*STAT = 2; * SOURCE FILE POINTER EXISTS IN MD
+*#DEFAULT#*READ X FROM TARGET,FILENAME ELSE X = 'Q'
+*#DEFAULT#*IF X<1> = 'Q' THEN
+*#DEFAULT#* IF FILEPTR<1> = 'Q' THEN
+*#DEFAULT#*  WRITE FILEPTR ON TARGET,FILENAME
+*#DEFAULT#* END ELSE
+*#DEFAULT#*  QPTR<2> = MY.ACCT
+*#DEFAULT#*  QPTR<3> = FILENAME
+*#DEFAULT#*  WRITE QPTR ON TARGET,FILENAME
+*#DEFAULT#* END
+*#DEFAULT#* STAT = 3; * Q-POINTER WRITTEN TO TARGET
+*#DEFAULT#*END
+*
+* jBase version
+*#JB#*QPTR = 'Q':AM:TARGET.ACCT:AM:AM:AM:AM:AM:AM:AM:'L':AM:'10'
+*#JB#*WRITE QPTR ON MD,'%ACCUTERMQPTR%'
+*#JB#*OPEN '%ACCUTERMQPTR%' TO TARGET ELSE
+*#JB#* RETURN
+*#JB#*END
+*#JB#*STAT = 1; * Q-POINTER TO TARGET OPENED
+*#JB#*READ FILEPTR FROM MD,FILENAME ELSE
+*#JB#** Real jbase files are not in the MD, and we've already opened
+*#JB#** the file variable (SOURCE), so assume we are able to successfully
+*#JB#** read the file pointer.
+*#JB#* FILEPTR='F'
+*#JB#*END
+*#JB#*STAT = 2; * SOURCE FILE POINTER EXISTS IN MD
+*#JB#*READ X FROM TARGET,FILENAME ELSE
+*#JB#* QPTR<3> = FILENAME
+*#JB#* WRITE QPTR ON MD,'%ACCUTERMQPTR%'
+*#JB#** Since there may not be an item in the target MD for the file
+*#JB#** we are setting up, test for existence by trying to open it.
+*#JB#* OPEN '%ACCUTERMQPTR%' TO JUNK THEN X = 'F' ELSE X = 'Q'
+*#JB#*END
+*#JB#*IF X<1> = 'Q' THEN
+*#JB#* IF FILEPTR<1> = 'Q' THEN
+*#JB#*  WRITE FILEPTR ON TARGET,FILENAME
+*#JB#* END ELSE
+*#JB#*  QPTR<2> = MY.ACCT
+*#JB#*  QPTR<3> = FILENAME
+*#JB#*  WRITE QPTR ON TARGET,FILENAME
+*#JB#* END
+*#JB#* STAT = 3; * Q-POINTER WRITTEN TO TARGET
+*#JB#*END
+*
+* MVON# version
+*#MVON#*QPTR = 'File':AM:'[':TARGET.ACCT:'].[dbo].[_VOC]':AM:'[':TARGET.ACCT:'].[dbo].[D__VOC]':AM:'SqlServer'
+*#MVON#*WRITE QPTR ON MD,'%ACCUTERMQPTR%'
+*#MVON#*OPEN '%ACCUTERMQPTR%' TO TARGET ELSE
+*#MVON#* RETURN
+*#MVON#*END
+*#MVON#*STAT = 1; * Q-POINTER TO TARGET OPENED
+*#MVON#*READ FILEPTR FROM MD,FILENAME ELSE
+*#MVON#* RETURN
+*#MVON#*END
+*#MVON#*IF FILEPTR<4>[1,1] = 'D' THEN
+*#MVON#* FPTR = 'File':AM:ACCOUNTPATH(MY.ACCT):'/':FILENAME:AM:ACCOUNTPATH(MY.ACCT):'/D_':FILENAME:AM:'Directory'
+*#MVON#*END ELSE
+*#MVON#* FPTR = 'File':AM:'[':MY.ACCT:'].[dbo].[_':FILENAME:']':AM:'[':MY.ACCT:'].[dbo].[D__':FILENAME:']':AM:'SqlServer'
+*#MVON#*END
+*#MVON#*READ X FROM TARGET,FILENAME THEN
+*#MVON#* IF X <> FPTR THEN
+*#MVON#*  STAT = 2 ; * item exists in target MD and its this same file
+*#MVON#* END ELSE
+*#MVON#*  STAT = 3 ; * this file exists in the target MD
+*#MVON#* END
+*#MVON#*END ELSE
+*#MVON#* WRITE FPTR ON TARGET,FILENAME ; * write new file pointer to target MD
+*#MVON#* STAT = 3
+*#MVON#*END
+*
+* Northgate Reality version (same as DEFAULT above)
+*#NR#*QPTR = 'Q':AM:TARGET.ACCT:AM:AM:AM:AM:AM:AM:AM:'L':AM:'10'
+*#NR#*WRITE QPTR ON MD,'%ACCUTERMQPTR%'
+*#NR#*OPEN '%ACCUTERMQPTR%' TO TARGET ELSE
+*#NR#* RETURN
+*#NR#*END
+*#NR#*STAT = 1; * Q-POINTER TO TARGET OPENED
+*#NR#*READ FILEPTR FROM MD,FILENAME ELSE
+*#NR#* RETURN
+*#NR#*END
+*#NR#*STAT = 2; * SOURCE FILE POINTER EXISTS IN MD
+*#NR#*READ X FROM TARGET,FILENAME ELSE X = 'Q'
+*#NR#*IF X<1> = 'Q' THEN
+*#NR#* IF FILEPTR<1> = 'Q' THEN
+*#NR#*  WRITE FILEPTR ON TARGET,FILENAME
+*#NR#* END ELSE
+*#NR#*  QPTR<2> = MY.ACCT
+*#NR#*  QPTR<3> = FILENAME
+*#NR#*  WRITE QPTR ON TARGET,FILENAME
+*#NR#* END
+*#NR#* STAT = 3; * Q-POINTER WRITTEN TO TARGET
+*#NR#*END
+*
+* OASYS version
+*#OAS#*QPTR = 'Q':AM:TARGET.ACCT:AM:'VOC':AM:AM:AM:AM:AM:AM:'L':AM:'10'
+*#OAS#*WRITE QPTR ON MD,'%ACCUTERMQPTR%'
+*#OAS#*OPEN '%ACCUTERMQPTR%' TO TARGET ELSE
+*#OAS#* RETURN
+*#OAS#*END
+*#OAS#*STAT = 1; * Q-POINTER TO TARGET OPENED
+*#OAS#*READ FILEPTR FROM MD,FILENAME ELSE
+*#OAS#* RETURN
+*#OAS#*END
+*#OAS#*STAT = 2; * SOURCE FILE POINTER EXISTS IN MD
+*#OAS#*READ X FROM TARGET,FILENAME ELSE X = 'Q'
+*#OAS#*IF X<1> = 'Q' THEN
+*#OAS#* IF FILEPTR<1> = 'Q' THEN
+*#OAS#*  WRITE FILEPTR ON TARGET,FILENAME
+*#OAS#* END ELSE
+*#OAS#*  QPTR<2> = MY.ACCT
+*#OAS#*  QPTR<3> = FILENAME
+*#OAS#*  WRITE QPTR ON TARGET,FILENAME
+*#OAS#* END
+*#OAS#* STAT = 3; * Q-POINTER WRITTEN TO TARGET
+*#OAS#*END
+*
+* OpenInsight version (same as DEFAULT above)
+*#OI#*QPTR = 'Q':AM:TARGET.ACCT:AM:'MD':AM:AM:AM:AM:AM:AM:'L':AM:'10'
+*#OI#*WRITE QPTR ON MD,'%ACCUTERMQPTR%'
+*#OI#*OPEN '%ACCUTERMQPTR%' TO TARGET ELSE
+*#OI#* RETURN
+*#OI#*END
+*#OI#*STAT = 1; * Q-POINTER TO TARGET OPENED
+*#OI#*READ FILEPTR FROM MD,FILENAME ELSE
+*#OI#* FILEPTR = 'D'
+*#OI#*END
+*#OI#*STAT = 2; * SOURCE FILE POINTER EXISTS IN MD
+*#OI#*X = ''
+*#OI#*OSREAD DBTINFO FROM TARGET.ACCT:'.DBT' THEN
+*#OI#* FOR I = 1 TO DCOUNT(DBTINFO,@RM) WHILE X = ''
+*#OI#*  DBTIFO = FIELD(DBTINFO,@RM,I)
+*#OI#*  LOCATE FILENAME IN DBTIFO<4> SETTING K THEN
+*#OI#*   X = 'D'
+*#OI#*  END
+*#OI#* NEXT I
+*#OI#*END
+*#OI#*IF X = '' THEN
+*#OI#* READ X FROM TARGET,FILENAME ELSE X = 'Q'
+*#OI#*END
+*#OI#*IF X<1> = 'Q' THEN
+*#OI#* IF FILEPTR<1> = 'Q' THEN
+*#OI#*  WRITE FILEPTR ON TARGET,FILENAME
+*#OI#* END ELSE
+*#OI#*  QPTR<2> = MY.ACCT
+*#OI#*  QPTR<3> = FILENAME
+*#OI#*  WRITE QPTR ON TARGET,FILENAME
+*#OI#* END
+*#OI#* STAT = 3; * Q-POINTER WRITTEN TO TARGET
+*#OI#*END
+*
+* MVON version
+*#ON#*QPTR = 'Q':AM:TARGET.ACCT:AM:AM:AM:AM:AM:AM:AM:'L':AM:'10'
+*#ON#*WRITE QPTR ON MD,'%ACCUTERMQPTR%'
+*#ON#*OPEN '%ACCUTERMQPTR%' TO TARGET ELSE
+*#ON#* RETURN
+*#ON#*END
+*#ON#*STAT = 1; * Q-POINTER TO TARGET OPENED
+*#ON#*READ FILEPTR FROM MD,FILENAME ELSE
+*#ON#* RETURN
+*#ON#*END
+*#ON#*STAT = 2; * SOURCE FILE POINTER EXISTS IN MD
+*#ON#*READ X FROM TARGET,FILENAME ELSE X = 'Q'
+*#ON#*IF X<1> = 'Q' THEN
+*#ON#* IF FILEPTR<1> = 'Q' THEN
+*#ON#*  WRITE FILEPTR ON TARGET,FILENAME
+*#ON#* END ELSE
+*#ON#*  QPTR<2> = MY.ACCT
+*#ON#*  QPTR<3> = FILENAME
+*#ON#*  WRITE QPTR ON TARGET,FILENAME
+*#ON#* END
+*#ON#* STAT = 3; * Q-POINTER WRITTEN TO TARGET
+*#ON#*END
+*
+* Pick (D3) version (same as DEFAULT above)
+*#PICK#*QPTR = 'Q':AM:TARGET.ACCT:AM:AM:AM:AM:AM:AM:AM:'L':AM:'10'
+*#PICK#*WRITE QPTR ON MD,'%ACCUTERMQPTR%'
+*#PICK#*OPEN '%ACCUTERMQPTR%' TO TARGET ELSE
+*#PICK#* RETURN
+*#PICK#*END
+*#PICK#*STAT = 1; * Q-POINTER TO TARGET OPENED
+*#PICK#*READ FILEPTR FROM MD,FILENAME ELSE
+*#PICK#* RETURN
+*#PICK#*END
+*#PICK#*STAT = 2; * SOURCE FILE POINTER EXISTS IN MD
+*#PICK#*READ X FROM TARGET,FILENAME ELSE X = 'Q'
+*#PICK#*IF X<1> = 'Q' THEN
+*#PICK#* IF FILEPTR<1> = 'Q' THEN
+*#PICK#*  WRITE FILEPTR ON TARGET,FILENAME
+*#PICK#* END ELSE
+*#PICK#*  QPTR<2> = MY.ACCT
+*#PICK#*  QPTR<3> = FILENAME
+*#PICK#*  WRITE QPTR ON TARGET,FILENAME
+*#PICK#* END
+*#PICK#* STAT = 3; * Q-POINTER WRITTEN TO TARGET
+*#PICK#*END
+*
+* QM version
+*#QM#*QPTR = 'Q':AM:TARGET.ACCT:AM:'VOC'
+*#QM#*WRITE QPTR ON MD,'%ACCUTERMQPTR%'
+*#QM#*OPEN '%ACCUTERMQPTR%' TO TARGET ELSE
+*#QM#* RETURN
+*#QM#*END
+*#QM#*STAT = 1; * Q-POINTER TO TARGET OPENED
+*#QM#*READ FILEPTR FROM MD,FILENAME ELSE
+*#QM#* RETURN
+*#QM#*END
+*#QM#*STAT = 2; * SOURCE FILE POINTER EXISTS IN MD
+*#QM#*READ X FROM TARGET,FILENAME ELSE X = 'Q'
+*#QM#*IF X<1> = 'Q' THEN
+*#QM#* IF FILEPTR<1> = 'Q' THEN
+*#QM#*  WRITE FILEPTR ON TARGET,FILENAME
+*#QM#* END ELSE
+*#QM#*  QPTR<2> = MY.ACCT
+*#QM#*  QPTR<3> = FILENAME
+*#QM#*  WRITE QPTR ON TARGET,FILENAME
+*#QM#* END
+*#QM#* STAT = 3; * Q-POINTER WRITTEN TO TARGET
+*#QM#*END
+*
+* Unidata version
+*#UD#*IF INDEX(TARGET.ACCT,DSEP,1) = 0 THEN
+*#UD#*QPTR = 'F':AM:'@UDTHOME':DSEP:'sys':DSEP:'UD.ACCOUNT':AM:'D_VOC'
+*#UD#* WRITE QPTR ON MD,'%ACCUTERMQPTR%'
+*#UD#* OPEN '%ACCUTERMQPTR%' TO ACCTS ELSE
+*#UD#*  RETURN
+*#UD#* END
+*#UD#* READ FILEPTR FROM ACCTS,TARGET.ACCT ELSE
+*#UD#*  RETURN
+*#UD#* END
+*#UD#* TARGET.PATH = FILEPTR<1>
+*#UD#*END ELSE
+*#UD#* TARGET.PATH = TARGET.ACCT
+*#UD#*END
+*#UD#*QPTR = 'F':AM:TARGET.PATH:DSEP:'VOC':AM:TARGET.PATH:DSEP:'D_VOC'
+*#UD#*WRITE QPTR ON MD,'%ACCUTERMQPTR%'
+*#UD#*OPEN '%ACCUTERMQPTR%' TO TARGET ELSE
+*#UD#* RETURN
+*#UD#*END
+*#UD#*STAT = 1; * Q-POINTER TO TARGET OPENED
+*#UD#*READ FILEPTR FROM MD,FILENAME ELSE
+*#UD#* RETURN
+*#UD#*END
+*#UD#*STAT = 2; * SOURCE FILE POINTER EXISTS IN MD
+*#UD#*READ X FROM TARGET,FILENAME ELSE X = 'F'
+*#UD#*IF X<1> = 'F' OR X<1> = 'DIR' OR X<1> = 'LF' OR X<1> = 'LD' THEN
+*#UD#* IF INDEX(FILEPTR<2>,DSEP,1) = 0 THEN FILEPTR<2> = @PATH:DSEP:FILEPTR<2>
+*#UD#* IF INDEX(FILEPTR<3>,DSEP,1) = 0 THEN FILEPTR<3> = @PATH:DSEP:FILEPTR<3>
+*#UD#* WRITE FILEPTR ON TARGET,FILENAME
+*#UD#* STAT = 3; * Q-POINTER WRITTEN TO TARGET
+*#UD#*END
+*
+* Universe version
+*#UV#*QPTR = 'Q':AM:TARGET.ACCT:AM:AM:AM:AM:AM:AM:AM:'L':AM:'10'
+*#UV#*WRITE QPTR ON MD,'%ACCUTERMQPTR%'
+*#UV#*OPEN '%ACCUTERMQPTR%' TO TARGET ELSE
+*#UV#* RETURN
+*#UV#*END
+*#UV#*STAT = 1; * Q-POINTER TO TARGET OPENED
+*#UV#*READ FILEPTR FROM MD,FILENAME ELSE
+*#UV#* RETURN
+*#UV#*END
+*#UV#*STAT = 2; * SOURCE FILE POINTER EXISTS IN MD
+*#UV#*READ X FROM TARGET,FILENAME ELSE X = 'Q'
+*#UV#*IF X<1> = 'Q' THEN
+*#UV#* IF FILEPTR<1> = 'Q' THEN
+*#UV#*  WRITE FILEPTR ON TARGET,FILENAME
+*#UV#* END ELSE
+*#UV#*  QPTR<2> = MY.ACCT
+*#UV#*  QPTR<3> = FILENAME
+*#UV#*  WRITE QPTR ON TARGET,FILENAME
+*#UV#* END
+*#UV#* STAT = 3; * Q-POINTER WRITTEN TO TARGET
+*#UV#*END
+*
+RETURN
+*
+300 *
+*
+*#JB#** Update target account SYSTEM record PATH and JBCOBJECTLIST to include
+*#JB#** ACCUTERM account JBCDEV_BIN & JBCDEV_LIB.
+*
+*#JB#*IF SYSTEM(1017) = 'UNIX' THEN
+*#JB#* DSEP = '/'
+*#JB#* PSEP = ':'
+*#JB#*END ELSE
+*#JB#* DSEP = '\'
+*#JB#* PSEP = ';'
+*#JB#*END
+*#JB#*READ MY.SYS.REC FROM SYSFILE,MY.ACCT ELSE
+*#JB#* PRINT 'Unable to read account info for ':MY.ACCT:' from SYSTEM file!'
+*#JB#* CAN = 1
+*#JB#* RETURN
+*#JB#*END
+*#JB#*UPD.TARGET = 0
+*#JB#*READ TARGET.SYS.REC FROM SYSFILE,TARGET.ACCT ELSE
+*#JB#* PRINT 'Unable to read account info for ':TARGET.ACCT:' from SYSTEM file!'
+*#JB#* CAN = 1
+*#JB#* RETURN
+*#JB#*END
+*#JB#*IF TARGET.SYS.REC<20> <> 'ESYSTEM_START' THEN
+*#JB#* PRINT 'Account info for ':TARGET.ACCT:' in SYSTEM file is missing extended values!'
+*#JB#* CAN = 1
+*#JB#* RETURN
+*#JB#*END
+*#JB#*IF TARGET.SYS.REC<25> = '' OR TARGET.SYS.REC<26> = '' THEN
+*#JB#* PRINT 'Path is missing in SYSTEM record for account ':TARGET.ACCT:'!'
+*#JB#* CAN = 1
+*#JB#* RETURN
+*#JB#*END
+*#JB#*IF TARGET.SYS.REC<26> = '' THEN
+*#JB#* PRINT 'Object list is missing in SYSTEM record for account ':TARGET.ACCT:'!'
+*#JB#* CAN = 1
+*#JB#* RETURN
+*#JB#*END
+*#JB#*MY.BIN.PATH = MY.SYS.REC<23>
+*#JB#*IF MY.BIN.PATH = '' THEN MY.BIN.PATH = MY.SYS.REC<2>:DSEP:'bin'
+*#JB#*TARGET.PATH = TARGET.SYS.REC<25>
+*#JB#*IF INDEX(PSEP:TARGET.PATH:PSEP, MY.BIN.PATH, 1) = 0 THEN
+*#JB#* UPD.TARGET = 1
+*#JB#* TARGET.SYS.REC<25> = TARGET.PATH:PSEP:MY.BIN.PATH
+*#JB#*END
+*#JB#*MY.LIB.PATH = MY.SYS.REC<24>
+*#JB#*IF MY.LIB.PATH = '' THEN MY.LIB.PATH = MY.SYS.REC<2>:DSEP:'lib'
+*#JB#*TARGET.OBJLIST = TARGET.SYS.REC<26>
+*#JB#*IF INDEX(PSEP:TARGET.OBJLIST:PSEP, MY.LIB.PATH, 1) = 0 THEN
+*#JB#* UPD.TARGET = 1
+*#JB#* TARGET.SYS.REC<26> = TARGET.OBJLIST:PSEP:MY.LIB.PATH
+*#JB#*END
+*#JB#*IF UPD.TARGET THEN
+*#JB#* WRITE TARGET.SYS.REC ON SYSFILE,TARGET.ACCT SETTING RC ON ERROR
+*#JB#*  PRINT 'Unable to SYSTEM file record for account ':TARGET.ACCT:' (code=':RC:')'
+*#JB#*  CAN = 1
+*#JB#*  RETURN
+*#JB#* END
+*#JB#*END
+*#JB#*RETURN
+*
+* Scan cataloged programs & copy catalog pointers to target
+*
+ LST = 1;* initialize for UV "Ideal" flavor (also QM & ON)
+ SELECT SOURCE TO LST
+ DONE = 0
+ LOOP
+  READNEXT ID FROM LST ELSE DONE = 1
+ UNTIL DONE DO
+  X = OCONV(ID,'MC/N')
+  IF PREFIX[LEN(PREFIX),1] = '.' THEN
+   LOOP I = INDEX(X,'.',1) WHILE I > 0 DO X = X[1,I-1]:X[I+1,9999] REPEAT
+  END
+  IF ALPHA(X) THEN
+   IF PREFIX = '' THEN OK = 1 ELSE OK = 0
+   FOR I = 1 TO DCOUNT(PREFIX,';')
+    X = FIELD(PREFIX,';',I)
+    IF ID[1,LEN(X)] = X THEN OK = 1;* sanity check to ensure demos dont get copied
+   NEXT I
+   IF OK THEN
+    READ X FROM MD,ID THEN
+*#OAS#*    IF X<1> = 'C' AND X<2>[1,1] <> '\' AND X<2>[1,1] <> '/' AND X<2>[2,2] <> ':\' THEN
+*#OAS#*     X<2> = @PATH:DSEP:X<2> ;* need full path to this account's program file
+*#OAS#*    END
+     READ Y FROM TARGET,ID THEN
+      IF X <> Y THEN
+* Catalog pointer exists in target account, but is different
+* from one in source account. Overwrite?
+       IF OVR THEN
+        WRITE X ON TARGET,ID
+       END ELSE
+        PRINT
+        PRINT "Catalog pointer for '":ID:"' exists in account ":TARGET.ACCT:". This may be"
+        PRINT "from an earlier version of the AccuTerm host programs. Do you want to"
+        PRINT "replace the existing pointer (Yes/No/All/Cancel) ?":
+        INPUT ANS
+        ANS = OCONV(ANS[1,1],'MCU')
+        IF ANS = 'C' THEN
+         CAN = 1
+*#QM#*CLEARSELECT LST
+         RETURN
+        END
+        IF ANS = 'Y' OR ANS = 'A' THEN
+         WRITE X ON TARGET,ID
+        END
+        IF ANS = 'A' THEN OVR = 1
+       END
+      END
+     END ELSE
+      WRITE X ON TARGET,ID
+* OpenInsight needs special handling to share catalogged programs
+*#OI#*     SRCID = '$':ID:'*':MY.ACCT
+*#OI#*     DSTID = '$':ID:'*':TARGET.ACCT
+*#OI#*     READ OBJ FROM SYSOBJ,SRCID THEN
+*#OI#*      WRITE OBJ ON SYSOBJ,DSTID
+*#OI#*     END
+     END
+    END
+   END
+  END
+ REPEAT
+ RETURN
+*
+END

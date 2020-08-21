@@ -1,0 +1,237 @@
+SUBROUTINE FTOPTION(OPTS,CNF,MAT PARAMS,FV)
+**************************************************************************
+*Copyright (c) 1993-2020 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTOPTION
+* AUTHOR: PJS
+* VERSION: 8.0.1
+* CREATED: 01/01/1993
+* UPDATED: 02/11/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.1
+*  PJS 02/11/2020
+*   Minor modification in LOOP/UNTIL/REPEAT for MVON# compatibility.
+*
+* 7.2.1
+*  PJS 10/09/2013
+*   Modified this routine to handle settings that are not in the first
+*   30 attributes of KMTCFG, passing CNF = 2 and using PARAMS(1) as a
+*   dynamic array containing the current settings being configured.
+*   This was necessary to support FTSETUP "miscellaneous settings".
+*
+* 7.1.1
+*  PJS 10/25/2012
+*   Trim entered data before saving (fixes blank server name)
+*
+* 5.4.1
+*  PJS 04/17/2007
+*   Added support for custom settings in hex.
+*
+* 5.0.1
+*  PJS 10/08/2002
+*   Added new ULTX (ancient Ultimate) platform type which does
+*   not support test for stacked input (YUK!)   
+*
+* 4.0.2
+*  PJS 07/24/2001
+*   Added system specific support code for Ultimate
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* UPDATE FILE TRANSFER OPTIONS
+*
+**************************************************************************
+**************************************************************************
+*
+* FTOPTION() SUBROUTINE INTERFACE
+*
+* INPUT:  PARAMS  = CURRENT FILE TRANSFER PARAMETER SETTINGS & FLAGS
+*         OPTS    = STRING OF PARAM INDICIES TO UPDATE
+*         CNF     = 1 IF CONFIG, 0 IF OPTIONS, 2 IF SETTINGS
+*         FV      = CONFIG FILE VARIABLE (FTBP)
+*
+* OUTPUT: PARAMS  = UPDATED PARAMETER SETTINGS & FLAGS
+*
+* IF CNF=2, THEN PARAMS(1) IS A DYNAMIC ARRAY CONTAINING THE SETTINGS
+* BEING MODIFIED.
+*
+********************************************************************
+*
+DIM PARAMS(30)
+EQU SETTINGS TO PARAMS(1)
+*
+READ DEFAULTS FROM FV,'FTPARAMS' ELSE RETURN
+LST=''
+N=0
+K=DCOUNT(OPTS,',')
+FOR I=1 TO K
+ RNG=FIELD(OPTS,',',I)
+ N1=FIELD(RNG,'-',1)
+ N2=FIELD(RNG,'-',2)
+ IF N2='' THEN N2=N1
+ FOR J=N1 TO N2
+  LST<-1>=J
+  N=N+1
+ NEXT J
+NEXT I
+IF CNF=1 THEN HST=8 ELSE HST=7
+LOOP
+ GOSUB 2222; IF NOT(CHKSTKINP) THEN
+  PRINT
+  IF CNF=2 THEN
+   PRINT 'Current settings are:'
+  END ELSE
+   PRINT 'Current parameter settings are:'
+  END
+  FOR J=1 TO N
+   I=LST<J>
+   CHOICES=FIELD(DEFAULTS<I>,',',5)
+   IF CNF=2 THEN Z=SETTINGS<I> ELSE Z=PARAMS(I)
+   IF (CHOICES NE '') AND ((Z EQ '') OR (Z MATCHES '1N')) AND (Z < DCOUNT(CHOICES,';')) THEN
+    Z=FIELD(CHOICES,';',Z+1)
+   END
+   PRINT '   ':(J 'R#2'):'. ':((FIELD(DEFAULTS<I>,',',1):STR('.',30))[1,30]):' ':Z
+  NEXT J
+ END
+ LOOP
+  GOSUB 2222; IF NOT(CHKSTKINP) THEN
+   PRINT
+   IF CNF=2 THEN
+    PRINT 'Enter setting number (1-':N:') to modify: ':
+   END ELSE
+    PRINT 'Enter parameter number (1-':N:') to modify: ':
+   END
+  END
+  INPUT OPT
+  IF OPT EQ '?' THEN
+   IF CNF=0 THEN HID=6 ELSE HID=5
+   CALL FTHELP(HID,FV)
+  END ELSE
+   IF OPT[1,1] EQ '?' THEN
+    LOOP OPT=OPT[2,99] UNTIL OPT EQ '' OR OPT MATCHES '1N0N' DO
+     NULL
+    REPEAT
+    IF OPT >= 1 AND OPT <= N THEN
+     HID=FIELD(DEFAULTS<LST<OPT>>,',',HST)
+     IF HID > 0 THEN CALL FTHELP(HID,FV)
+    END
+    OPT='?'
+   END
+  END
+  IF INDEX(OPT,'=',1) THEN
+   VAL=TRIM(FIELD(OPT,'=',2))
+   OPT=TRIM(FIELD(OPT,'=',1))
+  END ELSE VAL=''
+ UNTIL OPT EQ '' OR OPT EQ '?' OR (OPT MATCHES '1N0N' AND OPT >= 1 AND OPT <= N) DO NULL REPEAT
+UNTIL OPT EQ '' DO
+ IF OPT NE '?' THEN
+  J=LST<OPT>
+  CD=FIELD(DEFAULTS<J>,',',9)
+  CHOICES=FIELD(DEFAULTS<J>,',',5)
+  IF CHOICES EQ '' THEN
+   LOOP
+    IF VAL NE '' THEN
+     Z=VAL
+     VAL=''
+    END ELSE
+     GOSUB 2222; IF NOT(CHKSTKINP) THEN
+      PRINT
+      PRINT '   ':(OPT 'R#2'):'. ':FIELD(DEFAULTS<J>,',',1):'?':
+     END
+     INPUT Z
+     IF Z EQ '' THEN 
+      IF CNF=2 THEN Z=SETTINGS<J> ELSE Z=PARAMS(J)
+     END
+    END
+    OK=1
+    DEF=FIELD(DEFAULTS<J>,',',2)
+    MIN=FIELD(DEFAULTS<J>,',',3)
+    MAX=FIELD(DEFAULTS<J>,',',4)
+    IF DEF MATCHES '1N0N' AND MIN NE '' AND MAX NE '' THEN
+     * VALIDATE NUMERIC USING RANGE CHECK
+     IF NOT(Z MATCHES '1N0N' AND Z >= MIN AND Z <= MAX) THEN OK=0
+    END
+    IF OK=0 AND CD EQ 'X' THEN
+     * VALIDATE HEX STRING
+     IF REM(LEN(Z),2) = 1 THEN OK=0 ELSE
+      FOR K=1 TO LEN(Z)
+       IF INDEX('0123456789ABCDEFabcdef',Z[K,1],1) = 0 THEN OK=0
+      NEXT K
+     END 
+    END
+   UNTIL OK DO
+    IF Z EQ '?' THEN
+     HID=FIELD(DEFAULTS<J>,',',HST)
+     IF HID > 0 THEN CALL FTHELP(HID,FV)
+    END ELSE
+     IF CD EQ 'X' AND LEN(Z)>1 THEN
+      PRINT 'Parameter must be between ':MIN:' and ':MAX:' or be a valid hex string.'
+     END ELSE
+      PRINT 'Parameter must be between ':MIN:' and ':MAX:'.'
+     END
+    END
+   REPEAT
+  END ELSE
+   IF VAL NE '' THEN
+    OK=0
+    K=LEN(VAL); IF K > 2 THEN K=2
+    FOR I=0 TO FIELD(DEFAULTS<J>,',',4)
+     IF OCONV(VAL[1,K],'MCU')=FIELD(CHOICES,';',I+1)[1,K] THEN Z=I; I=99; OK=1
+    NEXT I
+    IF OK=0 AND CD EQ 'X' THEN
+     * VALIDATE HEX STRING
+     Z=VAL
+     IF REM(LEN(Z),2) = 0 THEN
+      OK=1
+      FOR K=1 TO LEN(Z)
+       IF INDEX('0123456789ABCDEFabcdef',Z[K,1],1) = 0 THEN OK=0
+      NEXT K
+     END
+    END
+    IF OK=0 THEN
+     IF CD EQ 'X' THEN
+      PRINT 'Parameter must match first letter(s) of desired setting or be a valid hex string.'
+     END ELSE
+      PRINT 'Parameter must match first letter(s) of desired setting.'
+     END
+     IF CNF=2 THEN Z=SETTINGS<J> ELSE Z=PARAMS(J)
+    END
+   END ELSE
+    IF CNF=2 THEN Z=SETTINGS<J> ELSE Z=PARAMS(J)
+    IF NUM(Z) THEN Z=Z+1 ELSE Z=0
+    IF Z > FIELD(DEFAULTS<J>,',',4) THEN Z=0
+   END
+  END  
+  IF CNF=2 THEN SETTINGS<J>=TRIM(Z) ELSE PARAMS(J)=TRIM(Z)
+ END
+REPEAT
+RETURN
+*
+**************************************************************************
+*
+* SUBROUTINE TO CHECK FOR STACKED INPUT
+*
+**************************************************************************
+*
+2222 *
+CHKSTKINP=0;*#GENERIC#*
+*#DEFAULT#*CHKSTKINP=SYSTEM(10)
+*#ULT#*CHKSTKINP=SYSTEM(29)
+*#ULTX#*CHKSTKINP=0
+RETURN
+*
+END

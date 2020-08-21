@@ -1,0 +1,126 @@
+SUBROUTINE ATGUIHELP(APPID, TYPE, FILENAME, TOPIC, WINDOW, ERRORS, STATE)
+**************************************************************************
+*Copyright (c) 2004-2006 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUIHELP
+* AUTHOR: PJS
+* VERSION: 5.3.1
+* CREATED: 05/02/2005
+* UPDATED: 06/12/2006
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.1
+*  PJS 06/12/2006
+*   Updated to use new version of FTOBJREQ, which requires that
+*   the PARAMS and CLIENV arrays be completely initialized.
+*
+* 5.2.1
+*  PJS 05/02/2005
+*   A bit of a kludge to pass TYPE and WINDOW arguments to runtime server.
+*   In the original version of this subroutine, the TYPE and WINDOW arguments
+*   were not passed to the server, and the original 1.2 version of the server
+*   used the app HelpType property, ignoring the TYPE specified to this
+*   routine. To maintain compatibility with the original 1.2 version, we now
+*   pass the TYPE and WINDOW arguments as sub-values 2 & 3 of the FILENAME
+*   argument (value 4), but only when TYPE is 1 or 2. New version of this
+*   subroutine calling old 1.2 server will ignore the FILENAME argument if
+*   the App HelpType is 1 or 2. Old version of this subroutine calling new 1.2
+*   server will have these sub-values NULL, causing App HelpType to be used.
+*   New sub and new server allow TYPE argument to override App HelpType.
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI MANAGER - DISPLAY HELP
+*
+* CALL THIS SUBROUTINE TO DISPLAY HELP INFORMATION
+*
+* INPUT:
+*  APPID      application identifier
+*  TYPE       0 = WinHelp (standard Windows help file)
+*             1 = HTML Document (pass document contents in TOPIC argument)
+*             2 = HTML Reference (pass document URL in TOPIC argument)
+*  WINDOW     reserved for future use (pass NULL or zero)
+*
+* If TYPE=0 (WinHelp):
+*  FILENAME   file name of desired help file or NULL to use help file
+*             defined in the application HelpFile property
+*  TOPIC      numeric help topic ID to to display or zero for contents
+*
+* If TYPE=1 (HTML Document):
+*  FILENAME   unused
+*  TOPIC      help text in HTML format
+*
+* If TYPE=2 (HTML Reference):
+*  FILENAME   unused
+*  TOPIC      URL of help text in HTML format
+*
+* OUTPUT:
+*  ERRORS     ERRORS<1> is non-zero if errors have occurred
+*
+* OTHER:
+*  STATE      internal use only - do not modify
+*
+**************************************************************************
+*
+$INCLUDE ATGUIEQUATES
+EQU THISPGM TO 'ATGUIHELP'
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30), CLIENV(10)
+ERRORS = GRSUCCESS
+FOR I = 1 TO 30
+ PARAMS(I) = STATE<20,I>
+NEXT I
+FOR I = 1 TO 10
+ CLIENV(I) = STATE<20+I>
+NEXT I
+IF NOT(STATE<1>) THEN
+ CALL ATGUIERROR(3, THISPGM, '', 0, GRFATAL, '', ERRORS)
+ RETURN
+END
+*
+* CHECK IF RECORDING MACRO
+*
+IF STATE<2> THEN
+ CALL ATGUIERROR(2, THISPGM, '', 0, GRNOMAC, '', ERRORS)
+ RETURN
+END
+*
+* CONVERT AM TO VM IN TOPIC
+*
+N = DCOUNT(TOPIC, AM)
+TEXT = ''
+FOR I = 1 TO N
+ TEXT<1,I> = TOPIC<I>
+NEXT I
+REC = GCMETHOD : VM : APPID : VM : GMHELP : VM : FILENAME : VM : TEXT
+* THIS IS A BIT OF A KLUDGE! WHEN THIS ROUTINE WAS FIRST WRITTEN, THE TYPE
+* AND WINDOW ARGUMENTS WERE NOT PASSED TO THE SERVER, AND THE ORIGINAL 1.2
+* VERSION OF THE SERVER USED THE APP HELP TYPE, IGNORING THE TYPE SPECIFIED
+* TO THIS ROUTINE. TO MAINTAIN COMPATIBILITY WITH THE ORIGINAL 1.2 VERSION,
+* WE NOW PASS THE TYPE AND WINDOW AS SUB-VALUES 2 & 3 OF THE FILENAME ARGUMENT
+* (VALUE 4), BUT ONLY WHEN TYPE IS 1 OR 2. NEW VERSION OF THIS SUBROUTINE
+* CALLING OLD 1.2 SERVER WILL IGNORE THE FILENAME ARGUMENT IF APP HELP TYPE
+* IS 1 OR 2. OLD VERSION OF THIS SUBROUTINE CALLING NEW 1.2 SERVER WILL HAVE
+* THESE SUB-VALUES NULL, CAUSING APP HELP TYPE TO BE USED. NEW SUB AND NEW
+* SERVER ALLOW TYPE ARGUMENT TO OVERRIDE APP HELP TYPE.
+IF TYPE > 0 THEN
+ REC<1,4,2> = TYPE
+ IF WINDOW <> '' AND WINDOW <> 0 THEN REC<1,4,3> = WINDOW
+END
+*
+* SEND COMMAND TO SERVER
+*
+CALL FTOBJREQ('g', REC, RSP, 0, MAT PARAMS, MAT CLIENV)
+CALL ATGUIERRORS(RSP, ERRORS)
+RETURN
+*
+END

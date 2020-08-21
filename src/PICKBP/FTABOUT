@@ -1,0 +1,309 @@
+*
+**************************************************************************
+*Copyright (c) 2020 Zumasys,Inc. as an unpublished work. All rights      *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTABOUT
+* AUTHOR: PJS
+* VERSION: 8.0.2
+* CREATED: 02/11/2020
+*
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.2
+*  PJS 02/11/2020
+*   Added support for MVON# platform (MVON).
+*
+* 8.0.1
+*  PJS 01/09/2020
+*   Handle AT8 release number properly (8.x.yyyy)
+*
+* 7.2.2
+*  PJS 03/19/2014
+*   Added support for OASYS platform.
+*
+* 7.2.1
+*  PJS 10/08/2013
+*   Initial version
+*
+**************************************************************************
+**************************************************************************
+*
+* DISPLAY INFORMATION ABOUT ACCUTERM HOST PROGRAM CONFIGURATION
+*
+**************************************************************************
+**************************************************************************
+*
+* THIS ROUTINE CALLS FTVSINF TO OBTAIN INFORMATION ABOUT THE CLIENT
+*
+* CAPABILITIES: string of letters representing capabilities available
+*          A = ASCII file transfer protocol supported
+*          B = border effects (visual styles) are enabled
+*          C = data capture supported
+*          D = file download supported
+*          E = execute DOS/Windows commands
+*          F = character set translation supported during file transfer
+*          G = GUI supported
+*          H = server mode supported
+*          I = image display supported
+*          J = screen save/restore supported
+*          K = Kermit file transfer protocol supported
+*          L = background image supported
+*          M = query settings (ATWIN.INI) supported (ESC STX '&')
+*          O = Object Bridge supported
+*          P = packetized messages supported
+*          Q = message integrity checks supported (also optional final ACK, save/restore mouse)
+*          R = reliable connection
+*          S = VBA scripting supported
+*          T = file transfer error info available
+*          U = file upload supported
+*          V = host capabilities (ESC STX '=') supported
+*          W = synchronous scripts supported (ESC STX 'R')
+*          X = file conversion supported
+*          Y = query status supported (ESC STX 'y')
+*          Z = case inversion is in effect
+*          ! = use tagged delimiters in FTENCODE/FTDECODE
+*
+* SERVICES: string of letters representing services available
+*          0 = server mode supported (same as H in CAPABILITIES above)
+*          a = Object Bridge (same as O in CAPABILITIES above)
+*          b = File format conversion (same as X in capabilities above)
+*          g = GUI (same as G in capabilities above)
+*
+*
+PRINT 'AccuTerm Host Program Details'
+PRINT
+*
+OPEN 'MD' TO MD ELSE
+ OPEN 'VOC' TO MD ELSE
+  PRINT 'Unable to open MD (or VOC) file!'
+  STOP
+ END
+END
+*
+WHO = OCONV('','U50BB');*#GENERIC#*
+ACCT = FIELD(WHO,' ',3);*#GENERIC#*
+IF ACCT = '' THEN ACCT = FIELD(WHO,' ',2);*#GENERIC#*
+*#DEFAULT#*WHO = OCONV('','U50BB')
+*#DEFAULT#*ACCT = FIELD(WHO,' ',3)
+*#DEFAULT#*IF ACCT = '' THEN ACCT = FIELD(WHO,' ',2)
+*#CACHE#*ACCT = @WHO
+*#JB#*ACCT = @WHO
+*#MVON#*ACCT = @WHO
+*#NR#*ACCT = @ACCOUNT
+*#OAS#*ACCT = @WHO
+*#OI#*ACCT = @APPID<1>
+*#ON#*ACCT = @WHO
+*#PICK#*ACCT = @ACCOUNT
+*#QM#*ACCT = @WHO
+*#UD#*ACCT = @WHO
+*#UV#*ACCT = @WHO
+*
+OPEN 'ACCUTERMCTRL' TO CTRL ELSE
+ OPEN 'FTBP' TO CTRL ELSE
+  PRINT 'Unable to open ACCUTERMCTRL file!'
+  STOP
+ END
+END
+*
+READ CFG FROM CTRL,'KMTCFG' ELSE
+ CFG = ''
+ PRINT 'Unable to read KMTCFG from ACCUTERMCTRL file!'
+END
+*
+CALL FTVERSN(VERSN)
+PRINT '  FTBP version: ':VERSN
+PRINT '  Host platform: ':CFG<51>
+*
+OPEN 'GUIBP' TO FV THEN OK = 4 ELSE OK = 0
+PRINT '  GUIBP: ':('not ')[1,OK]:'installed'
+OPEN 'OBJBP' TO FV THEN OK = 4 ELSE OK = 0
+PRINT '  OBJBP: ':('not ')[1,OK]:'installed'
+OPEN 'SUIBP' TO FV THEN OK = 4 ELSE OK = 0
+PRINT '  SUIBP: ':('not ')[1,OK]:'installed'
+*
+IF INDEX(OCONV(ACCT,'MCU'),'ACCUTERM',1) THEN
+ PRINT '  ACCUTERM account name: ':ACCT
+ OPEN 'DEMOBP' TO FV THEN OK = 4 ELSE OK = 0
+ PRINT '  DEMOBP: ':('not ')[1,OK]:'installed'
+ OPEN 'UIEX' TO FV THEN OK = 4 ELSE OK = 0
+ PRINT '  UIEX: ':('not ')[1,OK]:'installed'
+ OPEN 'SAMPLES' TO FV THEN OK = 4 ELSE OK = 0
+ PRINT '  Sample programs: ':('not ')[1,OK]:'installed'
+ OPEN 'CUST.SAMPLE' TO FV THEN OK = 4 ELSE OK = 0
+ PRINT '  Sample data files: ':('not ')[1,OK]:'installed'
+END ELSE
+ READ Q FROM MD,'FTBP' ELSE Q = ''
+ IF OCONV(Q<1>[1,1],'MCU') = 'Q' THEN
+  PRINT '  ACCUTERM account name: ':Q<2>
+ END ELSE
+  PRINT '  ACCUTERM account name: unknown (no FTBP Q-pointer found)'
+ END
+END
+*
+PRINT
+PRINT 'File Transfer Configuration'
+X = CFG<13>
+IF X = '' OR X = 1 THEN X = 'Text' ELSE X = 'Binary'
+PRINT '  Default transfer mode: ':X
+X = CFG<17>
+IF X = '' OR X = 2 THEN X = 'Unlimited' ELSE
+ IF X = 1 THEN X = 'Split at 32K' ELSE X = 'Truncate at 32K'
+END
+PRINT '  Host item size limit: ':X
+X = CFG<14>
+IF X = '' OR X = 1 THEN X = 'Yes' ELSE X = 'No'
+PRINT '  Preserve file extension: ':X
+X1 = CFG<15>
+IF X1 = '' OR X1 = 1 THEN X1 = 'Yes' ELSE X1 = 'No'
+X2 = CFG<16>
+IF X2 = '' OR X2 = 1 THEN X2 = 'Yes' ELSE
+ IF X2 = 2 THEN X2 = 'Merge' ELSE X2 = 'No'
+END
+X3 = CFG<19>
+IF X3 = '' OR X3 = 1 THEN X3 = 'Yes' ELSE X3 = 'No'
+PRINT '  Overwrite existing items: FT=':X1:' FTD=':X2:' FTPICK=':X3
+X = CFG<18>
+IF X = '' OR X = 0 THEN X = 'Tab' ELSE
+ IF X = 2 THEN X = 'CR/LF' ELSE X = 'Comma'
+END
+PRINT '  Text file field delimiter: ':X
+X = CFG<24>
+IF X = '' OR X = 0 THEN X = 'No' ELSE X = 'Yes'
+PRINT '  Character set conversion: ':X
+X = CFG<1>
+IF X = '' THEN X = 250
+PRINT '  Source buffer index: ':X
+X = CFG<20>
+IF X = '' OR X = 0 THEN X = 'No' ELSE X = 'Yes'
+PRINT '  Host requires extra trailing attribute mark: ':X
+*
+PRINT
+PRINT 'Kermit Configuration'
+X = CFG<2>
+IF X = '' THEN X = 94
+PRINT '  Maximum packet size: ':X
+X = CFG<3>
+IF X = '' THEN X = 10
+PRINT '  Number of retry attempts: ':X
+X = CFG<4>
+IF X = '' THEN X = 8
+PRINT '  Error timeout: ':X
+X = CFG<5>
+IF X = '' THEN X = 0
+PRINT '  Number of padding characters: ':X
+X = CFG<6>
+IF X = '' THEN X = 13
+PRINT '  End-of-line character: ':X
+X = CFG<7>
+IF X < 32 OR X > 126 THEN X = 35
+P1 = CHAR(X)
+X = CFG<8>
+IF X < 32 OR X > 126 THEN X = 38
+P2 = CHAR(X)
+X = CFG<9>
+IF X < 32 OR X > 126 THEN X = 126
+P3 = CHAR(X)
+PRINT '  Prefix characters (CTL, EBP, RLE): ':P1:' ':P2:' ':P3
+X = CFG<11>
+IF X = '' OR X = 0 THEN X = 'No' ELSE X = 'Yes'
+PRINT '  Use eighth-bit prefixing: ':X
+X = CFG<12>
+IF X = '' OR X = 0 THEN X = 'No' ELSE X = 'Yes'
+PRINT '  Use run-length encoding: ':X
+X = CFG<10>
+IF X = '' OR X = 0 THEN X = 'No' ELSE X = 'Yes'
+PRINT '  Use MCP conversion: ':X
+*
+PRINT
+PRINT 'Server Configuration (FTSERVER, WED, GED)'
+PRINT '  Host server name: ':CFG<26>
+X = CFG<27>
+IF X = '' OR X = 1 THEN X = 'Yes' ELSE X = 'No'
+PRINT '  Allow READ/READNEXT/RELEASE: ':X
+X = CFG<28>
+IF X = '' OR X = 1 THEN X = 'Yes' ELSE X = 'No'
+PRINT '  Allow WRITE/ADD/DELETE: ':X
+X = CFG<29>
+IF X = '' OR X = 1 THEN X = 'Yes' ELSE X = 'No'
+PRINT '  Allow CONV: ':X
+X = CFG<30>
+IF X = '' OR X = 1 THEN X = 'Yes' ELSE X = 'No'
+PRINT '  Allow EXECUTE/CALL: ':X
+*
+OK = 0
+FOR I = 52 TO 59
+ IF CFG<I> <> '' THEN OK = 1
+NEXT I
+IF OK THEN
+ PRINT
+ PRINT 'Advanced Configuration Settings'
+ X = CFG<52>
+ IF X = '' THEN X = 80
+ PRINT '  Messaging protocol maximum inbound packet size: ':X
+ X = CFG<53>
+ IF X = '' THEN X = 2000
+ PRINT '  Messaging protocol maximum outbound packet size: ':X
+ X = CFG<54>
+ IF X = '' THEN X = 4
+ PRINT '  Messaging protocol retry attempts: ':X
+ X = CFG<55>
+ IF X = '' OR X = 0 THEN X = 'No' ELSE X = 'Yes'
+ PRINT '  Disable messaging protocol streaming mode: ':X
+ X = CFG<56>
+ IF X = '' OR X = 0 THEN X = 'No' ELSE X = 'Yes'
+ PRINT '  Disable messaging protocol length check: ':X
+ X = CFG<57>
+ IF X = '' OR X = 0 THEN X = 'No' ELSE X = 'Yes'
+ PRINT '  Disable messaging protocol integrity check: ':X
+ X = CFG<58>
+ IF X = '' OR X = 0 THEN X = 'No' ELSE X = 'Yes'
+ PRINT '  Disable strict item locks for WED & GED: ':X
+ X = CFG<59>
+ IF X = '' OR X = 0 THEN X = 'No' ELSE X = 'Yes'
+ PRINT '  Disable messaging protocol tags: ':X
+END
+*
+PRINT
+PRINT 'AccuTerm Client Details'
+CALL FTVSINF(PLATFORM, PROD, RLS, CAPAS, SVCS, SERIAL, LICENSE, USER)
+IF PROD < 1 OR PROD > 8 THEN PROD = 0
+X = FIELD('Unknown,AccuTerm DOS,AccuTerm+ DOS,AccuTerm Win16,AccuTerm Win32,AccuTerm Internet Edition,AccuTerm Component,AccuTerm Lite,AccuTerm Client',',',PROD+1)
+PRINT '  Product class: ':X
+IF PLATFORM < 1 OR PLATFORM > 3 THEN PLATFORM = 0
+X = FIELD('Unknown,DOS,Win16,Win32',',',PLATFORM+1)
+PRINT '  Client platform: ':X
+MAJOR = FIELD(RLS,'.',1)
+IF MAJOR < 8 THEN
+ X = INT(RLS * 10) / 10
+ Y = CHAR(96 + INT(1000 * (RLS - X)))
+ PRINT '  Release: ':RLS:' (':X:Y:')'
+END ELSE
+ X = FIELD(RLS,'.',2)
+ IF LEN(X) = 5 THEN
+  Y = X[1,1]:'.':X[2,4]
+ END ELSE
+  Y = X
+ END
+ PRINT '  Release: ':RLS:' (':MAJOR:'.':Y:')'
+END
+PRINT '  Serial number: ':SERIAL
+IF LICENSE < 1 OR LICENSE > 9 THEN LICENSE = 0
+X = FIELD('Invalid,Single user,Small Business,Enterprise,Personal,Developer,Bundled,Organization,Component,Evaluation',',',LICENSE+1)
+PRINT '  License: ':X
+IF MAJOR < 8 AND LICENSE = 7 THEN X = 'Internet Edition'
+PRINT '  Registered user: ':USER
+PRINT '  Capability codes: ':CAPAS
+PRINT '  Service codes: ':SVCS
+*
+PRINT
+STOP
+*
+END

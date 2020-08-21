@@ -1,0 +1,620 @@
+SUBROUTINE FTRDDATA(BUF,CNT,MAX,EOF,CAN,ERR,MAT PARAMS,MAT VARS)
+**************************************************************************
+*Copyright (c) 1993-2020 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTRDDATA
+* AUTHOR: PJS
+* VERSION: 8.0.1
+* CREATED: 01/01/1993
+* UPDATED: 02/11/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.1
+*  PJS 02/11/2020
+*   Added support for MVON# platform (MVON).
+*
+* 7.1.1
+*  PJS 03/19/2014
+*   Added support for OASYS platform.
+*
+* 7.0.2
+*  PJS 06/24/2010
+*   Fixed unassigned varialbe compile error (EACH.ATTR s/b EACH.ATT).
+*
+* 7.0.1
+*  PJS 03/25/2010
+*   Added new "C" option to use column names from dictionary instead
+*   of attribute names for header row.
+*
+* 5.4.5
+*  PJS 12/20/2007
+*   Added support for CACHE platform.
+*
+* 5.4.4
+*  PJS 12/06/2007
+*   Changed SELECT to BSELECT for Northgate Reality (NR) platform.
+*
+* 5.4.3
+*  PJS 07/10/2007
+*   Fix minor bug where delimiter length assumed to be 1, in loop that
+*   strips embedded delimiters.
+*
+* 5.4.2
+*  PJS 05/02/2007
+*   Fixed problem with ITYPE() using current copy of ITEM as @RECORD,
+*   instead of original item. Current copy is updated as each ITYPE()
+*   field is evaluated, which might cause subsequent ITYPE()s to return
+*   invalid results. ALST<8> now indicates if a field uses ITYPE().
+*
+* 5.4.1
+*  PJS 04/18/2007
+*   Added support for extended delimiters, including user-defined
+*   delimiter in hex - see local subroutine 900.
+*
+* 5.3.4
+*  PJS 04/10/2007
+*   Initialize ICNT & BCNT variables to zero on initial entry.
+*
+* 5.3.3
+*  PJS 11/08/2006
+*   Added support for ON (ONWare MVON) platform.
+*
+* 5.3.2
+*  PJS 10/19/2006
+*   Use ITYPE() function for jBase.
+*
+* 5.3.1
+*  PJS 07/24/2006
+*   Changed size of VARS() array from 25 to 26, defining VARS(26)
+*   as MD. Define previously unused VARS(24) as DFILE, the file
+*   variable for the dictionary. Changed QM, UD & UV to use ITYPE()
+*   or CALCULATE() function instead of EXECUTE-SELECT-READNEXT
+*   (about 25x faster on QM!). Check for null item after READ,
+*   and if sending specific attributes then assign ITEM=AM so it
+*   won't fail the EXIST test. Added support for OI (OpenInsight
+*   CTO) platform.
+*
+* 5.0.5
+*  PJS 09/29/2004
+*   Changed max string length from 9999999 to 999999999
+*
+* 5.0.4
+*  PJS 03/05/2004
+*   Added new NR (Northgate Reality 9+) platform type, same as
+*   old MD platform.
+*
+* 5.0.3
+*  PJS 10/24/2003
+*   Integrated QM platform specific code per mods from Martin
+*   Phillips.
+*
+* 5.0.2
+*  PJS 10/08/2002
+*   Added new ULTX (ancient Ultimate) platform type which uses
+*   old EXECUTE syntax (YUK!)
+*
+* 5.0.1
+*  PJS 09/10/2002
+*   Added column name list (CLST) to VARS() array as VARS(15).
+*
+* 4.0.5
+*  PJS 05/11/2001
+*   Added new platform types: SEQ (Sequoia/mvEnterprise) & VIS (UniVision)
+*
+* 4.0.4
+*  PJS 12/14/2000
+*   Added new platform type: MVBASE
+*
+* 4.0.3
+*  PJS 11/24/2000
+*   Added new platform type: AP
+*
+* 4.0.2
+*  PJS 11/03/2000
+*   Added platform specific support code for Ultimate, ADDS, Enhanced R83.
+*   Changed comma-delimited format so that all fields
+*   are always enclosed in quote marks.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*   BETTER EARLY TERMINATION LOGIC (CAN)
+*
+**************************************************************************
+**************************************************************************
+*
+* READ DATA RECORDS
+*
+**************************************************************************
+**************************************************************************
+*
+* FTRDDATA() SUBROUTINE INTERFACE
+*
+* INPUT:
+*         BUF   = VARIABLE TO RETURN DATA (APPEND)
+*         CNT   = LEN(BUF)
+*         MAX   = MAXIMUM LENGTH OF BUF
+*         CAN   = NON-ZERO TO TERMINATE TRANSACTION
+*
+* OUTPUT:
+*         BUF   = UPDATED (NEW DATA APPENDED)
+*         CNT   = LEN(BUF)
+*         EOF   = 1 IF NO MORE DATA FOR THIS FILE
+*         ERR   = ERROR STATUS (STRING)
+*
+* ACTION:
+*
+* THIS ROUTINE IS CALLED BY THE FILE TRANSFER PROTOCOL TO RETURN
+* DATA TO BE TRANSMITTED.  ON FIRST ENTRY, IDMODE MUST BE SET TO ZERO,
+* AND ALST CONTAINS THE FILE ATTRIBUTE LIST.  DATA IS RETURNED TO
+* THE PROTOCOL BY APPENDING THE NEXT DATA TO BUF AND RETURNING.
+* WHEN THERE IS NO MORE DATA LEFT, RETURNS WITH EOF
+* SET TO ONE.
+*
+* THE NEXT CALL TO THIS ROUTINE AFTER EOF WILL RETURN WITH EOF=2.
+*
+* UPON ENTRY AND EXIT, CNT REFLECTS THE SIZE OF BUF.
+*
+* AN EXTRA AM IS ADDED TO THE END OF THE FILE.
+*
+**************************************************************************
+*
+DIM PARAMS(30),VARS(26)
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+EQU TAB TO CHAR(9), CR TO CHAR(13), LF TO CHAR(10)
+EQU DCH.FLG.PARAM TO PARAMS(18)
+EQU ICNT TO VARS(1)
+EQU BCNT TO VARS(2)
+EQU IDMODE TO VARS(3)
+EQU ALST TO VARS(4)
+EQU HDR TO VARS(5)
+EQU EXP TO VARS(6)
+EQU GEN TO VARS(7)
+EQU PFX TO VARS(8)
+EQU SID TO VARS(9)
+EQU SKP TO VARS(10)
+EQU FILE TO VARS(11)
+EQU FNAME TO VARS(12)
+EQU ID TO VARS(13)
+EQU IDLST TO VARS(14)
+EQU CLST TO VARS(15)
+EQU IDS TO VARS(16)
+EQU ISIZ TO VARS(17)
+EQU ISEQ TO VARS(18)
+EQU ITEM TO VARS(19)
+EQU XSIZ TO VARS(20)
+EQU PATH TO VARS(21)
+EQU FN TO VARS(22)
+EQU FNLST TO VARS(23)
+EQU DFILE TO VARS(24)
+EQU FNS TO VARS(25)
+EQU MD TO VARS(26)
+*
+**************************************************************************
+*
+IF CAN THEN IDMODE=3 ;* CANCELLED - RETURN EOF=1
+EOF=0
+IDMODE=IDMODE+0
+BEGIN CASE
+ CASE IDMODE EQ 0
+  ICNT=0
+  BCNT=0
+  IF ALST<2> EQ '' THEN CALL FTPARSE(FNAME,ALST,ERR,DFILE,MD)
+  IF ERR NE '' THEN EOF=2; CAN=2; RETURN
+  CALL FTSELECT(MAT VARS) ;* SETUP IDLST LIST VARIABLE
+  FN=FNLST<1>
+ CASE IDMODE EQ 3
+  FNS=FN
+  EOF=1
+  IDMODE=4
+  RETURN
+ CASE IDMODE EQ 4
+  EOF=2
+  RETURN
+END CASE
+*
+**************************************************************************
+*
+* LOOP THROUGH DATA ITEMS
+*
+**************************************************************************
+*
+IF MAX > 5000 THEN MAXX=5000 ELSE MAXX=MAX
+GOSUB 900
+IF DELIM EQ '' THEN
+ ERR='Invalid text file field delimiter'
+ EOF=2
+ CAN=2
+ RETURN
+END
+XCNT=0
+EXIST=(ITEM NE '')
+LOOP
+ LOOP UNTIL EXIST DO
+  READNEXT ID FROM IDLST ELSE ;*#GENERIC#*
+*#DEFAULT#*  READNEXT ID FROM IDLST ELSE
+*#CACHE#*  READNEXT ID FROM IDLST ELSE
+*#JB#*  READNEXT ID FROM IDLST ELSE
+*#MD#*  READNEXT ID FROM IDLST ELSE
+*#MVON#*  READNEXT ID FROM IDLST ELSE
+*#NR#*  READNEXT ID FROM IDLST ELSE
+*#OAS#*  READNEXT ID FROM IDLST ELSE
+*#OI#*  READNEXT ID USING IDLST ELSE
+*#ON#*  READNEXT ID FROM IDLST ELSE
+*#QM#*  READNEXT ID FROM IDLST ELSE
+*#SEQ#*  READNEXT ID FROM IDLST ELSE
+*#UD#*  READNEXT ID FROM IDLST ELSE
+*#ULT#*  READNEXT ID FROM IDLST ELSE
+*#ULTX#*  READNEXT ID FROM IDLST ELSE
+*#UV#*  READNEXT ID FROM IDLST ELSE
+   IF XCNT THEN
+    BCNT=BCNT+XCNT
+    IDMODE=3
+    RETURN
+   END ELSE
+    FNS=FN
+    IDMODE=4
+    IF MAX=0 THEN EOF=2 ELSE EOF=1
+    RETURN
+   END
+  END
+  EXIST=1
+  READ ITEM FROM FILE,ID ELSE EXIST=0
+  IF EXIST THEN
+   ICNT=ICNT+1
+   IF ALST<1> EQ '*' THEN
+    ITEM=ID:AM:ITEM
+   END ELSE
+    IF ALST<1> NE '+' THEN
+     IF ALST<7> NE '' OR ALST<8> NE '' THEN GOSUB 500
+     IF ITEM EQ '' THEN ITEM=AM ;* NULL ITEM IS OK, BUT FAILS THE EXIST TEST ABOVE, SO FAKE IT!
+    END
+   END
+  END
+ REPEAT
+UNTIL CNT >= MAXX DO
+*
+**************************************************************************
+*
+* BUILD HEADER RECORD...
+*
+**************************************************************************
+*
+ IF IDMODE EQ 1 THEN
+  IF HDR THEN
+   IF ALST<1>='*' OR ALST<1>='+' THEN
+    VL='*'
+    EACH.ATT=0
+    NATT=0
+    GOSUB 100
+   END ELSE
+    NATT=DCOUNT(ALST<1>,VM)
+    FOR EACH.ATT=1 TO NATT
+     IF HDR=2 THEN
+      VL=ALST<9,EACH.ATT>
+      IF VL='' THEN VL=ALST<1,EACH.ATT>
+     END ELSE
+      VL=ALST<1,EACH.ATT>
+     END
+     GOSUB 100
+    NEXT EACH.ATT
+   END
+  END
+  IDMODE = 2
+ END
+*
+**************************************************************************
+*
+* BUILD DATA RECORDS...
+*
+**************************************************************************
+*
+ IF ALST<1>='*' OR ALST<1>='+' THEN
+*
+**************************************************************************
+*
+* EXTRACT ALL INFO
+*
+**************************************************************************
+*
+  NATT=DCOUNT(ITEM,AM)
+  FOR EACH.ATT=1 TO NATT
+   VL=ITEM<EACH.ATT>
+   GOSUB 100
+   IF CNT >= MAXX THEN
+    K=INDEX(ITEM,AM,EACH.ATT)
+    * IF LAST ATTR IS NULL, LOOP ONE MORE TIME TO BE SURE TO GET RECORD DELIMITER!
+    IF EACH.ATT+1 NE NATT OR K < LEN(ITEM) THEN
+     IF K THEN ITEM=ITEM[K+1,999999999] ELSE ITEM=''
+     BCNT=BCNT+XCNT
+     RETURN ;* END EARLY
+    END
+   END
+  NEXT EACH.ATT
+*
+ END ELSE
+*
+**************************************************************************
+*
+* EXTRACT SPECIFIED ATTRIBUTES
+*
+**************************************************************************
+*
+  CURR.MV=1
+  MAX.MV=1
+  LOOP
+   NATT=DCOUNT(ALST<1>,VM)
+   FOR EACH.ATT=1 TO NATT
+    ANM=ALST<2,EACH.ATT>
+    BEGIN CASE
+     CASE ANM EQ 0; VL=ID
+     CASE ANM > 0; VL=ITEM<ANM>
+     CASE 1; VL=''
+    END CASE
+    NCORR=DCOUNT(ALST<3,EACH.ATT>,SVM)
+    NCONV=DCOUNT(ALST<4,EACH.ATT>,SVM)
+*
+    IF EXP THEN
+*
+* EXPLODING MULTIVALUES HERE
+*
+     NMV=DCOUNT(VL,VM)
+     IF NMV>1 THEN
+      VL=VL<1,CURR.MV>
+      IF NMV>MAX.MV THEN MAX.MV=NMV
+     END ELSE
+      IF NOT(EXP) THEN VL=''
+     END
+     MV=0;SV=0
+     FOR EACH.CORR=1 TO NCORR
+      CC=ALST<3,EACH.ATT,EACH.CORR>
+      GOSUB 200
+     NEXT EACH.CORR
+     FOR EACH.CONV=1 TO NCONV
+      CC=ALST<4,EACH.ATT,EACH.CONV>
+      GOSUB 200
+     NEXT EACH.CONV
+*
+    END ELSE
+*
+* NON-EXPLODED FIELD (PROCESS CONVERSION ON EACH VALUE/SUB-VALUE)
+*
+     IF NCONV OR NCORR THEN
+      VLX=VL
+      NMV=DCOUNT(VLX,VM)
+      FOR MV=1 TO NMV
+       NSV=DCOUNT(VLX<1,MV>,SVM)
+       FOR SV=1 TO NSV
+        VL=VLX<1,MV,SV>
+        FOR EACH.CORR=1 TO NCORR
+         CC=ALST<3,EACH.ATT,EACH.CORR>
+         GOSUB 200
+        NEXT EACH.CORR
+        FOR EACH.CONV=1 TO NCONV
+         CC=ALST<4,EACH.ATT,EACH.CONV>
+         GOSUB 200
+        NEXT EACH.CONV
+        VLX<1,MV,SV>=VL
+       NEXT SV
+      NEXT MV
+      VL=VLX
+     END
+*
+    END
+    GOSUB 100
+   NEXT EACH.ATT
+  WHILE CURR.MV<MAX.MV DO
+   CURR.MV=CURR.MV+1
+  REPEAT
+*
+ END
+ EXIST=0
+REPEAT
+BCNT=BCNT+XCNT
+FNS=FN
+RETURN
+*
+**************************************************************************
+*
+100 * ADD NEXT FIELD TO OUTPUT BUFFER
+*
+**************************************************************************
+*
+* FIRST, CHECK FOR EMBEDDED DELIMITERS OR QUOTES...
+*
+IF CSV THEN
+ *[4.0.2] IF INDEX(VL,DELIM,1) OR INDEX(VL,'"',1) THEN
+  NQT=COUNT(VL,'"'); WHCH=1
+  FOR EACH.QT=1 TO NQT
+   N1=INDEX(VL,'"',WHCH)
+   VL=VL[1,N1-1]:'"':VL[N1,999999999]
+   WHCH=WHCH+2
+  NEXT EACH.QT
+  VL='"':VL:'"'
+ *[4.0.2] END
+END ELSE
+ LOOP N1=INDEX(VL,DELIM,1) WHILE N1 DO VL=VL[1,N1-1]:VL[N1+DL,999999999] REPEAT
+END
+*
+* NEXT, APPEND FIELD VALUE TO OUTPUT BUFFER...
+*
+IF EACH.ATT NE NATT THEN
+ BUF=BUF:VL:DELIM
+ L=LEN(VL)+DL
+END ELSE
+ BUF=BUF:VL:AM
+ L=LEN(VL)+1
+END
+CNT=CNT+L
+XCNT=XCNT+L
+RETURN
+*
+**************************************************************************
+*
+200 * PROCESS CONVERSIONS / CORRELATIVES
+*
+**************************************************************************
+*
+IF CC[1,1] EQ 'C' OR CC[1,1] EQ 'c' THEN
+ CALL FTCONCAT(CC,ID,ITEM,MV,SV,VL)
+END ELSE
+ VL=OCONV(VL,CC)
+END
+RETURN
+*
+**************************************************************************
+*
+500 * USE SELECT QUERY OR ITYPE() TO PROCESS A/F/B/CALL & I-DESCRIPTORS
+*
+**************************************************************************
+*
+IF ALST<8> NE '' THEN
+ * SET UP @ID, @RECORD FOR ITYPE() FUNCTION
+*#CACHE#* @ID = ID; @RECORD = ITEM; @FILENAME = FNAME
+*#JB#* @ID = ID; @RECORD = ITEM; @FILENAME = FNAME
+*#MVON#* @ID = ID; @RECORD = ITEM
+*#OAS#* @ID = ID; @RECORD = ITEM
+*#OI#* @ID = ID; @RECORD = ITEM; @DICT = DFILE
+*#ON#* @ID = ID; @RECORD = ITEM
+*#QM#* @ID = ID; @RECORD = ITEM
+*#UD#* @ID = ID; @RECORD = ITEM
+*#UV#* @ID = ID; @RECORD = ITEM
+END
+NATT=DCOUNT(ALST<1>,VM)
+FOR EACH.ATT=1 TO NATT
+ IF ALST<8,EACH.ATT> THEN
+  * USE ITYPE() FUNCTION TO EVALUATE ATTRIBUTE
+*#CACHE#*  READ IDESC FROM DFILE,ALST<1,EACH.ATT> THEN
+*#CACHE#*   DUMMY.VALUE = ITYPE(IDESC)
+*#CACHE#*   ITEM<ALST<2,EACH.ATT>>=DUMMY.VALUE
+*#CACHE#*  END
+*#JB#*  READ IDESC FROM DFILE,ALST<1,EACH.ATT> THEN
+*#JB#*   DUMMY.VALUE = ITYPE(IDESC)
+*#JB#*   ITEM<ALST<2,EACH.ATT>>=DUMMY.VALUE
+*#JB#*  END
+*#MVON#**  READ IDESC FROM DFILE,ALST<1,EACH.ATT> THEN
+*#MVON#**   DUMMY.VALUE = ITYPE(IDESC)
+*#MVON#**   ITEM<ALST<2,EACH.ATT>>=DUMMY.VALUE
+*#MVON#**  END
+*#OAS#*  READ IDESC FROM DFILE,ALST<1,EACH.ATT> THEN
+*#OAS#*   DUMMY.VALUE = ITYPE(IDESC)
+*#OAS#*   ITEM<ALST<2,EACH.ATT>>=DUMMY.VALUE
+*#OAS#*  END
+*#OI#*  DUMMY.VALUE = CALCULATE(ALST<1,EACH.ATT>)
+*#OI#*  ITEM<ALST<2,EACH.ATT>>=DUMMY.VALUE
+*#ON#*  READ IDESC FROM DFILE,ALST<1,EACH.ATT> THEN
+*#ON#*   DUMMY.VALUE = ITYPE(IDESC)
+*#ON#*   ITEM<ALST<2,EACH.ATT>>=DUMMY.VALUE
+*#ON#*  END
+*#QM#*  READ IDESC FROM DFILE,ALST<1,EACH.ATT> THEN
+*#QM#*   DUMMY.VALUE = ITYPE(IDESC)
+*#QM#*   ITEM<ALST<2,EACH.ATT>>=DUMMY.VALUE
+*#QM#*  END
+*#UD#*  READ IDESC FROM DFILE,ALST<1,EACH.ATT> THEN
+*#UD#*   DUMMY.VALUE = ITYPE(IDESC)
+*#UD#*   ITEM<ALST<2,EACH.ATT>>=DUMMY.VALUE
+*#UD#*  END
+*#UV#*  READ IDESC FROM DFILE,ALST<1,EACH.ATT> THEN
+*#UV#*   DUMMY.VALUE = ITYPE(IDESC)
+*#UV#*   ITEM<ALST<2,EACH.ATT>>=DUMMY.VALUE
+*#UV#*  END
+ END ELSE
+  IF ALST<7,EACH.ATT> NE '' THEN
+   ITEM<ALST<2,EACH.ATT>>=''
+   IF ALST<7,EACH.ATT> EQ '*' THEN
+    SCL=''
+    SCA=ALST<1,EACH.ATT>
+   END ELSE
+    * CREATE DUMMY DICTIONARY ITEM THAT COMBINES CORRELATIVES & CONVERSIONS
+    DUMMY.DICT = 'A'
+    DUMMY.DICT<2> = '0'
+    NUM.CORR=DCOUNT(ALST<7,EACH.ATT>,SVM)
+    FOR EACH.CORR=1 TO NUM.CORR
+     DUMMY.DICT<8,EACH.CORR>=ALST<7,EACH.ATT,EACH.CORR>
+    NEXT EACH.CORR
+    DUMMY.DICT<9>='L'
+    DUMMY.DICT<10>='15'
+    OPEN 'DICT FTBP' TO DUMMY.FILE ELSE
+     STAT='Unable to open DICT FTBP for correlative processing!'
+     RETURN
+    END
+    DUMMY.ID='DUMMY':FIELD(OCONV('','U50BB'),' ',1)
+    WRITE DUMMY.DICT ON DUMMY.FILE,DUMMY.ID
+    SCL='USING DICT FTBP '
+    SCA=DUMMY.ID
+   END
+   DUMMY.LIST=1
+   PRINT 'Generic version of FTRDDATA does not support A/F/B/Call processing codes!';STOP;*#GENERIC#*
+*#DEFAULT#*   EXECUTE "SELECT ":FNAME:" '":ID:"' ":SCL:SCA CAPTURING JUNK
+*#DEFAULT#*   IF SYSTEM(11) THEN SELECT DUMMY.FILE TO DUMMY.LIST ELSE DUMMY.LIST=''
+*#CACHE#*   EXECUTE "SELECT ":FNAME:" '":ID:"' ":SCL:SCA RTNLIST DUMMY.LIST CAPTURING JUNK
+*#JB#*   EXECUTE "SELECT ":FNAME:" '":ID:"' ":SCL:SCA RTNLIST DUMMY.LIST CAPTURING JUNK
+*#MD#*   PERFORM "SELECT ":FNAME:" '":ID:"' ":SCL:SCA RTNLIST DUMMY.LIST CAPTURING JUNK
+*#MVON#*   EXECUTE "SELECT ":FNAME:" '":ID:"' ":SCL:SCA RTNLIST DUMMY.LIST CAPTURING JUNK
+*#NR#*   PERFORM "BSELECT ":FNAME:" '":ID:"' ":SCL:SCA RTNLIST DUMMY.LIST CAPTURING JUNK
+*#SEQ#*   EXECUTE "SELECT ":FNAME:" '":ID:"' ":SCL:SCA RTNLIST DUMMY.LIST CAPTURING JUNK
+*#ULT#*   EXECUTE "SELECT ":FNAME:" '":ID:"' ":SCL:SCA CAPTURING JUNK
+*#ULT#*   IF SYSTEM(25) THEN SELECT DUMMY.FILE TO DUMMY.LIST ELSE DUMMY.LIST=''
+*#ULTX#*   EXECUTE "SELECT ":FNAME:" '":ID:"' ":SCL:SCA, // OUT.>JUNK
+*#ULTX#*   IF SYSTEM(25) THEN SELECT DUMMY.FILE TO DUMMY.LIST ELSE DUMMY.LIST=''
+*#UV#*   EXECUTE "@@SELECT ":FNAME:" '":ID:"' ":SCL:SCA RTNLIST DUMMY.LIST CAPTURING JUNK
+   DUMMY.DONE=0
+   DUMMY.CNT=1
+   LOOP
+    READNEXT DUMMY.VALUE FROM DUMMY.LIST ELSE DUMMY.DONE=1
+   UNTIL DUMMY.DONE DO
+    ITEM<ALST<2,EACH.ATT>,DUMMY.CNT>=DUMMY.VALUE
+    DUMMY.CNT=DUMMY.CNT+1
+   REPEAT
+  END
+ END
+555 * 
+NEXT EACH.ATT
+RETURN
+*
+**************************************************************************
+*
+900 * SORT OUT DELIMITER
+*
+**************************************************************************
+*
+DCH = OCONV(DCH.FLG.PARAM,'MCU')
+BEGIN CASE
+ CASE (DCH EQ "0" AND LEN(DCH) EQ 1) OR DCH EQ "" OR DCH EQ "TAB"
+  DELIM=TAB; DL=1; CSV=0
+ CASE (DCH EQ "1" AND LEN(DCH) EQ 1) OR DCH EQ "COMMA"
+  DELIM=","; DL=1; CSV=1
+ CASE (DCH EQ "2" AND LEN(DCH) EQ 1) OR DCH EQ "CRLF"
+  * TRANSLATE CRLF TO AM BECAUSE KERMIT AUTOMATICALLY PERFORMS CONVERSION WHEN IN TEXT MODE
+  DELIM=AM; DL=1; CSV=0
+ CASE 1
+  DELIM = ICONV(DCH,'MX');*#GENERIC#*
+*#DEFAULT#*  DELIM = ICONV(DCH,'MX')
+*#CACHE#*  DELIM = OCONV(DCH,'MCXA')
+*#JB#*  DELIM = ICONV(DCH,'MX0C')
+*#MD#*  DELIM = ICONV(DCH,'MX')
+*#MVON#*  DELIM = ICONV(DCH,'MX0C')
+*#NR#*  DELIM = ICONV(DCH,'MX')
+*#OAS#*  DELIM = ICONV(DCH,'MX0C')
+*#OI#*  DELIM = ICONV(DCH,'MX')
+*#ON#*  DELIM = ICONV(DCH,'MX0C')
+*#QM#*  DELIM = ICONV(DCH,'MX0C')
+*#SEQ#*  DELIM = ICONV(DCH,'MX')
+*#UD#*  DELIM = ICONV(DCH,'MX0C')
+*#ULT#*  DELIM = ICONV(DCH,'MX')
+*#ULTX#*  DELIM = ICONV(DCH,'MX')
+*#UV#*  DELIM = ICONV(DCH,'MX0C')
+  DL=LEN(DELIM)
+  CSV=0
+END CASE
+RETURN
+*
+END

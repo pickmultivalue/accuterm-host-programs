@@ -1,0 +1,54 @@
+SUBROUTINE ATGUIERRORS(RESULT, ERRORS)
+**************************************************************************
+*Copyright (c) 1999-2000 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUIERRORS
+* AUTHOR: PJS
+* VERSION: 4.0.2
+* CREATED: 11/01/1999
+* UPDATED: 07/19/2005
+*
+* MAINTENANCE RECORD:
+*
+* 4.0.2
+*  PJS 07/19/2005
+*  Before using MATCHES operator, limit length of test string to
+*  50 characters to prevent "string too long" error in QM.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI MANAGER - LOG ERRORS FROM SERVER
+*
+* THIS IS AN INTERNAL SUBROUTINE USED TO UPDATE THE ERRORS
+* STRUCTURE.
+*
+**************************************************************************
+*
+$INCLUDE ATGUIEQUATES
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+IF RESULT[1,50] MATCHES "ERR: 1N0N 0X" OR RESULT[1,50] MATCHES "ERR: -1N0N 0X" THEN
+ RESULT = '3':SVM:SVM:SVM:SVM:FIELD(RESULT,' ',2):SVM:RESULT[INDEX(RESULT,' ',2)+1,999]
+END
+N = DCOUNT(RESULT, AM)
+FOR I = 1 TO N
+ LVL = RESULT<I,1,1>
+ IF LVL > 0 THEN
+  CALL ATGUIERROR(LVL, RESULT<I,1,2>, RESULT<I,1,3>, RESULT<I,1,4>, RESULT<I,1,5>, RESULT<I,1,6>, ERRORS)
+ END
+ RESULT = DELETE(RESULT,I,1)
+NEXT I
+RETURN
+*
+END

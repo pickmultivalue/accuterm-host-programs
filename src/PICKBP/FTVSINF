@@ -1,0 +1,1373 @@
+SUBROUTINE FTVSINF(PLATFORM, PRODUCT, RELAESE, CAPABILITIES, SERVICES, SERIALNUM, LICENSE, USER)
+**************************************************************************
+*Copyright (c) 1997-2020 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTVSINF
+* AUTHOR: PJS
+* VERSION: 8.0.3
+* CREATED: 01/01/2000
+* UPDATED: 02/11/2020
+*
+* MAINTENANCE RECORD:
+*
+* 8.0.3
+*  PJS 02/11/2020
+*   Added support for MVON# platform. Changed variable 'Release' to
+*   'RELAESE' (note bad spelling) to avoid conflict with jBASE and
+*   MVON# reserved word 'RELEASE'. Restructured GOTO 99 to avoid jumping
+*   into IF/THEN block.
+*
+* 8.0.2
+*  PJS 01/09/2020
+*   Support full build number for AT8 (8.x.yyyy) in RELAESE argument
+*
+* 8.0.1
+*  PJS 10/18/2019
+*   Added '$' to capability string to indicate that premium features are
+*   enabled.
+*
+* 7.2.1
+*  PJS 02/11/2015
+*   Added code to detect MOBILE version & release. New platforms added for
+*   Android & iOS.
+*
+* 7.1.2
+*  PJS 05/22/2014
+*   Changed SLEEP 1 in Universe version to NAP 50 to speed up getting
+*   response from AccuTerm.
+*
+* 7.1.1
+*  PJS 03/19/2014
+*   Added support for OASYS platform.
+*
+* 7.0.3
+*  PJS 03/17/2012
+*   Updated capabilities list: F (documentation only).
+*
+* 7.0.2
+*  PJS 06/05/2010
+*   Updated capabilities list: L, Q, W (documentation only).
+*
+* 7.0.1
+*  PJS 03/05/2010
+*   Updated for AccuTerm 7 release.
+*
+* 5.4.1
+*  PJS 01/23/2008
+*   Added support for ATCLIENT connections (QM).
+*
+* 5.3.7
+*  PJS 12/20/2007
+*   Added support for CACHE platform.
+*
+* 5.3.6
+*  PJS 03/23/2007
+*   For all platforms that check the state of the typeahead buffer to
+*   implement timed input, a "SLEEP 1" has been added when typeahead
+*   buffer is empty. This should reduce possible tight loop that prevents
+*   some systems from updating the typeahead buffer, causing failure to
+*   detect AccuTerm ID string.
+*
+* 5.3.5
+*  PJS 11/08/2006
+*   Added support for ON (ONWare MVON) platform. Fixed bug in sub
+*   500 which prevented ATEMULATOR from being identified as valid
+*   version of AccuTerm.
+*
+* 5.3.4
+*  PJS 07/31/2006
+*   Updated OI platform code to act like AIX due to fragile telnet
+*   server in CTO.
+*
+* 5.3.3
+*  PJS 07/24/2006
+*   Added support for OI (OpenInsight CTO) platform.
+*
+* 5.3.2
+*  PJS 06/12/2006
+*   Changed timed-input routine for QM platform to use TIMEOUT clause.
+*
+* 5.3.1
+*  PJS 05/08/2006
+*   Updated for 5.3a release. Added support for OpenInsight/CTO platform.
+*   No longer exchange host capabilities - this function moved to the new
+*   FTINITEX subroutine, which has access to the ACCUTERMCTRL file.
+*
+* 5.2.2
+*  PJS 03/09/2005
+*   Added OCONV(...,'MCN') to release number to handle international
+*   locale differences in decimal point character.
+*
+* 5.2.1
+*  PJS 01/06/2005
+*   Added new 'J', 'V' and '!' capabilities. Added HOSTCAPS for
+*   host capabilities. Exchange host capabilities if 'V' client
+*   capability is present.
+*
+* 5.0.5
+*  PJS 04/07/2004
+*   Updated capabilities list (documentation) to include B
+*   (border effects enabled). Added check for 'ATEMULATOR'
+*   in all places where testing for 'ACCUTERM' so emulator
+*   control is correctly identified.
+*
+* 5.0.4
+*  PJS 03/05/2004
+*   Added new NR (Northgate Reality 9+) platform type, same as
+*   old MD platform.
+*
+* 5.0.3
+*  PJS 10/24/2003
+*   Integrated QM platform specific code per mods from Martin
+*   Phillips.
+*
+* 5.0.2
+*  PJS 09/11/2003
+*   Modified PRINT expressions for UniVerse because concatenated
+*   expressions are sent in separate packets in NT version of
+*   UniVerse causing TCP "delayed ack" performance issues.
+*
+* 5.0.1
+*  PJS 10/08/2002
+*   Added new platform type ULTX for ancient Ultimate, as
+*   implemented in mvEnterprise. Added extra CHAR(0) to
+*   ESC:STX:'I' so mvEnterprise will flush output.
+*
+* 4.0.16
+*  PJS 08/16/2002
+*   Changed mvBase timeout from 3 seconds to 6 seconds to
+*   prevent errors recognizing AccuTerm on some networks.
+*
+* 4.0.15
+*  PJS 04/05/2002
+*   Fixed Power95 AIX version (ENH_AIX).
+*
+* 4.0.14
+*  PJS 03/08/2002
+*   Added new platform type: ULT_SCO for Ultimate Plus on SCO
+*   which has unusable SYSTEM(11) function.
+*
+* 4.0.13
+*  PJS 10/18/2001
+*   Added Sequoia & Power95 to AIX unreliable sections.
+*
+* 4.0.12
+*  PJS 09/26/2001
+*   Add patch to disable "reliable" flag due to AIX/APPRO unreliable
+*   telnet connections until reliablity problem is resolved.
+*
+* 4.0.11
+*  PJS 07/20/2001
+*   Update Ult+ to refrain from touching data stack - use INPUT,0 for
+*   for all input since this only reads from the terminal buffer, not
+*   not the data stack.
+*
+* 4.0.10
+*  PJS 05/11/2001
+*   Added new platform types: SEQ (Sequoia/mvEnterprise) & VIS (UniVision)
+*
+* 4.0.9
+*  PJS 04/27/2001
+*   Modified PICK (D3) platform to use INPUT ... FOR instead of
+*   LOOP WHILE SYSTEM(14) ...
+*
+* 4.0.8
+*  PJS 02/21/2001
+*   Improve reliability by trimming "fluff" characters that may
+*   precede the AccuTerm info string. Changed jBase to use timed
+*   input.
+*
+* 4.0.7
+*  PJS 01/03/2001
+*   Return CAPABILITIES in upper case, SERVICES in lower case.
+*
+* 4.0.6
+*  PJS 12/26/2000
+*   Updated UniData platform code to use timed input (INPUT ... FOR)
+*
+* 4.0.5
+*  PJS 12/14/2000
+*   Add platform type for mvBase (uses INPUT ... TIMEOUT statement)
+*   Increase timeout from 2 to 3 seconds to handle slow host response time
+*
+* 4.0.4
+*  PJS 11/24/2000
+*   Add platform type for AP (no INPUTCLEAR statement).
+*   Use IN or INPUT & SYSTEM(14) to clear input buffer for
+*   AP and ENH platforms.
+*
+* 4.0.3
+*  PJS 11/03/2000
+*   Use timed-input to detect if AccuTerm or actual terminal is present
+*
+* 4.0.2
+*  PJS 10/18/2000
+*   Add alternate stack save/restore code for jBase (last DATA statement
+*   goes to beginning, not end, of data stack in jBase)
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*   ADDED SERVICES ARGUMENT TO RETURN LIST OF AUTOMATION SERVERS AVAILABLE
+*   USE NEW ESC STX '?' TO OBTAIN CAPABILITIES & SERVICES FROM CLIENT
+*
+**************************************************************************
+**************************************************************************
+*
+* GET ACCUTERM VERSION INFORMATION
+*
+**************************************************************************
+**************************************************************************
+*
+* FTVSINF() SUBROUTINE INTERFACE
+*
+* NOTE: THIS SUBROUTINE USES AN "INPUT" STATEMENT, SO IF THE MAINLINE
+* PROGRAM HAS STACKED INPUT WAITING, DO NOT CALL THIS UNTIL THE STACKED
+* INPUT HAS BEEN CONSUMED...
+*
+* INPUT:  NONE
+*
+* OUTPUT:
+*
+*    PLATFORM:0 = NOT ACCUTERM
+*             1 = DOS
+*             2 = WIN16
+*             3 = WIN32
+*             41 = ANDROID
+*             51 = IPAD
+*             52 = IPHONE
+*
+*    PRODUCT: 0 = UNKNOWN
+*             1 = ACCUTERM
+*             2 = ACCUTERM/PLUS
+*             3 = ACCUTERM/WIN16
+*             4 = ACCUTERM/WIN32
+*             5 = ACCUTERM/IE
+*             6 = ACCUTERM EMULATOR CONTROL
+*             7 = ACCUTERM/LITE
+*             8 = ATCLIENT
+*             10 = ACCUTERM/MOBILE
+*
+*    RELAESE:  ALPHA PART OF RELEASE IS CONVERTED TO A NUMBER FROM
+*              .001 TO .026 AND ADDED TO NUMERIC PART OF RELEASE
+*
+*    CAPABILITIES: STRING OF CHARACTERS REPRESENTING CAPABILITIES
+*             A = ASCII PROTOCOL SUPPORTED
+*             B = BORDER EFFECTS (VISUAL STYLES) ARE ENABLED
+*             C = CAPTURE SUPPORTED
+*             D = DOWNLOAD SUPPORTED
+*             E = EXECUTE DOS/WINDOWS COMMANDS
+*             F = CHARACTER SET TRANSLATION SUPPORTED DURING FILE TRANSFER
+*             G = GUI SUPPORTED
+*             H = SERVER MODE SUPPORTED
+*             I = IMAGE DISPLAY SUPPORTED
+*             J = SCREEN SAVE/RESTORE SUPPORTED
+*             K = KERMIT PROTOCOL SUPPORTED
+*             L = BACKGROUND IMAGE SUPPORTED
+*             M = QUERY SETTINGS (ATWIN.INI) SUPPORTED (ESC STX '&')
+*             O = OBJECT BRIDGE SUPPORTED
+*             P = PACKETIZED MESSAGES SUPPORTED
+*             Q = MESSAGE INTEGRITY CHECKS SUPPORTED (also optional final ACK, save/restore mouse)
+*             R = RELIABLE CONNECTION
+*             S = VBA SCRIPTING SUPPORTED
+*             T = FILE TRANSFER ERROR INFO AVAILABLE
+*             U = UPLOAD SUPPORTED
+*             V = HOST CAPABILITIES (ESC STX '=') SUPPORTED
+*             W = SYNCHRONOUS SCRIPTS SUPPORTED (ESC STX 'R')
+*             X = FILE CONVERSION SUPPORTED
+*             Y = QUERY STATUS SUPPORTED (ESC STX 'y')
+*             Z = CASE INVERSION IS IN EFFECT
+*             ! = USE TAGGED DELIMITERS IN FTENCODE/FTDECODE
+*             $ = PREMIUM FEATURES ARE ENABLED
+*
+*    SERVICES: STRING OF LETTERS REPRESENTING SUPPORTED EXTERNAL SERVICES
+*             a = OBJECT BRIDGE
+*             b = FILE CONVERSION
+*             g = GUI RUNTIME
+*
+*    SERIALNUM: ACCUTERM SERIAL NUMBER
+*
+*    LICENSE: TYPE OF LICENSE
+*             0 = INVALID LICENSE
+*             1 = SINGLE USER LICENSE
+*             2 = SITE LICENSE
+*             3 = ENTERPRISE LICENSE
+*             4 = PERSONAL EDITION
+*             5 = DEVELOPER LICENSE
+*             6 = BUNDLED LICENSE
+*             7 = ORGANIZATION LICENSE
+*             8 = COMPONENT LICENSE
+*             9 = EVALUATION VERSION
+*
+*    HOST CAPABILITIES (SENT TO CLIENT BY FTINITEX IF SUPPORTED):
+*             D = USE TAGGED SYSTEM DELIMITERS IN FTENCODE/FTDECODE
+*             C = HOST SUPPORTS MESSAGE CHECKSUMS
+*             M = HOST SUPPORTS MESSAGE LENGTH CHECK
+*
+********************************************************************
+*
+*#ULT_SCO#*LIBRARY %WaitForInput
+*
+EQU ESC TO CHAR(27), STX TO CHAR(2), CR TO CHAR(13), LF TO CHAR(10)
+*
+EQU HOSTCAPS TO 'D' ;* USE TAGGED DELIMITERS (SUPPORTED BY CLIENT IF 'V' CAPABILITY PRESENT)
+*
+GOSUB 100; * SAVE DATA STACK
+*
+GOSUB 500; * GET ACCUTERM INFO STRING
+*
+* MAKE SURE ACCUTERM IS PRESENT
+*
+Z = OCONV(RSP,'MCU')
+IF Z[1,8] NE 'ACCUTERM' AND Z[1,10] NE 'ATEMULATOR' AND Z[1,8] NE 'ATCLIENT' THEN
+ GOSUB 99; * ACCUTERM NOT FOUND
+ RETURN
+END
+*
+* CONVERT RELEASE TO NUMBER
+RELAESE = FIELD(Z,' ',2)
+IF RELAESE MATCHES '1N.1N1A' THEN
+ RELAESE=(OCONV(RELAESE[1,3],'MCN')/10)+((SEQ(RELAESE[4,1])-64)/1000)
+END ELSE
+ IF RELAESE MATCHES '1N.1N.1N0N' OR RELAESE MATCHES '2N.1N.1N0N' THEN
+  RELAESE = FIELD(RELAESE,'.',1) : '.' : FIELD(RELAESE,'.',2) : (FIELD(RELAESE,'.',3) 'R%%%%')
+ END ELSE
+  RELAESE=OCONV(RELAESE[1,3],'MCN')/10
+ END
+END
+*
+* GET SERIAL NUMBER
+SERIALNUM = FIELD(Z,' ',3)
+*
+* CHECK IF EMULATOR INFO FUNCTION SUPPORTED
+IF RELAESE[1,1] >= 4 OR Z[10,6] = 'MOBILE' THEN
+ *
+ * GET EMULATOR INFO
+ GOSUB 300
+*#ADDS#* INPUTCLEAR
+*#AP#* LOOP WHILE SYSTEM(14) DO IN X REPEAT
+*#AP_AIX#* LOOP WHILE SYSTEM(14) DO IN X REPEAT
+*#AP_PRO#* LOOP WHILE SYSTEM(14) DO IN X REPEAT
+*#CACHE#* INPUTCLEAR
+*#CACHE_AIX#* INPUTCLEAR
+*#ENH#* LOOP WHILE SYSTEM(14) DO INPUT X,0 REPEAT
+*#ENH_AIX#* LOOP WHILE SYSTEM(14) DO INPUT X,0 REPEAT
+*#JB#* INPUTCLEAR
+*#JB_AIX#* INPUTCLEAR
+*#MVBASE#* INPUTCLEAR
+*#MVON#* INPUTCLEAR
+*#NR#*LOOP WHILE SYSTEM(14) DO INPUT X,0 REPEAT
+*#OAS#* INPUTCLEAR
+*#OI#*INPUTCLEAR
+*#ON#* INPUTCLEAR
+*#ON_AIX#* INPUTCLEAR
+*#PICK#* INPUTCLEAR
+*#PICK_AIX#* INPUTCLEAR
+*#QM#* INPUTCLEAR
+*#R83#* LOOP WHILE SYSTEM(14) DO IN X REPEAT
+*#SEQ#* INPUTCLEAR
+*#SEQ_AIX#* INPUTCLEAR
+*#UD#* INPUTCLEAR
+*#UD_AIX#* INPUTCLEAR
+*#ULT#* LOOP WHILE SYSTEM(11) DO INPUT X,0 REPEAT
+*#ULT_AIX#* LOOP WHILE SYSTEM(11) DO INPUT X,0 REPEAT
+*#ULT_SCO#* LOOP CALL %WaitForInput(X,0) WHILE X>0 DO INPUT X,0 REPEAT
+*#ULTX#* LOOP WHILE SYSTEM(11) DO INPUT X,0 REPEAT
+*#ULTX_AIX#* LOOP WHILE SYSTEM(11) DO INPUT X,0 REPEAT
+*#UV#* INPUTCLEAR
+*#UV_AIX#* INPUTCLEAR
+*#VIS#* INPUTCLEAR
+ *
+ PRINT '':(ESC:STX:'?'):
+ *
+ INPUT INFO:;*#GENERIC#*
+*#ADDS#* INPUT INFO:
+*#AP#* INPUT INFO:
+*#AP_AIX#* INPUT INFO:
+*#AP_PRO#* INPUT INFO:
+*#CACHE#* INPUT INFO:
+*#CACHE_AIX#* INPUT INFO:
+*#ENH#* INPUT INFO:
+*#ENH_AIX#* INPUT INFO:
+*#JB#* INPUT INFO:
+*#JB_AIX#* INPUT INFO:
+*#MD#* INPUT INFO:
+*#MVBASE#* INPUT INFO:
+*#MVON#* INPUT INFO:
+*#NR#* INPUT INFO:
+*#OAS#* INPUT INFO:
+*#OI#* INPUT INFO:
+*#ON#* INPUT INFO:
+*#ON_AIX#* INPUT INFO:
+*#PICK#* INPUT INFO:
+*#PICK_AIX#* INPUT INFO:
+*#QM#* INPUT INFO:
+*#R83#* INPUT INFO:
+*#SEQ#* INPUT INFO:
+*#SEQ_AIX#* INPUT INFO:
+*#UD#* INPUT INFO:
+*#UD_AIX#* INPUT INFO:
+*#ULT#* INFO=''; LOOP INPUT X,0 UNTIL X EQ CR OR X EQ LF OR X EQ '' DO INFO=INFO:X REPEAT
+*#ULT_AIX#* INFO=''; LOOP INPUT X,0 UNTIL X EQ CR OR X EQ LF OR X EQ '' DO INFO=INFO:X REPEAT
+*#ULT_SCO#* INFO=''; LOOP INPUT X,0 UNTIL X EQ CR OR X EQ LF OR X EQ '' DO INFO=INFO:X REPEAT
+*#ULTX#* INFO=''; LOOP INPUT X,0 UNTIL X EQ CR OR X EQ LF OR X EQ '' DO INFO=INFO:X REPEAT
+*#ULTX_AIX#* INFO=''; LOOP INPUT X,0 UNTIL X EQ CR OR X EQ LF OR X EQ '' DO INFO=INFO:X REPEAT
+*#UV#* INPUT INFO:
+*#UV_AIX#* INPUT INFO:
+*#VIS#* INPUT INFO:
+ *
+ GOSUB 400
+ *
+ * EXTRACT PLATFORM, PRODUCT, LICENSE & CAPABILITIES FROM EMULATOR INFO
+ PLATFORM = FIELD(INFO,'*',1)
+ PRODUCT = FIELD(INFO,'*',2)
+ LICENSE = FIELD(INFO,'*',3)
+ CAPABILITIES = OCONV(FIELD(INFO,'*',4),'MCU')
+ SERVICES = OCONV(FIELD(INFO,'*',5),'MCL')
+ *
+ * PATCH FOR UNRELIABLE TELNET (APPRO, AIX)
+*#AP_AIX#* K = INDEX(CAPABILITIES,'R',1)
+*#AP_AIX#* IF K THEN CAPABILITIES = CAPABILITIES[1,K-1]:CAPABILITIES[K+1,999]
+*#AP_PRO#* K = INDEX(CAPABILITIES,'R',1)
+*#AP_PRO#* IF K THEN CAPABILITIES = CAPABILITIES[1,K-1]:CAPABILITIES[K+1,999]
+*#CACHE_AIX#* K = INDEX(CAPABILITIES,'R',1)
+*#CACHE_AIX#* IF K THEN CAPABILITIES = CAPABILITIES[1,K-1]:CAPABILITIES[K+1,999]
+*#ENH_AIX#* K = INDEX(CAPABILITIES,'R',1)
+*#ENH_AIX#* IF K THEN CAPABILITIES = CAPABILITIES[1,K-1]:CAPABILITIES[K+1,999]
+*#JB_AIX#* K = INDEX(CAPABILITIES,'R',1)
+*#JB_AIX#* IF K THEN CAPABILITIES = CAPABILITIES[1,K-1]:CAPABILITIES[K+1,999]
+*#OI#* K = INDEX(CAPABILITIES,'R',1)
+*#OI#* IF K THEN CAPABILITIES = CAPABILITIES[1,K-1]:CAPABILITIES[K+1,999]
+*#ON_AIX#* K = INDEX(CAPABILITIES,'R',1)
+*#ON_AIX#* IF K THEN CAPABILITIES = CAPABILITIES[1,K-1]:CAPABILITIES[K+1,999]
+*#PICK_AIX#* K = INDEX(CAPABILITIES,'R',1)
+*#PICK_AIX#* IF K THEN CAPABILITIES = CAPABILITIES[1,K-1]:CAPABILITIES[K+1,999]
+*#SEQ_AIX#* K = INDEX(CAPABILITIES,'R',1)
+*#SEQ_AIX#* IF K THEN CAPABILITIES = CAPABILITIES[1,K-1]:CAPABILITIES[K+1,999]
+*#UD_AIX#* K = INDEX(CAPABILITIES,'R',1)
+*#UD_AIX#* IF K THEN CAPABILITIES = CAPABILITIES[1,K-1]:CAPABILITIES[K+1,999]
+*#ULT_AIX#* K = INDEX(CAPABILITIES,'R',1)
+*#ULT_AIX#* IF K THEN CAPABILITIES = CAPABILITIES[1,K-1]:CAPABILITIES[K+1,999]
+*#ULTX_AIX#* K = INDEX(CAPABILITIES,'R',1)
+*#ULTX_AIX#* IF K THEN CAPABILITIES = CAPABILITIES[1,K-1]:CAPABILITIES[K+1,999]
+*#UV_AIX#* K = INDEX(CAPABILITIES,'R',1)
+*#UV_AIX#* IF K THEN CAPABILITIES = CAPABILITIES[1,K-1]:CAPABILITIES[K+1,999]
+ *
+END ELSE
+ *
+ * DECODE PLATFORM, PRODUCT & CAPABILITIES FROM LICENSE INFO
+ ID = FIELD(Z,' ',1)
+ BEGIN CASE
+  CASE ID = 'ACCUTERM'
+   PLATFORM = 1; PRODUCT = 1; CAPABILITIES = ''
+  CASE ID = 'ACCUTERM+'
+   PLATFORM = 1; PRODUCT = 2; CAPABILITIES = 'CDUAKE'
+  CASE ID EQ 'ACCUTERM/WIN'
+   PLATFORM = 2; PRODUCT = 3; CAPABILITIES = 'CDUAKE'
+   IF RELAESE >= 2 THEN CAPABILITIES = CAPABILITIES : 'HIS'
+  CASE ID EQ 'ACCUTERM/WIN32'
+   PLATFORM = 3; PRODUCT = 4; CAPABILITIES = 'CDUAKEHIS'
+   IF RELAESE >= 3.1 THEN CAPABILITIES = CAPABILITIES : 'P'
+   IF RELAESE >= 3.103 THEN CAPABILITIES = CAPABILITIES : 'X'
+   IF RELAESE >= 3.104 THEN CAPABILITIES = CAPABILITIES : 'O'
+   IF RELAESE >= 3.105 THEN CAPABILITIES = CAPABILITIES : 'T'
+  CASE ID EQ 'ACCUTERM/WIN32IE'
+   PLATFORM = 3; PRODUCT = 5; CAPABILITIES = 'CDUAKEHISP'
+   IF RELAESE >= 1.002 THEN CAPABILITIES = CAPABILITIES : 'OX'
+   IF RELAESE >= 1.003 THEN CAPABILITIES = CAPABILITIES : 'T'
+  CASE ID EQ 'ACCUTERM/WIN32IS'
+   PLATFORM = 3; PRODUCT = 5; CAPABILITIES = 'HISP'
+  CASE ID EQ 'ATEMULATOR'
+   PLATFORM = 3; PRODUCT = 6; CAPABILITIES = 'CDUAKEI'
+   IF RELAESE >= 3.1 THEN CAPABILITIES = CAPABILITIES : 'P'
+   IF RELAESE >= 3.105 THEN CAPABILITIES = CAPABILITIES : 'T'
+  CASE 1
+   GOSUB 99 ;* UNKNOWN PRODUCT VERSION (PROBABLY CORRUPT INFO STRING)
+   RETURN
+ END CASE
+ *
+ * DECODE SERVICES FROM CAPABILITIES
+ SERVICES = ''
+ IF INDEX(CAPABILITIES,'O',1) THEN SERVICES = SERVICES : 'a'
+ IF INDEX(CAPABILITIES,'X',1) THEN SERVICES = SERVICES : 'b'
+ *
+ * DECODE LICENSE TYPE
+ LIC = FIELD(Z,' ',4)
+ BEGIN CASE
+  CASE LIC EQ 'SINGLE'
+   LICENSE = 1
+  CASE LIC EQ 'SITE' OR LIC EQ 'NETWORK'
+   LICENSE = 2
+  CASE LIC EQ 'CORP'
+   LICENSE = 3
+  CASE LIC EQ 'DEALER'
+   LICENSE = 5
+  CASE LIC EQ 'ORG'
+   LICENSE = 7
+  CASE LIC EQ 'INTERNET'
+   IF SERIALNUM EQ 10000000 THEN LICENSE = 9 ELSE LICENSE = 7
+  CASE LIC EQ 'DEMO'
+   LICENSE = 9
+  CASE LIC EQ 'ATEMULATOR'
+   LICENSE = 8
+  CASE 1
+   LICENSE = 0
+ END CASE
+END
+*
+* CHECK FOR CASE INVERSION
+IF SEQ(RSP[1,1]) EQ 97 THEN CAPABILITIES = CAPABILITIES : 'Z'
+*
+* GET USER
+K = INDEX(RSP,' ',4)
+IF K THEN
+ USER = TRIM(RSP[K+1,999])
+ LOOP WHILE USER[1,1] EQ ',' DO USER = TRIM(USER[2,999]) REPEAT
+END ELSE
+ USER = ''
+END
+*
+GOSUB 200; * RESTORE DATA STACK
+*
+RETURN
+*
+99 * UNKNOWN PRODUCT OR ACCUTERM NOT FOUND
+*
+PLATFORM = 0
+PRODUCT = 0
+CAPABILITIES = ''
+SERVICES = ''
+RELAESE = 0
+SERIALNUM = 0
+LICENSE = 0
+USER = ''
+GOSUB 200; * RESTORE DATA STACK
+RETURN
+*
+100 * SAVE THE DATA STACK
+*
+GOSUB 300
+NSTK = 0
+DATA 'END_OF_DATA_STACK';*#GENERIC#*
+*#MD#*DATA 'END_OF_DATA_STACK'
+*#NR#*DATA 'END_OF_DATA_STACK'
+*#ULT#*RETURN
+*#ULT_AIX#*RETURN
+*#ULT_SCO#*RETURN
+*#ULTX#*RETURN
+*#ULTX_AIX#*RETURN
+DSTK = ''
+LOOP
+*#ADDS#*WHILE SYSTEM(10) DO
+*#AP#*WHILE SYSTEM(10) DO
+*#AP_AIX#*WHILE SYSTEM(10) DO
+*#AP_PRO#*WHILE SYSTEM(10) DO
+*#CACHE#*WHILE SYSTEM(10) DO
+*#CACHE_AIX#*WHILE SYSTEM(10) DO
+*#ENH#*WHILE SYSTEM(10) DO
+*#ENH_AIX#*WHILE SYSTEM(10) DO
+*#JB#*WHILE SYSTEM(10) DO
+*#JB_AIX#*WHILE SYSTEM(10) DO
+*#MVBASE#*WHILE SYSTEM(10) DO
+*#MVON#*WHILE SYSTEM(10) DO
+*#OAS#*WHILE SYSTEM(10) DO
+*#OI#*WHILE SYSTEM(10) DO
+*#ON#*WHILE SYSTEM(10) DO
+*#ON_AIX#*WHILE SYSTEM(10) DO
+*#PICK#*WHILE SYSTEM(10) DO
+*#PICK_AIX#*WHILE SYSTEM(10) DO
+*#QM#*WHILE SYSTEM(10) DO
+*#R83#*WHILE SYSTEM(10) DO
+*#SEQ#*WHILE SYSTEM(10) DO
+*#SEQ_AIX#*WHILE SYSTEM(10) DO
+*#UD#*WHILE SYSTEM(10) DO
+*#UD_AIX#*WHILE SYSTEM(10) DO
+*#UV#*WHILE SYSTEM(10) DO
+*#UV_AIX#*WHILE SYSTEM(10) DO
+*#VIS#*WHILE SYSTEM(10) DO
+ INPUT ANS
+UNTIL ANS EQ 'END_OF_DATA_STACK' DO;*#GENERIC#*
+*#MD#*UNTIL ANS EQ 'END_OF_DATA_STACK' DO
+*#NR#*UNTIL ANS EQ 'END_OF_DATA_STACK' DO
+ NSTK = NSTK + 1
+ DSTK<NSTK> = ANS
+REPEAT
+GOSUB 400
+RETURN
+*
+200 * RESTORE THE DATA STACK
+*
+IF NSTK > 0 THEN
+ FOR I=1 TO NSTK
+  DATA DSTK<I>
+ NEXT I
+END
+RETURN
+*
+300 * TURN OFF ECHO & PROMPT
+*
+ECHO OFF; PROMPT '';*#GENERIC#*
+*#ADDS#*ECHO OFF; PROMPT ''
+*#AP#*ECHO OFF; PROMPT ''
+*#AP_AIX#*ECHO OFF; PROMPT ''
+*#AP_PRO#*ECHO OFF; PROMPT ''
+*#CACHE#*SV.ECHO=SYSTEM(24); SV.PROMPT=SYSTEM(26); ECHO OFF; PROMPT ''
+*#CACHE_AIX#*SV.ECHO=SYSTEM(24); SV.PROMPT=SYSTEM(26); ECHO OFF; PROMPT ''
+*#ENH#*ECHO OFF; PROMPT ''
+*#ENH_AIX#*ECHO OFF; PROMPT ''
+*#JB#*IF SYSTEM(22)=0 THEN SV.ECHO=SYSTEM(24) ELSE SV.ECHO=SYSTEM(3024)
+*#JB#*IF SYSTEM(22)=0 THEN SV.PROMPT=SYSTEM(26) ELSE SV.PROMPT=SYSTEM(3026)
+*#JB#*ECHO OFF; PROMPT ''
+*#JB_AIX#*IF SYSTEM(22)=0 THEN SV.ECHO=SYSTEM(24) ELSE SV.ECHO=SYSTEM(3024)
+*#JB_AIX#*IF SYSTEM(22)=0 THEN SV.PROMPT=SYSTEM(26) ELSE SV.PROMPT=SYSTEM(3026)
+*#JB_AIX#*ECHO OFF; PROMPT ''
+*#MD#*ECHO OFF; PROMPT ''
+*#MVBASE#*ECHO OFF; PROMPT ''
+*#MVON#*SV.ECHO=SYSTEM(24); SV.PROMPT=SYSTEM(26); ECHO OFF; PROMPT ''
+*#NR#*ECHO OFF; PROMPT ''
+*#OAS#*ECHO OFF; PROMPT ''
+*#OI#*ECHO OFF; PROMPT ''
+*#ON#*ECHO OFF; PROMPT ''
+*#ON_AIX#*ECHO OFF; PROMPT ''
+*#PICK#*ECHO OFF; PROMPT ''
+*#PICK_AIX#*ECHO OFF; PROMPT ''
+*#QM#*SV.ECHO=SYSTEM(24); SV.PROMPT=SYSTEM(26); ECHO OFF; PROMPT ''
+*#R83#*ECHO OFF; PROMPT ''
+*#SEQ#*ECHO OFF; PROMPT ''
+*#SEQ_AIX#*ECHO OFF; PROMPT ''
+*#UD#*ECHO OFF; PROMPT ''
+*#UD_AIX#*ECHO OFF; PROMPT ''
+*#ULT#*ECHO OFF; PROMPT ''
+*#ULT_AIX#*ECHO OFF; PROMPT ''
+*#ULT_SCO#*ECHO OFF; PROMPT ''
+*#ULTX#*ECHO OFF; PROMPT ''
+*#ULTX_AIX#*ECHO OFF; PROMPT ''
+*#UV#*SV.ECHO=SYSTEM(24); SV.PROMPT=SYSTEM(26); ECHO OFF; PROMPT ''
+*#UV_AIX#*SV.ECHO=SYSTEM(24); SV.PROMPT=SYSTEM(26); ECHO OFF; PROMPT ''
+*#VIS#*ECHO OFF; PROMPT ''
+RETURN
+*
+400 * RESTORE ECHO & PROMPT
+*
+ECHO ON; PROMPT '?';*#GENERIC#*
+*#ADDS#*ECHO ON; PROMPT '?'
+*#AP#*ECHO ON; PROMPT '?'
+*#AP_AIX#*ECHO ON; PROMPT '?'
+*#AP_PRO#*ECHO ON; PROMPT '?'
+*#CACHE#*ECHO SV.ECHO; PROMPT SV.PROMPT
+*#CACHE_AIX#*ECHO SV.ECHO; PROMPT SV.PROMPT
+*#ENH#*ECHO ON; PROMPT '?'
+*#ENH_AIX#*ECHO ON; PROMPT '?'
+*#JB#*ECHO SV.ECHO; PROMPT SV.PROMPT
+*#JB_AIX#*ECHO SV.ECHO; PROMPT SV.PROMPT
+*#MD#*ECHO ON; PROMPT '?'
+*#MVBASE#*ECHO ON; PROMPT '?'
+*#MVON#*ECHO SV.ECHO; PROMPT SV.PROMPT
+*#NR#*ECHO ON; PROMPT '?'
+*#OAS#*ECHO ON; PROMPT '?'
+*#OI#*ECHO ON; PROMPT '?'
+*#ON#*ECHO ON; PROMPT '?'
+*#ON_AIX#*ECHO ON; PROMPT '?'
+*#PICK#*ECHO ON; PROMPT '?'
+*#PICK_AIX#*ECHO ON; PROMPT '?'
+*#QM#*ECHO SV.ECHO; PROMPT SV.PROMPT
+*#R83#*ECHO ON; PROMPT '?'
+*#SEQ#*ECHO ON; PROMPT '?'
+*#SEQ_AIX#*ECHO ON; PROMPT '?'
+*#UD#*ECHO ON; PROMPT '?'
+*#UD_AIX#*ECHO ON; PROMPT '?'
+*#ULT#*ECHO ON; PROMPT '?'
+*#ULT_AIX#*ECHO ON; PROMPT '?'
+*#ULT_SCO#*ECHO ON; PROMPT '?'
+*#ULTX#*ECHO ON; PROMPT '?'
+*#ULTX_AIX#*ECHO ON; PROMPT '?'
+*#UV#*ECHO SV.ECHO; PROMPT SV.PROMPT
+*#UV_AIX#*ECHO SV.ECHO; PROMPT SV.PROMPT
+*#VIS#*ECHO ON; PROMPT '?'
+RETURN
+*
+500 * GET ACCUTERM LICENSE INFO
+*
+GOSUB 300
+*
+* Generic version
+PRINT CR:LF:'Press Enter:':;*#GENERIC#*
+PRINT ESC:STX:'I':;*#GENERIC#*
+INPUT RSP:;*#GENERIC#*
+PRINT CR:SPACE(13):CR:;*#GENERIC#*
+*
+* ADDS version
+*#ADDS#*INPUTCLEAR
+*#ADDS#*PRINT ESC:STX:'I':
+*#ADDS#*RSP = ''
+*#ADDS#*DONE = 0
+*#ADDS#*K = 0
+*#ADDS#*T1 = TIME()
+*#ADDS#*LOOP
+*#ADDS#* T2 = TIME()
+*#ADDS#* IF T2 < T1 THEN T1 = T2
+*#ADDS#* N = TA(-1)
+*#ADDS#* IF N > 0 THEN
+*#ADDS#*  INPUT X,0
+*#ADDS#*  IF X = CR OR X = LF OR X = '' THEN
+*#ADDS#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#ADDS#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#ADDS#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#ADDS#*  END ELSE
+*#ADDS#*   RSP = RSP : X
+*#ADDS#*   T1 = T2
+*#ADDS#*  END
+*#ADDS#* END
+*#ADDS#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#ADDS#* IF N = 0 THEN SLEEP 1
+*#ADDS#*REPEAT
+*#ADDS#*IF K > 1 THEN RSP = RSP[K,999]
+*
+* Advanced Pick (AP) version
+*#AP#*LOOP WHILE SYSTEM(14) DO IN X REPEAT
+*#AP#*PRINT ESC:STX:'I':
+*#AP#*RSP = ''
+*#AP#*DONE = 0
+*#AP#*K = 0
+*#AP#*T1 = TIME()
+*#AP#*LOOP
+*#AP#* T2 = TIME()
+*#AP#* IF T2 < T1 THEN T1 = T2
+*#AP#* N = SYSTEM(14)
+*#AP#* IF N > 0 THEN
+*#AP#*  IN X
+*#AP#*  IF X = 13 OR X = 10 THEN
+*#AP#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#AP#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#AP#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#AP#*  END ELSE
+*#AP#*   RSP = RSP : CHAR(X)
+*#AP#*   T1 = T2
+*#AP#*  END
+*#AP#* END
+*#AP#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#AP#* IF N = 0 THEN SLEEP 1
+*#AP#*REPEAT
+*#AP#*IF K > 1 THEN RSP = RSP[K,999]
+*
+* Advanced Pick version (AIX)
+*#AP_AIX#*LOOP WHILE SYSTEM(14) DO IN X REPEAT
+*#AP_AIX#*PRINT ESC:STX:'I':
+*#AP_AIX#*RSP = ''
+*#AP_AIX#*DONE = 0
+*#AP_AIX#*K = 0
+*#AP_AIX#*T1 = TIME()
+*#AP_AIX#*LOOP
+*#AP_AIX#* T2 = TIME()
+*#AP_AIX#* IF T2 < T1 THEN T1 = T2
+*#AP_AIX#* N = SYSTEM(14)
+*#AP_AIX#* IF N > 0 THEN
+*#AP_AIX#*  IN X
+*#AP_AIX#*  IF X = 13 OR X = 10 THEN
+*#AP_AIX#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#AP_AIX#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#AP_AIX#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#AP_AIX#*  END ELSE
+*#AP_AIX#*   RSP = RSP : CHAR(X)
+*#AP_AIX#*   T1 = T2
+*#AP_AIX#*  END
+*#AP_AIX#* END
+*#AP_AIX#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#AP_AIX#* IF N = 0 THEN SLEEP 1
+*#AP_AIX#*REPEAT
+*#AP_AIX#*IF K > 1 THEN RSP = RSP[K,999]
+*
+* Advanced Pick PRO (AP_PRO) version
+*#AP_PRO#*LOOP WHILE SYSTEM(14) DO IN X REPEAT
+*#AP_PRO#*PRINT ESC:STX:'I':
+*#AP_PRO#*RSP = ''
+*#AP_PRO#*DONE = 0
+*#AP_PRO#*K = 0
+*#AP_PRO#*T1 = TIME()
+*#AP_PRO#*LOOP
+*#AP_PRO#* T2 = TIME()
+*#AP_PRO#* IF T2 < T1 THEN T1 = T2
+*#AP_PRO#* N = SYSTEM(14)
+*#AP_PRO#* IF N > 0 THEN
+*#AP_PRO#*  IN X
+*#AP_PRO#*  IF X = 13 OR X = 10 THEN
+*#AP_PRO#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#AP_PRO#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#AP_PRO#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#AP_PRO#*  END ELSE
+*#AP_PRO#*   RSP = RSP : CHAR(X)
+*#AP_PRO#*   T1 = T2
+*#AP_PRO#*  END
+*#AP_PRO#* END
+*#AP_PRO#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#AP_PRO#* IF N = 0 THEN SLEEP 1
+*#AP_PRO#*REPEAT
+*#AP_PRO#*IF K > 1 THEN RSP = RSP[K,999]
+*
+* Cache version
+*#CACHE#*INPUTCLEAR
+*#CACHE#*PRINT '':(ESC:STX:'I'):
+*#CACHE#*RSP = ''
+*#CACHE#*DONE = 0
+*#CACHE#*K = 0
+*#CACHE#*T1 = TIME()
+*#CACHE#*NAP 50 
+*#CACHE#*LOOP
+*#CACHE#* T2 = TIME()
+*#CACHE#* IF T2 < T1 THEN T1 = T2
+*#CACHE#* INPUT N,-1
+*#CACHE#* IF N <> 0 THEN
+*#CACHE#*  X = KEYIN()
+*#CACHE#*  IF X = CR OR X = LF OR X = '' THEN
+*#CACHE#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#CACHE#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#CACHE#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#CACHE#*  END ELSE
+*#CACHE#*   RSP = RSP : X
+*#CACHE#*   T1 = T2
+*#CACHE#*  END
+*#CACHE#* END
+*#CACHE#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#CACHE#* IF N = 0 THEN SLEEP 1
+*#CACHE#*REPEAT
+*
+* Cache version (AIX)
+*#CACHE_AIX#*INPUTCLEAR
+*#CACHE_AIX#*PRINT '':(ESC:STX:'I'):
+*#CACHE_AIX#*RSP = ''
+*#CACHE_AIX#*DONE = 0
+*#CACHE_AIX#*K = 0
+*#CACHE_AIX#*T1 = TIME()
+*#CACHE_AIX#*NAP 50 
+*#CACHE_AIX#*LOOP
+*#CACHE_AIX#* T2 = TIME()
+*#CACHE_AIX#* IF T2 < T1 THEN T1 = T2
+*#CACHE_AIX#* INPUT N,-1
+*#CACHE_AIX#* IF N <> 0 THEN
+*#CACHE_AIX#*  X = KEYIN()
+*#CACHE_AIX#*  IF X = CR OR X = LF OR X = '' THEN
+*#CACHE_AIX#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#CACHE_AIX#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#CACHE_AIX#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#CACHE_AIX#*  END ELSE
+*#CACHE_AIX#*   RSP = RSP : X
+*#CACHE_AIX#*   T1 = T2
+*#CACHE_AIX#*  END
+*#CACHE_AIX#* END
+*#CACHE_AIX#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#CACHE_AIX#* IF N = 0 THEN SLEEP 1
+*#CACHE_AIX#*REPEAT
+*
+* Enhanced R83 version
+*#ENH#*LOOP WHILE SYSTEM(14) DO INPUT X,0 REPEAT
+*#ENH#*PRINT ESC:STX:'I':
+*#ENH#*RSP = ''
+*#ENH#*DONE = 0
+*#ENH#*K = 0
+*#ENH#*T1 = TIME()
+*#ENH#*LOOP
+*#ENH#* T2 = TIME()
+*#ENH#* IF T2 < T1 THEN T1 = T2
+*#ENH#* N = SYSTEM(14)
+*#ENH#* IF N > 0 THEN
+*#ENH#*  INPUT X,0
+*#ENH#*  IF X = CR OR X = LF OR X = '' THEN
+*#ENH#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#ENH#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#ENH#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#ENH#*  END ELSE
+*#ENH#*   RSP = RSP : X
+*#ENH#*   T1 = T2
+*#ENH#*  END
+*#ENH#* END
+*#ENH#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#ENH#* IF N = 0 THEN SLEEP 1
+*#ENH#*REPEAT
+*#ENH#*IF K > 1 THEN RSP = RSP[K,999]
+*
+* Enhanced R83 version (Power95)
+*#ENH_AIX#*LOOP WHILE SYSTEM(14) DO INPUT X,0 REPEAT
+*#ENH_AIX#*PRINT ESC:STX:'I':
+*#ENH_AIX#*RSP = ''
+*#ENH_AIX#*DONE = 0
+*#ENH_AIX#*K = 0
+*#ENH_AIX#*T1 = TIME()
+*#ENH_AIX#*LOOP
+*#ENH_AIX#* T2 = TIME()
+*#ENH_AIX#* IF T2 < T1 THEN T1 = T2
+*#ENH_AIX#* N = SYSTEM(14)
+*#ENH_AIX#* IF N > 0 THEN
+*#ENH_AIX#*  INPUT X,0
+*#ENH_AIX#*  IF X = CR OR X = LF OR X = '' THEN
+*#ENH_AIX#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#ENH_AIX#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#ENH_AIX#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#ENH_AIX#*  END ELSE
+*#ENH_AIX#*   RSP = RSP : X
+*#ENH_AIX#*   T1 = T2
+*#ENH_AIX#*  END
+*#ENH_AIX#* END
+*#ENH_AIX#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#ENH_AIX#* IF N = 0 THEN SLEEP 1
+*#ENH_AIX#*REPEAT
+*#ENH_AIX#*IF K > 1 THEN RSP = RSP[K,999]
+*
+* jBase version
+*#JB#*INPUTCLEAR
+*#JB#*PRINT ESC:STX:'I':
+*#JB#*INPUT RSP: FOR 30 ELSE RSP = ''
+*
+* jBase version (AIX)
+*#JB_AIX#*INPUTCLEAR
+*#JB_AIX#*PRINT ESC:STX:'I':
+*#JB_AIX#*INPUT RSP: FOR 30 ELSE RSP = ''
+*
+* McDonnel Douglas version
+*#MD#*PRINT CR:LF:'Press Enter:':
+*#MD#*PRINT ESC:STX:'I':
+*#MD#*INPUT RSP:
+*#MD#*PRINT CR:SPACE(13):CR:
+*
+* mvBase Version
+*#MVBASE#*INPUTCLEAR
+*#MVBASE#*PRINT ESC:STX:'I':
+*#MVBASE#*TIMEOUT 6
+*#MVBASE#*INPUT RSP: ON TIMEOUT RSP = ''
+*#MVBASE#*TIMEOUT 0
+*
+* MVON# version
+*#MVON#*INPUTCLEAR
+*#MVON#*PRINT '':(ESC:STX:'I'):
+*#MVON#*NAP 10
+*#MVON#*RSP = ''
+*#MVON#*DONE = 0
+*#MVON#*K = 0
+*#MVON#*T1 = TIME()
+*#MVON#*LOOP
+*#MVON#* T2 = TIME()
+*#MVON#* IF T2 < T1 THEN T1 = T2
+*#MVON#* INPUT N,-1
+*#MVON#* IF N > 0 THEN
+*#MVON#*  INPUT X,1:
+*#MVON#*  IF X = '' THEN
+*#MVON#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#MVON#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#MVON#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#MVON#*  END ELSE
+*#MVON#*   RSP = RSP : X
+*#MVON#*   T1 = T2
+*#MVON#*  END
+*#MVON#* END
+*#MVON#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#MVON#* IF N = 0 THEN NAP 50
+*#MVON#*REPEAT
+*#MVON#*IF K > 1 THEN RSP = RSP[K,999]
+*
+* Northgate Reality version
+*#NR#*INPUTCLEAR
+*#NR#*PRINT ESC:STX:'I':
+*#NR#*INPUT RSP: FOR 30 ELSE RSP = ''
+*
+* OASYS version
+*#OAS#*INPUTCLEAR
+*#OAS#*PRINT ESC:STX:'I':
+*#OAS#*INPUT RSP: FOR 3 ELSE RSP = ''
+*
+* OI version
+*#OI#*INPUTCLEAR
+*#OI#*PRINT ESC:STX:'I':
+*#OI#*INPUT RSP: FOR 100 ELSE RSP=''
+*
+* MVON version
+*#ON#*INPUTCLEAR
+*#ON#*PRINT '':(ESC:STX:'I'):
+*#ON#*RSP = ''
+*#ON#*DONE = 0
+*#ON#*K = 0
+*#ON#*T1 = TIME()
+*#ON#*LOOP
+*#ON#* T2 = TIME()
+*#ON#* IF T2 < T1 THEN T1 = T2
+*#ON#* INPUT N,-1
+*#ON#* IF N > 0 THEN
+*#ON#*  INPUT X,1:
+*#ON#*  IF X = '' THEN
+*#ON#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#ON#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#ON#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#ON#*  END ELSE
+*#ON#*   RSP = RSP : X
+*#ON#*   T1 = T2
+*#ON#*  END
+*#ON#* END
+*#ON#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#ON#* IF N = 0 THEN SLEEP 1
+*#ON#*REPEAT
+*#ON#*IF K > 1 THEN RSP = RSP[K,999]
+*
+* MVON version (AIX)
+*#ON_AIX#*INPUTCLEAR
+*#ON_AIX#*PRINT '':(ESC:STX:'I'):
+*#ON_AIX#*RSP = ''
+*#ON_AIX#*DONE = 0
+*#ON_AIX#*K = 0
+*#ON_AIX#*T1 = TIME()
+*#ON_AIX#*LOOP
+*#ON_AIX#* T2 = TIME()
+*#ON_AIX#* IF T2 < T1 THEN T1 = T2
+*#ON_AIX#* INPUT N,-1
+*#ON_AIX#* IF N > 0 THEN
+*#ON_AIX#*  INPUT X,1:
+*#ON_AIX#*  IF X = '' THEN
+*#ON_AIX#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#ON_AIX#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#ON_AIX#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#ON_AIX#*  END ELSE
+*#ON_AIX#*   RSP = RSP : X
+*#ON_AIX#*   T1 = T2
+*#ON_AIX#*  END
+*#ON_AIX#* END
+*#ON_AIX#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#ON_AIX#* IF N = 0 THEN SLEEP 1
+*#ON_AIX#*REPEAT
+*#ON_AIX#*IF K > 1 THEN RSP = RSP[K,999]
+*
+* Pick (D3) version
+*#PICK#*INPUTCLEAR
+*#PICK#*PRINT ESC:STX:'I':
+*#PICK#*INPUT RSP: FOR 30 ELSE RSP = ''
+*
+* Pick (D3) version (AIX)
+*#PICK_AIX#*INPUTCLEAR
+*#PICK_AIX#*PRINT ESC:STX:'I':
+*#PICK_AIX#*INPUT RSP: FOR 30 ELSE RSP = ''
+*
+* QM version
+*#QM#*INPUTCLEAR
+*#QM#*PRINT '':(ESC:STX:'I'):
+*#QM#*IF @TTY <> 'vbsrvr' THEN
+*#QM#* INPUT RSP: TIMEOUT 3 ELSE RSP = ''
+*#QM#*END ELSE
+*#QM#* INPUT RSP:
+*#QM#*END
+*
+* R83 version
+*#R83#*LOOP WHILE SYSTEM(14) DO IN X REPEAT
+*#R83#*PRINT ESC:STX:'I':
+*#R83#*RSP = ''
+*#R83#*DONE = 0
+*#R83#*K = 0
+*#R83#*T1 = TIME()
+*#R83#*LOOP
+*#R83#* T2 = TIME()
+*#R83#* IF T2 < T1 THEN T1 = T2
+*#R83#* N = SYSTEM(14)
+*#R83#* IF N > 0 THEN
+*#R83#*  IN X
+*#R83#*  IF X = 13 OR X = 10 THEN
+*#R83#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#R83#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#R83#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#R83#*  END ELSE
+*#R83#*   RSP = RSP : CHAR(X)
+*#R83#*   T1 = T2
+*#R83#*  END
+*#R83#* END
+*#R83#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#R83#* IF N = 0 THEN SLEEP 1
+*#R83#*REPEAT
+*#R83#*IF K > 1 THEN RSP = RSP[K,999]
+*
+* Sequoia/mvEnterprise version
+*#SEQ#*INPUTCLEAR
+*#SEQ#*PRINT ESC:STX:'I':CHAR(0):
+*#SEQ#*RSP = ''
+*#SEQ#*DONE = 0
+*#SEQ#*K = 0
+*#SEQ#*T1 = TIME()
+*#SEQ#*LOOP
+*#SEQ#* T2 = TIME()
+*#SEQ#* IF T2 < T1 THEN T1 = T2
+*#SEQ#* N = SYSTEM(14)
+*#SEQ#* IF N > 0 THEN
+*#SEQ#*  IN X
+*#SEQ#*  IF X = 13 OR X = 10 THEN
+*#SEQ#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#SEQ#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#SEQ#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#SEQ#*  END ELSE
+*#SEQ#*   RSP = RSP : CHAR(X)
+*#SEQ#*   T1 = T2
+*#SEQ#*  END
+*#SEQ#* END
+*#SEQ#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#SEQ#* IF N = 0 THEN SLEEP 1
+*#SEQ#*REPEAT
+*#SEQ#*IF K > 1 THEN RSP = RSP[K,999]
+*
+* Sequoia/mvEnterprise version (AIX)
+*#SEQ_AIX#*INPUTCLEAR
+*#SEQ_AIX#*PRINT ESC:STX:'I':CHAR(0):
+*#SEQ_AIX#*RSP = ''
+*#SEQ_AIX#*DONE = 0
+*#SEQ_AIX#*K = 0
+*#SEQ_AIX#*T1 = TIME()
+*#SEQ_AIX#*LOOP
+*#SEQ_AIX#* T2 = TIME()
+*#SEQ_AIX#* IF T2 < T1 THEN T1 = T2
+*#SEQ_AIX#* N = SYSTEM(14)
+*#SEQ_AIX#* IF N > 0 THEN
+*#SEQ_AIX#*  IN X
+*#SEQ_AIX#*  IF X = 13 OR X = 10 THEN
+*#SEQ_AIX#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#SEQ_AIX#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#SEQ_AIX#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#SEQ_AIX#*  END ELSE
+*#SEQ_AIX#*   RSP = RSP : CHAR(X)
+*#SEQ_AIX#*   T1 = T2
+*#SEQ_AIX#*  END
+*#SEQ_AIX#* END
+*#SEQ_AIX#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#SEQ_AIX#* IF N = 0 THEN SLEEP 1
+*#SEQ_AIX#*REPEAT
+*#SEQ_AIX#*IF K > 1 THEN RSP = RSP[K,999]
+*
+* Unidata version
+*#UD#*INPUTCLEAR
+*#UD#*PRINT ESC:STX:'I':
+*#UD#*INPUT RSP: FOR 3 ELSE RSP = ''
+*
+* Unidata version (AIX)
+*#UD_AIX#*INPUTCLEAR
+*#UD_AIX#*PRINT ESC:STX:'I':
+*#UD_AIX#*INPUT RSP: FOR 3 ELSE RSP = ''
+*
+* Ultimate Plus version
+*#ULT#*LOOP WHILE SYSTEM(11) DO INPUT X,0 REPEAT
+*#ULT#*PRINT ESC:STX:'I':
+*#ULT#*RSP = ''
+*#ULT#*DONE = 0
+*#ULT#*K = 0
+*#ULT#*T1 = TIME()
+*#ULT#*LOOP
+*#ULT#* T2 = TIME()
+*#ULT#* IF T2 < T1 THEN T1 = T2
+*#ULT#* N = SYSTEM(11)
+*#ULT#* IF N > 0 THEN
+*#ULT#*  INPUT X,0
+*#ULT#*  IF X = CR OR X = LF OR X = '' THEN
+*#ULT#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#ULT#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#ULT#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#ULT#*  END ELSE
+*#ULT#*   RSP = RSP : X
+*#ULT#*   T1 = T2
+*#ULT#*  END
+*#ULT#* END
+*#ULT#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#ULT#* IF N = 0 THEN SLEEP 1
+*#ULT#*REPEAT
+*#ULT#*IF K > 1 THEN RSP = RSP[K,999]
+*
+* Ultimate Plus version (AIX)
+*#ULT_AIX#*LOOP WHILE SYSTEM(11) DO INPUT X,0 REPEAT
+*#ULT_AIX#*PRINT ESC:STX:'I':
+*#ULT_AIX#*RSP = ''
+*#ULT_AIX#*DONE = 0
+*#ULT_AIX#*K = 0
+*#ULT_AIX#*T1 = TIME()
+*#ULT_AIX#*LOOP
+*#ULT_AIX#* T2 = TIME()
+*#ULT_AIX#* IF T2 < T1 THEN T1 = T2
+*#ULT_AIX#* N = SYSTEM(11)
+*#ULT_AIX#* IF N > 0 THEN
+*#ULT_AIX#*  INPUT X,0
+*#ULT_AIX#*  IF X = CR OR X = LF OR X = '' THEN
+*#ULT_AIX#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#ULT_AIX#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#ULT_AIX#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#ULT_AIX#*  END ELSE
+*#ULT_AIX#*   RSP = RSP : X
+*#ULT_AIX#*   T1 = T2
+*#ULT_AIX#*  END
+*#ULT_AIX#* END
+*#ULT_AIX#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#ULT_AIX#* IF N = 0 THEN SLEEP 1
+*#ULT_AIX#*REPEAT
+*#ULT_AIX#*IF K > 1 THEN RSP = RSP[K,999]
+*
+* Ultimate Plus version (SCO)
+*#ULT_SCO#*LOOP CALL %WaitForInput(X,0) WHILE X>0 DO INPUT X,0 REPEAT
+*#ULT_SCO#*PRINT ESC:STX:'I':
+*#ULT_SCO#*RSP = ''
+*#ULT_SCO#*DONE = 0
+*#ULT_SCO#*K = 0
+*#ULT_SCO#*T1 = TIME()
+*#ULT_SCO#*LOOP
+*#ULT_SCO#* T2 = TIME()
+*#ULT_SCO#* IF T2 < T1 THEN T1 = T2
+*#ULT_SCO#* CALL %WaitForInput(N,0)
+*#ULT_SCO#* IF N > 0 THEN
+*#ULT_SCO#*  INPUT X,0
+*#ULT_SCO#*  IF X = CR OR X = LF OR X = '' THEN
+*#ULT_SCO#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#ULT_SCO#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#ULT_SCO#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#ULT_SCO#*  END ELSE
+*#ULT_SCO#*   RSP = RSP : X
+*#ULT_SCO#*   T1 = T2
+*#ULT_SCO#*  END
+*#ULT_SCO#* END
+*#ULT_SCO#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#ULT_SCO#* IF N = 0 THEN SLEEP 1
+*#ULT_SCO#*REPEAT
+*#ULT_SCO#*IF K > 1 THEN RSP = RSP[K,999]
+*
+* Ancient Ultimate version
+*#ULTX#*LOOP WHILE SYSTEM(11) DO INPUT X,0 REPEAT
+*#ULTX#*PRINT ESC:STX:'I':CHAR(0):
+*#ULTX#*RSP = ''
+*#ULTX#*DONE = 0
+*#ULTX#*K = 0
+*#ULTX#*T1 = TIME()
+*#ULTX#*LOOP
+*#ULTX#* T2 = TIME()
+*#ULTX#* IF T2 < T1 THEN T1 = T2
+*#ULTX#* N = SYSTEM(11)
+*#ULTX#* IF N > 0 THEN
+*#ULTX#*  INPUT X,0
+*#ULTX#*  IF X = CR OR X = LF OR X = '' THEN
+*#ULTX#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#ULTX#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#ULTX#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#ULTX#*  END ELSE
+*#ULTX#*   RSP = RSP : X
+*#ULTX#*   T1 = T2
+*#ULTX#*  END
+*#ULTX#* END
+*#ULTX#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#ULTX#* IF N = 0 THEN SLEEP 1
+*#ULTX#*REPEAT
+*#ULTX#*IF K > 1 THEN RSP = RSP[K,999]
+*
+* Ancient Ultimate version (AIX)
+*#ULTX_AIX#*LOOP WHILE SYSTEM(11) DO INPUT X,0 REPEAT
+*#ULTX_AIX#*PRINT ESC:STX:'I':CHAR(0):
+*#ULTX_AIX#*RSP = ''
+*#ULTX_AIX#*DONE = 0
+*#ULTX_AIX#*K = 0
+*#ULTX_AIX#*T1 = TIME()
+*#ULTX_AIX#*LOOP
+*#ULTX_AIX#* T2 = TIME()
+*#ULTX_AIX#* IF T2 < T1 THEN T1 = T2
+*#ULTX_AIX#* N = SYSTEM(11)
+*#ULTX_AIX#* IF N > 0 THEN
+*#ULTX_AIX#*  INPUT X,0
+*#ULTX_AIX#*  IF X = CR OR X = LF OR X = '' THEN
+*#ULTX_AIX#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#ULTX_AIX#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#ULTX_AIX#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#ULTX_AIX#*  END ELSE
+*#ULTX_AIX#*   RSP = RSP : X
+*#ULTX_AIX#*   T1 = T2
+*#ULTX_AIX#*  END
+*#ULTX_AIX#* END
+*#ULTX_AIX#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#ULTX_AIX#* IF N = 0 THEN SLEEP 1
+*#ULTX_AIX#*REPEAT
+*#ULTX_AIX#*IF K > 1 THEN RSP = RSP[K,999]
+*
+* UniVerse version
+*#UV#*INPUTCLEAR
+*#UV#*PRINT '':(ESC:STX:'I'):
+*#UV#*NAP 10
+*#UV#*RSP = ''
+*#UV#*DONE = 0
+*#UV#*K = 0
+*#UV#*T1 = TIME()
+*#UV#*LOOP
+*#UV#* T2 = TIME()
+*#UV#* IF T2 < T1 THEN T1 = T2
+*#UV#* INPUT N,-1
+*#UV#* IF N > 0 THEN
+*#UV#*  INPUT X,1:
+*#UV#*  IF X = '' THEN
+*#UV#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#UV#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#UV#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#UV#*  END ELSE
+*#UV#*   RSP = RSP : X
+*#UV#*   T1 = T2
+*#UV#*  END
+*#UV#* END
+*#UV#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#UV#* IF N = 0 THEN NAP 50
+*#UV#*REPEAT
+*#UV#*IF K > 1 THEN RSP = RSP[K,999]
+*
+* UniVerse version (AIX)
+*#UV_AIX#*INPUTCLEAR
+*#UV_AIX#*PRINT '':(ESC:STX:'I'):
+*#UV_AIX#*NAP 10
+*#UV_AIX#*RSP = ''
+*#UV_AIX#*DONE = 0
+*#UV_AIX#*K = 0
+*#UV_AIX#*T1 = TIME()
+*#UV_AIX#*LOOP
+*#UV_AIX#* T2 = TIME()
+*#UV_AIX#* IF T2 < T1 THEN T1 = T2
+*#UV_AIX#* INPUT N,-1
+*#UV_AIX#* IF N > 0 THEN
+*#UV_AIX#*  INPUT X,1:
+*#UV_AIX#*  IF X = '' THEN
+*#UV_AIX#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#UV_AIX#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#UV_AIX#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#UV_AIX#*  END ELSE
+*#UV_AIX#*   RSP = RSP : X
+*#UV_AIX#*   T1 = T2
+*#UV_AIX#*  END
+*#UV_AIX#* END
+*#UV_AIX#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#UV_AIX#* IF N = 0 THEN NAP 50
+*#UV_AIX#*REPEAT
+*#UV_AIX#*IF K > 1 THEN RSP = RSP[K,999]
+*
+* UniVision version
+*#VIS#*INPUTCLEAR
+*#VIS#*PRINT ESC:STX:'I':
+*#VIS#*RSP = ''
+*#VIS#*DONE = 0
+*#VIS#*K = 0
+*#VIS#*T1 = TIME()
+*#VIS#*LOOP
+*#VIS#* T2 = TIME()
+*#VIS#* IF T2 < T1 THEN T1 = T2
+*#VIS#* N = SYSTEM(14)
+*#VIS#* IF N > 0 THEN
+*#VIS#*  IN X
+*#VIS#*  IF X = 13 OR X = 10 THEN
+*#VIS#*   K = INDEX(OCONV(RSP,'MCU'),'ACCUTERM',1)
+*#VIS#*   IF K = 0 THEN K = INDEX(OCONV(RSP,'MCU'),'ATEMULATOR',1)
+*#VIS#*   IF K > 0 THEN DONE = 1 ELSE RSP = ''
+*#VIS#*  END ELSE
+*#VIS#*   RSP = RSP : CHAR(X)
+*#VIS#*   T1 = T2
+*#VIS#*  END
+*#VIS#* END
+*#VIS#*UNTIL DONE OR T2 >= T1 + 3 DO
+*#VIS#* IF N = 0 THEN SLEEP 1
+*#VIS#*REPEAT
+*#VIS#*IF K > 1 THEN RSP = RSP[K,999]
+*
+GOSUB 400
+RETURN
+*
+END

@@ -1,0 +1,551 @@
+SUBROUTINE SUI.INPUT.LIST(Left, Top, Width, Height, Opts, Headings, Widths, List, Selection, BegPos, CurPos, RtnCom, MAT TermDef)
+*****************************************************************************
+*Copyright (c) 2004 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+*****************************************************************************
+*
+* MODULE: SUI.INPUT.LIST
+* AUTHOR: PJS
+* VERSION: 1.0.3
+* CREATED: 06/01/2004
+* UPDATED: 06/05/2006
+*
+* MAINTENANCE RECORD:
+*
+* 1.0.3
+*  PJS 06/05/2006
+*   Changed syntax in list display routine (DSPVALUE) to be compatible
+*   with jBase. Statements like:
+*     DSP = DSP : (Headings<i,ListCol>) (Masks<1,ListCol>)
+*   would not compile.
+*
+* 1.0.2
+*  PJS 02/04/2005
+*   Fixed problem with non-zero BegPos.
+*
+* 1.0.1
+*  PJS 07/27/2004
+*   Fixed problem with entering letters to match multiple entries
+*   in the list. Now cycles through all entries with same first
+*   letter correctly.
+*
+*************************************************************************
+*************************************************************************
+*
+* SMART USER INTERFACE: Input Selection From List
+*
+*************************************************************************
+*************************************************************************
+*
+*   Input Interface:
+*
+*    Left, Top: upper-left corner of list box (relative to current window)
+*
+*    Width, Height: size of list box
+*
+*    Opts:      options
+*                M = multiple items may be selected
+*
+*    Headings:  multi-valued list of column headings
+*
+*    Widths:    multi-valued list of column widths
+*
+*    List:      list items; one value per item, with sub-values for columns
+*               within the item.
+*
+*    Selection: one-based index of currently selected item. If multiple
+*               selections are supported, this is a multi-valued list
+*               of selected items. Null or zero means no item is selected.
+*
+*    BegPos:    one-based index of the item to display on the top line
+*               of the list box.
+*
+*    CurPos:    one-based index of the "active" list item (cursor is at
+*               this item). This is only used in multi-select lists.
+*
+*    TermDef: terminal definitions as set up by SUI.GET.TERM
+*
+*
+*   Output Interface:
+*
+*    Selection: one-based index of currently selected item. If multiple
+*               selections are supported, this is a multi-valued list
+*               of selected items. Null or zero means no item is selected.
+*
+*    BegPos:    one-based index of the item displayed on the top line
+*               of the list box.
+*
+*    CurPos:    one-based index of the "active" list item
+*
+*    RtnCom:    command code that caused this routine to return. This
+*               is normally TERM.ENTER$, TERM.TAB$, TERM.STAB$,
+*               TERM.F1$ ... TERM.SF12$. TERM.SENTER$ is internally
+*               translated and returned as TERM.ENTER$.
+*
+*   Note: for single-select lists, pressing the space-bar selects the
+*   current item and exits. For multi-select lists, pressing the space-
+*   bar toggles the currently selected item.
+*
+*************************************************************************
+*
+$INCLUDE SUI.TERMDEF
+$INCLUDE SUI.WINDEF
+$INCLUDE SUI.CONFIG
+*
+EQU VM TO CHAR(253)
+EQU BEL TO CHAR(7), ESC TO CHAR(27), STX TO CHAR(2), CR TO CHAR(13)
+*
+IF Width < 1 OR Height < (1 + (Headings NE '')) THEN
+ RtnCom = SUI.ERROR.INVSIZE$
+ RETURN
+END
+*
+* Adjust screen positions based on current window
+ListWd = Width
+ListHt = Height
+BegCol = Left ;* Screen beginning column
+BegRow = Top ;* Screen row
+WinInf = TERM.WINDOW<1,2>
+IF WinInf EQ '' THEN
+ WinWd = TERM.WIDTH
+ WinHt = TERM.HEIGHT
+END ELSE
+ BegCol = BegCol + WinInf<1,1,SUI.WINLEFT$> + WinInf<1,1,SUI.CLILEFT$>
+ BegRow = BegRow + WinInf<1,1,SUI.WINTOP$> + WinInf<1,1,SUI.CLITOP$>
+ WinWd = WinInf<1,1,SUI.CLIWIDTH$>
+ WinHt = WinInf<1,1,SUI.CLIHEIGHT$>
+END
+IF Left < 0 THEN
+ RtnCom = SUI.ERROR.INVPOS$
+ RETURN
+END
+IF Left + ListWd > WinWd THEN
+ ListWd = WinWd - Left
+ IF ListWd <= 0 OR (ListWd < 1 AND Width > 1) THEN
+  RtnCom = SUI.ERROR.INVSIZE$
+  RETURN
+ END 
+END
+IF Top < 0 THEN
+ RtnCom = SUI.ERROR.INVPOS$
+ RETURN
+END
+IF Top + ListHt > WinHt THEN
+ ListHt = WinHt - Top
+ IF ListHt <= 0 THEN
+  RtnCom = SUI.ERROR.INVSIZE$
+  RETURN
+ END
+END
+EndCol = BegCol + ListWd - 1 ;* Ending screen column
+EndRow = BegRow + ListHt - 1 ;* Ending screen row
+*
+* Decode options
+OptMulti = INDEX(Opts,'M',1)
+*
+* Format the list box
+ColCnt = DCOUNT(Headings,VM)
+IF ColCnt = 0 THEN ColCnt = 1
+Masks = ''
+X = ListWd
+I = 0
+LOOP
+ I = I + 1
+ ColWd = Widths<1,I>
+ IF I = ColCnt THEN
+  ColWd = X ;* remaining space goes to last column
+ END ELSE
+  IF ColWd > X THEN
+   ColWd = X - 1
+  END ELSE
+   ColWd = ColWd - 1
+  END
+ END
+ Masks<1,I> = 'L#':ColWd:SPACE(I < ColCnt)
+ X = X - ColWd - 1
+ IF X <= 0 THEN ColCnt = I
+WHILE X > 0 DO REPEAT
+*
+ListTop = BegRow + (Headings NE '')
+ListRows = EndRow - ListTop + 1
+ListCnt = DCOUNT(List,VM)
+MaxBegPos = ListCnt - ListRows + 1
+IF MaxBegPos < 1 THEN MaxBegPos = 1
+IF BegPos < 1 THEN BegPos = 1 ELSE IF BegPos > MaxBegPos THEN BegPos = MaxBegPos
+*
+* Set up echo, prompt & cursor
+PROMPT ''
+IF TERM.ECHO THEN ECHO OFF; TERM.ECHO = 0
+IF NOT(TERM.CURSOR) THEN PRINT TERM.CSRON:; TERM.CURSOR = 1
+PRINT TERM.CSRLINE:
+IF TERM.SPECIAL NE '' THEN
+ PRINT ESC:STX:'1': ;* AccuTerm mouse on
+END
+*
+* If a mouse address was passed into this routine, and it falls in the
+* area of the list box, position the cursor to that spot
+IF TERM.MOUSEADDR NE '' THEN
+ MouseCol = FIELD(TERM.MOUSEADDR,'.',1)
+ MouseRow = FIELD(TERM.MOUSEADDR,'.',2)
+ IF MouseRow >= ListTop AND MouseRow <= EndRow THEN
+  IF MouseCol >= BegCol AND MouseCol <= EndCol THEN
+   IF MouseRow - ListTop + BegPos <= ListCnt THEN
+    CurPos = MouseRow - ListTop + BegPos
+    IF OptMulti = 0 THEN Selection = CurPos
+   END
+  END
+ END
+END
+*
+* Sort out initial display position
+*  BegPos is the one-based index of the list item displayed at the top of list box
+*  CurPos is the one-based index of the active (cursor) list item
+IF OptMulti = 0 THEN
+ IF Selection > 0 AND Selection <= ListCnt THEN
+  CurPos = Selection
+ END ELSE
+  CurPos = BegPos
+ END
+END
+IF CurPos < 0 OR CurPos > ListCnt THEN CurPos = 0
+IF CurPos - BegPos + 1 > ListRows THEN BegPos = CurPos - ListRows + 1
+IF CurPos > 0 AND CurPos < BegPos THEN BegPos = CurPos
+IF BegPos = 0 THEN BegPos = 1
+IF CurPos = 0 THEN CurPos = 1
+IF OptMulti THEN
+ IF Selection = 0 THEN Selection = ''
+END
+*
+* Display current value
+AttrLast = -1 ;* Initialize attribute for first call to DSPVALUE
+Active = 1
+DspPos = 0 ;* Display entire list
+GOSUB DSPVALUE
+*
+* Input Loop
+RtnCom = 0
+LOOP
+ CALL SUI.INPUT.CHAR(Chr, RtnCom, MAT TermDef)
+ BEGIN CASE
+  CASE RtnCom = 0; GOSUB MATCHENTRY
+  CASE RtnCom >= TERM.LEFTBUTTON$ AND RtnCom <= TERM.MIDBUTTON$; GOSUB GETADDR
+  CASE RtnCom = TERM.LEFT$; GOSUB PREVITEM
+  CASE RtnCom = TERM.RIGHT$; GOSUB NEXTITEM
+  CASE RtnCom = TERM.UP$; GOSUB PREVITEM
+  CASE RtnCom = TERM.DOWN$; GOSUB NEXTITEM
+  CASE RtnCom = TERM.BKSP$; RtnCom = 0 ;* Eat!
+  CASE RtnCom = TERM.INS$; RtnCom = 0 ;* Eat!
+  CASE RtnCom = TERM.DEL$; RtnCom = 0 ;* Eat!
+  CASE RtnCom = TERM.HOME$; GOSUB HOMEKEY
+  CASE RtnCom = TERM.END$; GOSUB ENDKEY
+  CASE RtnCom = TERM.PGUP$; GOSUB PGUPKEY
+  CASE RtnCom = TERM.PGDN$; GOSUB PGDNKEY
+  CASE RtnCom = TERM.ENTER$; GOSUB ENTERKEY
+  CASE RtnCom = TERM.SENTER$; GOSUB ENTERKEY
+ END CASE
+UNTIL RtnCom DO
+REPEAT
+IF OptMulti = 0 THEN Selection = CurPos
+Active = 0
+DspPos = 0
+GOSUB DSPVALUE
+IF TERM.ATTRTYPE NE 1 THEN PRINT TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL):
+IF TERM.SPECIAL NE '' THEN
+ PRINT ESC:STX:'0': ;* AccuTerm mouse off
+END
+PRINT TERM.CSROFF:; TERM.CURSOR = 0
+ECHO ON; TERM.ECHO = 1
+RETURN
+!
+ENTERKEY: *
+*
+IF OptMulti = 0 THEN
+ Selection = CurPos
+END
+RtnCom = TERM.ENTER$
+RETURN
+!
+PREVITEM: *
+*
+IF CurPos > 1 THEN
+ CurPos = CurPos - 1
+ IF CurPos < BegPos THEN
+  BegPos = CurPos
+  DspPos = 0
+  GOSUB DSPVALUE
+ END ELSE
+  DspPos = CurPos
+  GOSUB DSPVALUE
+  DspPos = CurPos + 1
+  GOSUB DSPVALUE
+ END
+END
+RtnCom = 0
+RETURN
+!
+NEXTITEM: *
+*
+IF CurPos < ListCnt AND ListCnt > 0 THEN
+ CurPos = CurPos + 1
+ IF CurPos - ListRows + 1 > BegPos THEN
+  BegPos = CurPos - ListRows + 1
+  DspPos = 0
+  GOSUB DSPVALUE
+ END ELSE
+  DspPos = CurPos - 1
+  IF DspPos > 0 THEN GOSUB DSPVALUE
+  DspPos = CurPos
+  GOSUB DSPVALUE
+ END
+END
+RtnCom = 0
+RETURN
+!
+PGUPKEY: *
+*
+IF CurPos > 1 THEN
+ IF ListRows > 1 THEN X = ListRows - 1 ELSE X = 1
+ DspPos = CurPos
+ CurPos = CurPos - X
+ IF CurPos < 1 THEN CurPos = 1
+ IF CurPos < BegPos THEN
+  BegPos = CurPos
+  DspPos = 0
+  GOSUB DSPVALUE
+ END ELSE
+  GOSUB DSPVALUE
+  DspPos = CurPos
+  GOSUB DSPVALUE
+ END
+END
+RtnCom = 0
+RETURN
+!
+PGDNKEY: *
+*
+IF CurPos < ListCnt AND ListCnt > 0 THEN
+ IF ListRows > 1 THEN X = ListRows - 1 ELSE X = 1
+ DspPos = CurPos
+ CurPos = CurPos + X
+ IF CurPos > ListCnt THEN CurPos = ListCnt
+ IF CurPos - BegPos + 1 > ListRows THEN
+  BegPos = CurPos - ListRows + 1
+  DspPos = 0
+  GOSUB DSPVALUE
+ END ELSE
+  IF DspPos > 0 THEN GOSUB DSPVALUE
+  DspPos = CurPos
+  GOSUB DSPVALUE
+ END
+END
+RtnCom = 0
+RETURN
+!
+HOMEKEY: *
+*
+IF CurPos NE 1 AND ListCnt > 0 THEN
+ DspPos = CurPos
+ CurPos = 1
+ IF CurPos < BegPos THEN
+  BegPos = CurPos
+  DspPos = 0
+  GOSUB DSPVALUE
+ END ELSE
+  IF DspPos > 0 THEN GOSUB DSPVALUE
+  DspPos = CurPos
+  GOSUB DSPVALUE
+ END
+END
+RtnCom = 0
+RETURN
+!
+ENDKEY: *
+*
+IF CurPos < ListCnt AND ListCnt > 0 THEN
+ DspPos = CurPos
+ CurPos = ListCnt
+ IF CurPos - BegPos + 1 > ListRows THEN
+  BegPos = CurPos - ListRows + 1
+  DspPos = 0
+  GOSUB DSPVALUE
+ END ELSE
+  IF DspPos > 0 THEN GOSUB DSPVALUE
+  DspPos = CurPos
+  GOSUB DSPVALUE
+ END
+END
+RtnCom = 0
+RETURN
+!
+GETADDR: * CHECK MOUSE ADDRESS
+*
+MouseCol = FIELD(TERM.MOUSEADDR,'.',1)
+MouseRow = FIELD(TERM.MOUSEADDR,'.',2)
+IF MouseRow >= BegRow AND MouseRow <= EndRow THEN
+ IF MouseCol >= BegCol AND MouseCol <= EndCol THEN
+  IF MouseRow >= ListTop AND MouseRow - ListTop + BegPos <= ListCnt THEN
+   DspPos = CurPos
+   CurPos = MouseRow - ListTop + BegPos
+   IF OptMulti THEN
+    * Toggle selection state of item
+    LOCATE(CurPos,Selection,1;K;'AR') THEN
+     Selection = DELETE(Selection,1,K)
+    END ELSE
+     Selection = INSERT(Selection,1,K;CurPos)
+    END
+    IF CurPos NE DspPos THEN
+     GOSUB DSPVALUE
+     DspPos = CurPos
+    END
+    GOSUB DSPVALUE
+   END ELSE
+    IF CurPos NE DspPos THEN
+     GOSUB DSPVALUE
+     DspPos = CurPos
+     GOSUB DSPVALUE
+    END
+   END
+  END
+  RtnCom = 0
+ END
+END
+RETURN
+!
+MATCHENTRY: *
+*
+IF ListCnt > 0 THEN
+ IF OptMulti AND Chr = ' ' THEN
+  * Toggle the current item
+  LOCATE(CurPos,Selection,1;K;'AR') THEN
+   Selection = DELETE(Selection,1,K)
+  END ELSE
+   Selection = INSERT(Selection,1,K;CurPos)
+  END
+  DspPos = CurPos
+  GOSUB DSPVALUE
+ END ELSE
+  * Search for match on first character of list item
+  DspPos = CurPos
+  MatchPos = CurPos
+  FOR I = 1 TO ListCnt - 1
+   MatchPos = MatchPos + 1
+   IF MatchPos > ListCnt THEN MatchPos = 1
+   IF OCONV(Chr,'MCU') = OCONV(List<1,MatchPos>[1,1],'MCU') THEN
+    * Found next match
+    CurPos = MatchPos
+    I = ListCnt
+   END
+  NEXT I
+  IF CurPos NE DspPos THEN
+   IF CurPos - BegPos + 1 > ListRows THEN
+    * Scroll down so new selection is displayed
+    BegPos = CurPos - ListRows + 1
+    DspPos = 0
+    GOSUB DSPVALUE
+   END ELSE
+    IF CurPos < BegPos THEN
+     * Scroll up so new selection is displayed
+     BegPos = CurPos
+     DspPos = 0
+     GOSUB DSPVALUE
+    END ELSE
+     * New selection already displayed - just redisplay
+     * the current & new selections
+     IF DspPos > 0 THEN GOSUB DSPVALUE
+     DspPos = CurPos
+     GOSUB DSPVALUE
+    END
+   END
+  END
+ END
+END
+RtnCom = 0
+RETURN      
+!
+DSPVALUE: * Display current value in proper visual attribute
+*
+* List item to display = DspPos; zero to display all items
+* Position cursor to item at CurPos before return
+*
+IF AttrLast < 0 THEN
+ * Refresh heading & entire list
+ DspBeg = BegRow
+ DspEnd = EndRow
+ DspPos = BegPos - (Headings NE '')
+END ELSE
+ IF DspPos = 0 THEN
+  * Refresh entire list
+  DspBeg = ListTop
+  DspEnd = EndRow
+  DspPos = BegPos
+ END ELSE
+  * Refresh single list item
+  DspBeg = DspPos - BegPos + ListTop
+  DspEnd = DspBeg
+ END
+END
+Dsp = ''
+IF AttrLast < 0 AND SUICFG.LIST.BORDER AND INDEX(TERM.SPECIAL,'B',1) THEN
+ * Draw list box border using AccuTerm Visual Styles
+ Dsp = Dsp:ESC:STX:'r':BegCol:',':BegRow:',':EndCol:',':EndRow:',N,':'NIRB'[SUICFG.LIST.BORDER+1,1]:CR
+END
+FOR DspRow = DspBeg TO DspEnd
+ IF DspPos < BegPos THEN
+  Attr = SUICFG.LIST.HEADING
+ END ELSE
+  IF OptMulti THEN
+   LOCATE(DspPos,Selection,1;K;'AR') THEN
+    Attr = SUICFG.LIST.SELECTED
+   END ELSE
+    IF Active THEN
+     Attr = SUICFG.LIST.ACTIVE
+    END ELSE
+     Attr = SUICFG.LIST.INACTIVE
+    END
+   END
+  END ELSE
+   IF Active THEN
+    IF DspPos = CurPos THEN Attr = SUICFG.LIST.SELECTED ELSE Attr = SUICFG.LIST.ACTIVE
+   END ELSE
+    IF DspPos = CurPos THEN Attr = SUICFG.LIST.SELECTED ELSE Attr = SUICFG.LIST.INACTIVE
+   END
+  END
+ END 
+ IF Attr = AttrLast AND TERM.ATTRTYPE NE 1 THEN
+  Dsp = Dsp:@(BegCol,DspRow)
+ END ELSE
+  IF TERM.ATTRTYPE = 1 THEN
+   IF EndCol >= TERM.WIDTH - 1 THEN
+    IF DspRow < TERM.HEIGHT - 1 THEN Dsp = Dsp:@(0,DspRow+1):TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+   END ELSE
+    Dsp = Dsp:@(EndCol+1,DspRow):TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+   END
+   IF BegCol = 0 THEN
+    IF DspRow > 0 THEN Dsp = Dsp:@(TERM.WIDTH-1,DspRow-1):TermDef(TERM.ATT$+Attr)
+   END ELSE
+    Dsp = Dsp:@(BegCol-1,DspRow):TermDef(TERM.ATT$+Attr)
+   END
+   Dsp = Dsp:@(BegCol,DspRow)
+  END ELSE
+   Dsp = Dsp:@(BegCol,DspRow):TermDef(TERM.ATT$+Attr)
+  END
+ END
+ FOR ListCol = 1 TO ColCnt
+  IF DspPos < BegPos THEN
+   Dta = Headings<1,ListCol>
+  END ELSE
+   Dta = List<1,DspPos,ListCol>
+  END
+  Msk = Masks<1,ListCol>
+  Dsp = Dsp:(Dta Msk)
+ NEXT ListCol
+ DspPos = DspPos + 1
+ AttrLast = Attr
+NEXT DspRow
+Dsp = Dsp:@(BegCol,CurPos-BegPos+ListTop)
+PRINT Dsp:
+RETURN
+END

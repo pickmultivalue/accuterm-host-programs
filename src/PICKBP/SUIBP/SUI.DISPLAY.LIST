@@ -1,0 +1,211 @@
+SUBROUTINE SUI.DISPLAY.LIST(Left, Top, Width, Height, State, Opts, Headings, Widths, List, Selection, BegPos, RtnCom, MAT TermDef)
+**************************************************************************
+*Copyright (c) 2004 Zumasys, Inc. as an unpublished work. All rights     *
+*reserved. You are free to use this code within your own applications,   *
+*but you are expressly forbidden from selling or otherwise distributing  *
+*this code without prior written consent. Portions based on original     *
+*design by Joe Goldthwaite.                                              *
+**************************************************************************
+*
+* MODULE: SUI.DISPLAY.LIST
+* AUTHOR: PJS
+* VERSION: 1.0.0
+* CREATED: 06/01/2004
+* UPDATED: 
+*
+* MAINTENANCE RECORD:
+*
+*************************************************************************
+*************************************************************************
+*
+* SMART USER INTERFACE: Display List Box
+*
+*************************************************************************
+*************************************************************************
+*
+*   Input Interface:
+*
+*    Left, Top: upper-left corner of list box (relative to current window)
+*
+*    Width, Height: size of list box
+*
+*    State:     field display state
+*                0 = inactive
+*                1 = active
+*                2 = disabled
+*
+*    Opts:      options
+*                M = multiple items may be selected
+*
+*    Headings:  multi-valued list of column headings
+*
+*    Widths:    multi-valued list of column widths
+*
+*    List:      list items; one value per item, with sub-values for columns
+*               within the item.
+*
+*    Selection: one-based index of currently selected item. If multiple
+*               selections are supported, this is a multi-valued list
+*               of selected items. Null or zero means no item is selected.
+*
+*    BegPos:    one-based index of the item to display on the top line
+*               of the list box.
+*
+*    TermDef: terminal definitions as set up by SUI.GET.TERM
+*
+*
+*   Output Interface:
+*
+*    RtnCom:   zero if success, else error code
+*
+*************************************************************************
+*
+$INCLUDE SUI.TERMDEF
+$INCLUDE SUI.WINDEF
+$INCLUDE SUI.CONFIG
+*
+EQU VM TO CHAR(253)
+EQU BEL TO CHAR(7), ESC TO CHAR(27), STX TO CHAR(2), CR TO CHAR(13)
+*
+IF Width < 1 OR Height < (1 + (Headings NE '')) THEN
+ RtnCom = SUI.ERROR.INVSIZE$
+ RETURN
+END
+*
+* Adjust screen positions based on current window
+ListWd = Width
+ListHt = Height
+BegCol = Left ;* Screen beginning column
+BegRow = Top ;* Screen row
+WinInf = TERM.WINDOW<1,2>
+IF WinInf EQ '' THEN
+ WinWd = TERM.WIDTH
+ WinHt = TERM.HEIGHT
+END ELSE
+ BegCol = BegCol + WinInf<1,1,SUI.WINLEFT$> + WinInf<1,1,SUI.CLILEFT$>
+ BegRow = BegRow + WinInf<1,1,SUI.WINTOP$> + WinInf<1,1,SUI.CLITOP$>
+ WinWd = WinInf<1,1,SUI.CLIWIDTH$>
+ WinHt = WinInf<1,1,SUI.CLIHEIGHT$>
+END
+IF Left < 0 THEN
+ RtnCom = SUI.ERROR.INVPOS$
+ RETURN
+END
+IF Left + ListWd > WinWd THEN
+ ListWd = WinWd - Left
+ IF ListWd <= 0 OR (ListWd < 1 AND Width > 1) THEN
+  RtnCom = SUI.ERROR.INVSIZE$
+  RETURN
+ END 
+END
+IF Top < 0 THEN
+ RtnCom = SUI.ERROR.INVPOS$
+ RETURN
+END
+IF Top + ListHt > WinHt THEN
+ ListHt = WinHt - Top
+ IF ListHt <= 0 THEN
+  RtnCom = SUI.ERROR.INVSIZE$
+  RETURN
+ END
+END
+EndCol = BegCol + ListWd - 1 ;* Ending screen column
+EndRow = BegRow + ListHt - 1 ;* Ending screen row
+*
+* Decode options
+OptMulti = INDEX(Opts,'M',1)
+*
+* Format the list box
+ColCnt = DCOUNT(Headings,VM)
+IF ColCnt = 0 THEN ColCnt = 1
+Masks = ''
+X = ListWd
+I = 0
+LOOP
+ I = I + 1
+ ColWd = Widths<1,I>
+ IF I = ColCnt THEN
+  ColWd = X ;* remaining space goes to last column
+ END ELSE
+  IF ColWd > X THEN
+   ColWd = X - 1
+  END ELSE
+   ColWd = ColWd - 1
+  END
+ END
+ Masks<1,I> = 'L#':ColWd:SPACE(I < ColCnt)
+ X = X - ColWd - 1
+ IF X <= 0 THEN ColCnt = I
+WHILE X > 0 DO REPEAT
+*
+ListTop = BegRow + (Headings NE '')
+ListRows = EndRow - ListTop + 1
+ListCnt = DCOUNT(List,VM)
+MaxBegPos = ListCnt - ListRows + 1
+IF MaxBegPos < 1 THEN MaxBegPos = 1
+IF BegPos < 1 THEN BegPos = 1 ELSE IF BegPos > MaxBegPos THEN BegPos = MaxBegPos
+*
+* Display heading & entire list
+AttrLast = -1
+DspBeg = BegRow
+DspEnd = EndRow
+DspPos = BegPos - (Headings NE '')
+Dsp = ''
+IF SUICFG.LIST.BORDER AND INDEX(TERM.SPECIAL,'B',1) THEN
+ * Draw list box border using AccuTerm Visual Styles
+ Dsp = Dsp:ESC:STX:'r':BegCol:',':BegRow:',':EndCol:',':EndRow:',N,':'NIRB'[SUICFG.LIST.BORDER+1,1]:CR
+END
+FOR DspRow = DspBeg TO DspEnd
+ IF DspPos < BegPos THEN
+  Attr = SUICFG.LIST.HEADING
+ END ELSE
+  IF OptMulti THEN
+   LOCATE(DspPos,Selection,1;K;'AR') THEN
+    Attr = SUICFG.LIST.SELECTED
+   END ELSE
+    IF State = 0 THEN Attr = SUICFG.LIST.INACTIVE ELSE
+     IF State = 2 THEN Attr = SUICFG.LIST.DISABLED ELSE Attr = SUICFG.LIST.ACTIVE
+    END
+   END
+  END ELSE
+   IF DspPos = Selection THEN Attr = SUICFG.LIST.SELECTED ELSE
+    IF State = 0 THEN Attr = SUICFG.LIST.INACTIVE ELSE
+     IF State = 2 THEN Attr = SUICFG.LIST.DISABLED ELSE Attr = SUICFG.LIST.ACTIVE
+    END
+   END
+  END
+ END 
+ IF Attr = AttrLast AND TERM.ATTRTYPE NE 1 THEN
+  Dsp = Dsp:@(BegCol,DspRow)
+ END ELSE
+  IF TERM.ATTRTYPE = 1 THEN
+   IF EndCol >= TERM.WIDTH - 1 THEN
+    IF DspRow < TERM.HEIGHT - 1 THEN Dsp = Dsp:@(0,DspRow+1):TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+   END ELSE
+    Dsp = Dsp:@(EndCol+1,DspRow):TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+   END
+   IF BegCol = 0 THEN
+    IF DspRow > 0 THEN Dsp = Dsp:@(TERM.WIDTH-1,DspRow-1):TermDef(TERM.ATT$+Attr)
+   END ELSE
+    Dsp = Dsp:@(BegCol-1,DspRow):TermDef(TERM.ATT$+Attr)
+   END
+   Dsp = Dsp:@(BegCol,DspRow)
+  END ELSE
+   Dsp = Dsp:@(BegCol,DspRow):TermDef(TERM.ATT$+Attr)
+  END
+ END
+ FOR ListCol = 1 TO ColCnt
+  Msk = Masks<1,ListCol>
+  IF DspPos < BegPos THEN
+   Dsp = Dsp:(Headings<1,ListCol>) Msk
+  END ELSE
+   Dsp = Dsp:(List<1,DspPos,ListCol>) Msk
+  END
+ NEXT ListCol
+ DspPos = DspPos + 1
+ AttrLast = Attr
+NEXT DspRow
+IF TERM.ATTRTYPE NE 1 THEN Dsp = Dsp:TermDef(TERM.ATT$+SUICFG.DISPLAY.NORMAL)
+PRINT Dsp:
+RETURN
+END

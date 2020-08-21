@@ -1,0 +1,131 @@
+SUBROUTINE ATGUIINIT(ERRORS, STATE)
+**************************************************************************
+*Copyright (c) 1999-2006 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUIINIT
+* AUTHOR: PJS
+* VERSION: 5.3.4
+* CREATED: 11/01/1999
+* UPDATED: 02/25/2008
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.4
+*  PJS 02/25/2008
+*   Check if "case inversion" is in effect and return error if it is.
+*
+* 5.3.3
+*  PJS 12/13/2006
+*   Fix Unassigned SVRVER variable when GUI system returns an error.
+*
+* 5.3.2
+*  PJS 06/12/2006
+*   Updated to use new version of FTOBJREQ, which requires that
+*   the PARAMS and CLIENV arrays be completely initialized.
+*
+* 5.3.1
+*  PJS 05/08/2006
+*   Updated for 5.3a release. Combined old calls to FTINIT and
+*   FTCLIENV to call new FTINITEX subroutine.
+*
+* 5.2.1
+*  PJS 10/27/2004
+*   Updated for GUI version 1.2. This subroutine is now deprecated
+*   to the new ATGUIINITEX routine. For maximum compatibility, the
+*   the app version number is hard-coded as 1.0 since there is no
+*   way to pass the actual app version.
+*
+* 5.0.1
+*  PJS 02/17/2002
+*  Added new element to CLIENV() array for FTBP library version number.
+*
+* 4.0.2
+*  PJS 02/01/2001
+*   Change error number to GRFATAL if AccuTerm version does not support GUI
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*   CALLS FTCLIENV AND SAVES CLIENT INFO IN STATE VARIABLE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI MANAGER - INITIALIZE
+*
+* ALL PROGRAMS WHICH CALL ACCUTERM GUI SUBROUTINES MUST
+* CALL THIS SUBROUTINE FIRST AND MAINTAIN THE STATE VARIABLE!
+*
+* INPUT:
+*
+* OUTPUT:
+*  ERRORS     ERRORS<1> is non-zero if errors have occurred
+*
+* OTHER:
+*  STATE      internal use only - do not modify
+*
+**************************************************************************
+**************************************************************************
+*
+$INCLUDE ATGUIEQUATES
+EQU THISPGM TO 'ATGUIINIT'
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+EQU ESC TO CHAR(27), STX TO CHAR(2), CR TO CHAR(13)
+*
+DIM FTCONF(30), CLIENV(10)
+*
+EQU CLI.PLATFORM TO CLIENV(1)
+EQU CLI.PRODUCT TO CLIENV(2)
+EQU CLI.RELEASE TO CLIENV(3)
+EQU CLI.CAPAS TO CLIENV(4)
+EQU CLI.SVCS TO CLIENV(5)
+EQU CLI.SERIAL TO CLIENV(6)
+EQU CLI.LICENSE TO CLIENV(7)
+EQU CLI.USER TO CLIENV(8)
+EQU CLI.VERSION TO CLIENV(9)
+*
+ERRORS = GRSUCCESS
+STATE = ''
+PROMPT ''
+CALL FTINITEX('',MAT FTCONF,MAT CLIENV,FV,STAT)
+IF STAT NE '' THEN
+ CALL ATGUIERROR(3, THISPGM, '', '', GRFATAL, STAT, ERRORS)
+ RETURN
+END
+IF INDEX(CLI.CAPAS,'Z',1) THEN
+ CALL ATGUIERROR(3, THISPGM, '', '', GRFATAL, 'Case inversion must be disabled to run GUI programs - try "PTERM CASE NOINVERT".', ERRORS)
+ RETURN
+END
+IF INDEX(CLI.SVCS,'g',1) = 0 THEN
+ CALL ATGUIERROR(3, THISPGM, '', '', GRFATAL, 'This version of AccuTerm does not support GUI programs.', ERRORS)
+ RETURN
+END
+REC = GCINITIALIZE : VM : '1.0' : VM : ATGUIVERSION
+CALL FTOBJREQ('g', REC, RSP, 0, MAT FTCONF, MAT CLIENV)
+CALL ATGUIERRORS(RSP, ERRORS)
+SVRVER = '1.0'; * ASSUME RUNTIME VERSION IS 1.0 (COULD ACTUALLY BE 1.1 - LATER VERSIONS RETURN VERSION IN RSP)
+IF ERRORS<1> = 0 THEN
+ IF RSP NE '' THEN
+  SVRVER = RSP<1,1>; * RETURN GUI RUNTIME ENGINE VERSION
+ END
+END
+* SAVE CONFIGURATION
+STATE<1> = 1; * GUI initialized
+FOR I = 1 TO 30
+ STATE<20,I> = FTCONF(I)
+NEXT I
+FOR I = 1 TO 10
+ STATE<I+20> = CLIENV(I)
+NEXT I
+STATE<13> = SVRVER; * GUI ENGINE VERSION NUMBER
+STATE<14> = '1.0'; * GUI APP VERSION NUMBER
+RETURN
+*
+END

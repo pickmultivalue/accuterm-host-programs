@@ -1,0 +1,59 @@
+SUBROUTINE ATRELEASEOBJECT(OBJID, ERRMSG, OPTS)
+**************************************************************************
+*Copyright (c) 1998-2000 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATRELEASEOBJECT
+* AUTHOR: PJS
+* VERSION: 4.0.1
+* CREATED: 01/01/1998
+* UPDATED: 09/25/2000
+*
+* MAINTENANCE RECORD:
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM OBJECT MANAGER - RELEASE OBJECT
+*
+* CALL THIS SUBROUTINE TO RELEASE (OR DESTROY) AN OBJECT
+* YOU CREATED WITH ATCREATEOBJECT. AFTER RELEASING THE OBJECT,
+* YOU MAY NOT REFERENCE THAT OBJECT AGAIN.
+*
+**************************************************************************
+*
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30), CLIENV(10)
+FOR I = 1 TO 30; PARAMS(I) = OPTS<I>; NEXT I
+FOR I = 1 TO 10; CLIENV(I) = OPTS<I+30>; NEXT I
+IF PARAMS(1) < 1 THEN
+ ERRMSG = 'Subroutine ATINITOBJMGR must be called before using this function!'
+ RETURN
+END
+REC = '3':VM:OBJID
+CALL FTOBJREQ('a',REC,RSP,0,MAT PARAMS,MAT CLIENV)
+BEGIN CASE
+ CASE RSP[1,4] EQ 'ERR:'
+  ERRNUM = FIELD(RSP,' ',2)
+  ERRMSG = RSP[COL2()+1,9999]
+  IF ERRMSG EQ '' THEN ERRMSG = 'Unknown error: ':ERRNUM
+ CASE RSP<1,5>
+  ERRNUM = RSP<1,5>
+  ERRMSG = RSP<1,6>
+  IF ERRMSG EQ '' THEN ERRMSG = 'Unknown error: ':ERRNUM
+ CASE 1
+  ERRMSG = ''
+END CASE
+RETURN
+*
+END

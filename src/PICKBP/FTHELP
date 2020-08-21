@@ -1,0 +1,49 @@
+SUBROUTINE FTHELP(HID,FV)
+**************************************************************************
+*Copyright (c) 1993-2000 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTHELP
+* AUTHOR: PJS
+* VERSION: 4.0.1
+* CREATED: 01/01/1993
+* UPDATED: 09/25/2000
+*
+* MAINTENANCE RECORD:
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* DISPLAY FILE TRANSFER HELP MESSAGE
+*
+**************************************************************************
+**************************************************************************
+*
+* FTHELP() SUBROUTINE INTERFACE
+*
+* INPUT:  HID     = HELP INDEX
+*         FV      = FILE VARIABLE (FTBP)
+*
+**************************************************************************
+*
+PRINT; PRINT
+READV MSG FROM FV,'KMTHLP',HID ELSE MSG=''
+IF MSG='' THEN PRINT 'Help is not available for this item!'; RETURN
+N=DCOUNT(MSG,'~')
+FOR I=1 TO N
+ PRINT '          ':FIELD(MSG,'~',I)
+NEXT I
+PRINT
+PRINT 'Press ENTER to continue':; INPUT OK
+RETURN
+END

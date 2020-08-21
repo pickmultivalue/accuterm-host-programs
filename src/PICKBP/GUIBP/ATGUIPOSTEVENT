@@ -1,0 +1,120 @@
+SUBROUTINE ATGUIPOSTEVENT(APPID, FORMID, CTLID, EVENT, ARGS, POSITION, ERRORS, STATE)
+**************************************************************************
+*Copyright (c) 1999-2006 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUIPOSTEVENT
+* AUTHOR: PJS
+* VERSION: 5.3.1
+* CREATED: 11/01/1999
+* UPDATED: 06/12/2006
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.1
+*  PJS 06/12/2006
+*   Updated to use new version of FTOBJREQ, which requires that
+*   the PARAMS and CLIENV arrays be completely initialized.
+*
+* 5.2.1
+*  PJS 10/27/2004
+*   Updated for GUI version 1.2 which may return multiple events
+*   in a single response. Events with arguments that have multiple
+*   attributes are handled by returning the number of attributes in
+*   the event in RSP<I,2,2>. Extra events are stored in the local
+*   event queue and retrieved from the local queue on the next call.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI MANAGER - POST EVENT
+*
+* CALL THIS SUBROUTINE TO POST AN EVENT TO THE QUEUE.
+*
+* INPUT:
+*  APPID      application identifier
+*  FORMID     form identifier of form being created
+*  CTLID      control identifier (unique within scope of form)
+*  EVENT      event code for triggered event
+*  ARGS       event arguments
+*  POSITION   0 posts event at beginning of queue, -1 posts to end of queue
+*
+* OUTPUT:
+*  ERRORS     ERRORS<1> is non-zero if errors have occurred
+*
+* OTHER:
+*  STATE      internal use only - do not modify
+*
+**************************************************************************
+*
+$INCLUDE ATGUIEQUATES
+EQU THISPGM TO 'ATGUIPOSTEVENT'
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30), CLIENV(10)
+ERRORS = GRSUCCESS
+FOR I = 1 TO 30
+ PARAMS(I) = STATE<20,I>
+NEXT I
+FOR I = 1 TO 10
+ CLIENV(I) = STATE<20+I>
+NEXT I
+IF NOT(STATE<1>) THEN
+ CALL ATGUIERROR(3, THISPGM, '', 0, GRFATAL, '', ERRORS)
+ RETURN
+END
+*
+* CHECK IF RECORDING MACRO (CANNOT POST EVENT WHEN RECORDING MACRO!)
+*
+IF STATE<2> THEN
+ CALL ATGUIERROR(2, THISPGM, '', 0, GRNOPOST, '', ERRORS)
+ RETURN
+END
+*
+* INITIALIZE
+K = 51 + STATE<5>
+N = COUNT(ARGS, AM) + 1
+NEWEVT = APPID : '*' : FORMID : '*' : CTLID : VM : EVENT : SVM : N : VM : ARGS
+*
+* POST NEW EVENT
+*
+IF POSITION < 0 THEN
+ * POST AT END OF QUEUE (SUCK UP QUEUED EVENTS FROM SERVER)
+ LOOP
+  REC = GCCHECKEVENT : VM : '0'
+  CALL FTOBJREQ('g', REC, RSP, 0, MAT PARAMS, MAT CLIENV)
+  IF RSP<1,1,1> > 0 AND RSP<1,1,5> = GRNOEVENT THEN
+   EVT = 0 ;* NO FORMS VISIBLE - IGNORE ERROR
+  END ELSE
+   CALL ATGUIERRORS(RSP, ERRORS)
+   EVT = RSP<1,2,1> + 0
+  END
+ WHILE EVT DO
+  M = RSP<1,2,2> + 0 ;* NEW EVENT RESPONSE INCLUDES ATTRIBUTE COUNT IN RSP<I,2,2>
+  IF M = 0 THEN RSP<1,2,2> = DCOUNT(RSP, AM) ;* OLD EVENT RESPONSE DOES NOT INCLUDE ATTRIBUTE COUNT, SO ADD IT BEFORE SAVING IN LOCAL QUEUE
+  STATE<K> = RSP
+  K = K + COUNT(RSP, AM) + 1
+  IF M > 0 THEN GOTO XLOOP
+ REPEAT
+XLOOP: *
+ STATE<K> = NEWEVT
+END ELSE
+ * POST AT BEGINNING OF QUEUE
+ STATE = INSERT(STATE, 51; NEWEVT)
+END
+*
+* UPDATE QUEUED EVENT COUNT
+*
+STATE<5> = K + N - 51
+RETURN
+*
+END

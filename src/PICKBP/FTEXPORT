@@ -1,0 +1,317 @@
+SUBROUTINE FTEXPORT(MODE,HOST.FILE,HOST.IDS,REMOTE.FILE,ATTRS,ITEM.COUNT,BYTE.COUNT,STAT)
+**************************************************************************
+*Copyright (c) 2007-2011 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTEXPORT
+* AUTHOR: PJS
+* VERSION: 7.0.2
+* CREATED: 04/18/2007
+* UPDATED: 03/11/2011
+*
+* MAINTENANCE RECORD:
+*
+* 7.0.2
+*  PJS 03/11/2011
+*   Added missing EQUate for TXT.FLG.PARAM variable.
+*
+* 7.0.1
+*  PJS 03/25/2010
+*   Added new 'LABEL' mode. Use 'LABEL' mode to use dictionary heading
+*   field for column headers, or 'HEADING' mode to use attribute name
+*   for column headers.
+*
+* 5.4.2
+*  PJS 06/20/2007
+*   Added new MODE options: Y, Z to override configuration setting
+*   for OEM/ANSI charaset conversion.
+*
+* 5.4.1
+*  PJS 04/18/2007
+*   Initial release
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM DATA TRANSFER - EXPORT DATA TO PC
+*
+**************************************************************************
+**************************************************************************
+*
+* FTEXPORT() SUBROUTINE INTERFACE
+*
+*
+* INPUT:
+*
+*         MODE         = MODES SEPARATED BY COMMAS (FIRST LETTER IS SUFFICIENT):
+*
+*                          KERMIT - USES THE KERMIT FILE TRANSFER PROTOCOL (RECOMMENDED).
+*
+*                          ASCII - USES THE ASCII FILE TRANSFER PROTOCOL.
+*
+*                          OVERLAY - OVERWRITES EXISTING FILE, WORKSHEET, RANGE,
+*                            TABLE, ETC.
+*
+*                          NO OVERLAY - FAILS TRANSFER IF FILE, WORKSHEET OR TABLE
+*                            EXISTS.
+*
+*                          MERGE - APPENDS DATA TO EXISTING FILE, WORKSHEET OR TABLE.
+*                            IF FILE, WORKSHEET OR TABLE DOES NOT EXIST, IT IS CREATED.
+*
+*                          DELIM=TAB - CREATES TAB DELIMITED TEXT FILE.
+*                          DELIM=COMMA - CREATES COMMA DELIMITED TEXT FILE (CSV).
+*                          DELIM=CRLF - MERGES MULTIPLE ITEMS INTO SINGLE TEXT FILE.
+*                          DELIM=hex - CREATES DELIMITED TEXT FILE WITH USER-DEFINED DELIMITER.
+*
+*                          HEADER - FIRST LINE OF TARGET FILE CONTAINS ATTRIBUTE
+*                            NAMES AS COLUMN HEADINGS.
+*
+*                          LABEL - FIRST LINE OF TARGET FILE CONTAINS COLUMN HEADINGS
+*                            FROM FILE DICTIONARY.
+*
+*                          EXPLODE - REPEATS SINGLE-VALUED COLUMNS BASED ON NUMBER OF
+*                            MULTIVALUES IN THE RECORD.
+*
+*                          Y - OEM TO ANSI CHARACTER SET TRANSLATION
+*
+*                          Z - NO CHARACTER SET TRANSLATION
+*
+*         HOST.FILE    = SOURCE FILE NAME ON THE HOST
+*
+*         HOST.IDS     = SOURCE ITEM LIST:
+*
+*                          EXPLICIT ITEM-ID LIST SEPARATED BY ATTRIBUTE MARKS, OR
+*
+*                          '*' (ASTERISK) TO SEND ALL ITEMS, OR
+*
+*                          NULL TO USE ACTIVE SELECT LIST, OR
+*
+*                          '(SAVEDLIST' TO USE A SAVED LIST AS THE ITEM LIST
+*
+*         REMOTE.FILE  = TARGET FILE ON THE PC. SEE FTD DOCUMENTATION FOR SPECIAL
+*                        FILE SYNTAX FOR UPDATING RANGES OF EXISTING WORKSHEETS,
+*                        OR SPECIFYING ACCESS DATABASE TABLES.
+*
+*
+*         ATTRS        = MULTIVALUED LIST OF ATTRIBUTES TO EXPORT. USE ATTRIBUTE
+*                        NUMBERS OR DICTIONARY NAMES, OR '*' (ASTERISK) FOR ALL
+*                        ATTRIBUTES, OR '+' (PLUS SIGN) FOR ALL ATTRIBUTES EXCEPT
+*                        THE ITEM-ID.
+*
+*
+* OUTPUT:
+*         ITEM.COUNT   = NUMBER OF ITEMS EXPORTED
+*         BYTE.COUNT   = NUMBER OF BYTES EXPORTED
+*         STAT         = NULL INDICATES SUCCESS, OTHERWISE ERROR MESSAGE
+*
+*                        NOTE: IT IS POSSIBLE TO HAVE PARTIAL SUCCESS, SUCH AS
+*                        WHEN THE USER CLICKS THE 'ABORT' BUTTON WHILE A TRANSFER
+*                        IS IN PROGRESS. CHECK THE ITEM.COUNT & BYTE.COUNT
+*                        VARIABLES TO TEST IF PARTIAL SUCCESS.
+*
+**************************************************************************
+*
+EQU MODES TO 'KAONMTCEHLGDYZ'
+EQU MODE.SET TO '25,25,15,15,15,18,18,-6,-5,-5,-7,18,24,24'
+EQU MODE.VAL TO '1,0,1,0,2,0,1,1,1,2,1,0,1,0'
+*
+DIM PARAMS(30),VARS(26),CLIENV(10)
+*
+EQU TXT.FLG.PARAM TO PARAMS(13)
+EQU OVR.FLG.PARAM TO PARAMS(15)
+EQU OVR.FTD.PARAM TO PARAMS(16)
+EQU DCH.FLG.PARAM TO PARAMS(18)
+EQU DIR.FLG.PARAM TO PARAMS(21)
+EQU FIL.CNV.PARAM TO PARAMS(23)
+EQU OEM.CHR.PARAM TO PARAMS(24)
+EQU PRO.FLG.PARAM TO PARAMS(25)
+*
+EQU ICNT TO VARS(1)
+EQU BCNT TO VARS(2)
+EQU IDMODE TO VARS(3)
+EQU ALST TO VARS(4)
+EQU HDR TO VARS(5)
+EQU EXP TO VARS(6)
+EQU GEN TO VARS(7)
+EQU PFX TO VARS(8)
+EQU SID TO VARS(9)
+EQU SKP TO VARS(10)
+EQU FILE TO VARS(11)
+EQU FNAME TO VARS(12)
+EQU ID TO VARS(13)
+EQU IDLST TO VARS(14)
+EQU CLST TO VARS(15)
+EQU IDS TO VARS(16)
+EQU ISIZ TO VARS(17)
+EQU ISEQ TO VARS(18)
+EQU ITEM TO VARS(19)
+EQU XSIZ TO VARS(20)
+EQU PATH TO VARS(21)
+EQU FN TO VARS(22)
+EQU FNLST TO VARS(23)
+EQU DFILE TO VARS(24)
+EQU FNS TO VARS(25)
+EQU MD TO VARS(26)
+*
+EQU CLI.PLATFORM TO CLIENV(1)
+EQU CLI.PRODUCT TO CLIENV(2)
+EQU CLI.RELEASE TO CLIENV(3)
+EQU CLI.CAPAS TO CLIENV(4)
+EQU CLI.SVCS TO CLIENV(5)
+EQU CLI.SERIAL TO CLIENV(6)
+EQU CLI.LICENSE TO CLIENV(7)
+EQU CLI.USER TO CLIENV(8)
+EQU CLI.VERSION TO CLIENV(9)
+EQU CLI.CONFIG TO CLIENV(10)
+*
+NO.PAGE=@(0,0);* DISABLE PAGINATION (QM, ON)
+*
+**************************************************************************
+*
+* ENSURE FTCHK HAS BEEN RUN (OTHERWISE FTSELECT MIGHT PRINT ERROR MESASGE & STOP)
+*
+STAT='You must RUN FTBP FTCHK and select your host platform before FTEXPORT can be used!';RETURN;*#GENERIC#*
+*#DEFAULT#*STAT=''
+ITEM.COUNT=0
+BYTE.COUNT=0
+*
+**************************************************************************
+*
+* OPEN MD
+*
+MAT VARS=''
+OPEN 'MD' TO MD ELSE
+ OPEN 'VOC' TO MD ELSE
+  STAT='Unable to open MD or VOC file!'
+  RETURN
+ END
+END
+*
+**************************************************************************
+*
+* VALIDATE CONFIGURATION & INITIALIZE PARAMETERS
+*
+**************************************************************************
+*
+CALL FTINITEX('',MAT PARAMS,MAT CLIENV,FV,STAT)
+IF STAT NE '' THEN RETURN
+IF CLI.PLATFORM=0 THEN
+ STAT='FTEXPORT requires AccuTerm to run!'
+ RETURN
+END
+IF INDEX(CLI.CAPAS,'Z',1) THEN
+ STAT='Upper case / lower case inversion must be disabled to call FTEXPORT.'
+ RETURN
+END
+IF INDEX(CLI.CAPAS,'D',1) = 0 THEN
+ STAT='This version of AccuTerm does not support file transfers.'
+ RETURN
+END
+OVR.FLG.PARAM = OVR.FTD.PARAM; * USE COMMON OVERWRITE VARIABLE
+*
+**************************************************************************
+*
+* PARSE MODE ARGUMENT
+*
+**************************************************************************
+*
+P=''
+I=0
+LOOP
+ I=I+1
+ ITM=TRIM(FIELD(MODE,',',I))
+ Z=OCONV(ITM[1,1],'MCU')
+WHILE COL2() DO
+ K=INDEX(MODES,Z,1)
+ IF K THEN
+  J=FIELD(MODE.SET,',',K)
+  IF P<ABS(J)> NE '' THEN
+   READV TXT FROM FV,'FTPARAMS',ABS(J) ELSE TXT='*'
+   STAT='Cannot specify more than one setting for ':FIELD(TXT,',',1):'!'
+   RETURN
+  END
+  IF J>0 THEN
+   IF INDEX(ITM,'=',1) THEN
+    PARAMS(J)=FIELD(ITM,'=',2)
+   END ELSE
+    PARAMS(J)=FIELD(MODE.VAL,',',K)+0
+   END
+  END ELSE
+   VARS(-J)=FIELD(MODE.VAL,',',K)+0
+  END
+  P<ABS(J)>='1'
+ END
+REPEAT
+IF P<25> EQ '' THEN
+ STAT='Kermit or ASCII protocol must be specified to FTEXPORT subroutine!'
+ RETURN
+END
+IF ATTRS EQ '' THEN
+ STAT='No attributes have been specified!'
+ RETURN
+END
+ALST=ATTRS
+* SETUP HOST FILE NAME & OPEN FILE
+FNAME = HOST.FILE
+IF FNAME[1,5] EQ 'DICT ' THEN
+ OPEN FNAME TO FILE ELSE
+  STAT="Unable to open file ":FNAME
+  RETURN
+ END
+ DFILE=MD
+ FNAME=FNAME[6,99]
+END ELSE
+ OPEN FNAME TO FILE ELSE
+  STAT="Unable to open file ":FNAME
+  RETURN
+ END
+ OPEN 'DICT',FNAME TO DFILE ELSE
+  STAT="Unable to open DICT ":FNAME
+  RETURN
+ END
+END
+* SETUP TARGET PATH & FILE NAME
+PATH=REMOTE.FILE
+K=COUNT(PATH,'\')
+IF K THEN K=INDEX(PATH,'\',K); FNLST=PATH[K+1,999]; PATH=PATH[1,K] ELSE
+ K=COUNT(PATH,':')
+ IF K THEN K=INDEX(PATH,':',K); FNLST=PATH[K+1,999]; PATH=PATH[1,K] ELSE
+  FNLST=PATH; PATH=''
+ END
+END
+*
+**************************************************************************
+*
+* SEND DATA
+*
+**************************************************************************
+*
+DIR.FLG.PARAM=1
+TXT.FLG.PARAM=1; * ALWAYS TEXT FORMAT
+FIL.CNV.PARAM=1; * ALLOW AUTOMATIC FILE FORMAT CONVERSIONS
+SUBNAME='FTRDDATA'
+* SETUP SOURCE ID LIST
+IDLST=HOST.IDS
+IF HOST.IDS[1,1] = '(' THEN
+ * FTSELECT EXPECTS SAVED LIST FILE NAME IN ATTR 1, LIST NAME IN ATTR 2
+ IDLST=FIELD(HOST.IDS,' ',1)
+ IDLST<2>=FIELD(HOST.IDS,' ',2)
+END ELSE
+ * FTSELECT EXPECTS ATTRIBUTE-DELIMITED ID LIST, OR '*' OR NULL
+ IDLST=HOST.IDS
+END
+* PERFORM TRANSFER
+CALL FTMODE(STAT,SUBNAME,MAT PARAMS,MAT VARS,MAT CLIENV)
+ITEM.COUNT=ICNT
+BYTE.COUNT=BCNT
+RETURN
+*
+**************************************************************************
+*
+END

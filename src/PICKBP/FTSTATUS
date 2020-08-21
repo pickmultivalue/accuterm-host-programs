@@ -1,0 +1,128 @@
+SUBROUTINE FTSTATUS(STAT,FATAL,MAT PARAMS,MAT VARS,MAT CLIENV)
+**************************************************************************
+*Copyright (c) 2000-2006 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTSTATUS
+* AUTHOR: PJS
+* VERSION: 5.3.1
+* CREATED: 09/15/2000
+* UPDATED: 07/24/2006
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.1
+*  PJS 07/24/2006
+*   Changed size of VARS() array from 25 to 26.
+*
+* 5.0.3
+*  PJS 09/11/2003
+*   Modified PRINT expressions for UniVerse because concatenated
+*   expressions are sent in separate packets in NT version of
+*   UniVerse causing TCP "delayed ack" performance issues.
+*
+* 5.0.2
+*  PJS 08/21/2003
+*   Added new file transfer status message for status code 10:
+*   'Destination file protected'
+*
+* 5.0.1
+*  PJS 02/17/2002
+*   Added new element to CLIENV() array for FTBP library version number.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* GET FILE TRANSFER STATUS
+*
+* INPUT:  PARAMS  = CURRENT FILE TRANSFER PARAMETER SETTINGS & FLAGS
+*         VARS    = VARIABLES USED BY I/O SUBROUTINES
+*         CLIENV  = CLIENT (ACCUTERM) INFORMATION & CAPABILITIES
+*
+* OUTPUT: STAT    = STATUS OF LAST FILE TRANSFER, NULL IF SUCCESSFUL
+*         FATAL   = NON-ZERO IF LAST FILE TRANSFER ENCOUNTERED A FATAL ERROR
+*
+**************************************************************************
+**************************************************************************
+*
+DIM PARAMS(30),VARS(26),CLIENV(10)
+*
+EQU ICNT TO VARS(1)
+EQU BCNT TO VARS(2)
+*
+EQU CLI.PLATFORM TO CLIENV(1)
+EQU CLI.PRODUCT TO CLIENV(2)
+EQU CLI.RELEASE TO CLIENV(3)
+EQU CLI.CAPAS TO CLIENV(4)
+EQU CLI.SVCS TO CLIENV(5)
+EQU CLI.SERIAL TO CLIENV(6)
+EQU CLI.LICENSE TO CLIENV(7)
+EQU CLI.USER TO CLIENV(8)
+EQU CLI.VERSION TO CLIENV(9)
+EQU CLI.CONFIG TO CLIENV(10)
+*
+EQU CR TO CHAR(13), ESC TO CHAR(27), STX TO CHAR(2), SUB TO CHAR(26)
+EQU XFER.MSGS TO 'Cannot open DOS file!,File transfer aborted!,Destination file exists!,Timeout error!,Corrupted packet!,Unexpected packet type!,File transfer failure,File transfer failure!,File transfer failure!,Destination file protected!'
+*
+STAT = ''
+FATAL = 0
+PRINT '':(ESC:STX:'S'):
+ECHO OFF
+PROMPT ''
+LOOP
+INPUT Z:
+Z = OCONV(TRIM(Z),'MCU')
+UNTIL Z EQ '' OR Z[1,3] EQ 'END' OR Z[1,6] EQ 'STATUS' DO NULL REPEAT
+ECHO ON
+PROMPT '?'
+Z1=FIELD(Z,' ',2)
+IF NOT(Z1 MATCHES '1N') THEN Z1=9
+IF Z1 THEN
+ FATAL=1
+ STAT=FIELD(XFER.MSGS,',',Z1)
+ IF INDEX(CLI.CAPAS,'T',1) THEN
+  ECHO OFF
+  PROMPT ''
+  PRINT '':(ESC:STX:'T'):
+  INPUT STAT:
+  PROMPT '?'
+  ECHO ON
+  IF STAT EQ '' THEN STAT=FIELD(XFER.MSGS,',',Z1)
+ END
+END
+*
+* COMPARE STATUS BYTE COUNT WITH LOCAL BYTE COUNT
+*
+Z2=FIELD(Z,' ',6)
+IF NOT(Z2 MATCHES '1N0N') THEN Z2=0
+IF (Z2=0 AND BCNT>0) OR (Z2>0 AND BCNT=0) THEN
+ IF NOT(FATAL) THEN
+  FATAL=1
+  STAT=FIELD(XFER.MSGS,',',9)
+ END
+ BCNT=0
+ ICNT=0
+END
+*
+* ADJUST ITEM COUNT IF SOME TARGET FILES ARE PROTECTED & CANNOT BE OVERWRITTEN
+*
+IF FATAL THEN
+ IF INDEX(OCONV(STAT,'MCU'),'EXIST',1) THEN
+  Z2=FIELD(Z,' ',4)
+  IF NOT(Z2 MATCHES '1N0N') THEN Z2=0
+  IF ICNT > Z2 AND Z2 > 1 THEN ICNT = Z2
+ END 
+END
+RETURN
+*
+END

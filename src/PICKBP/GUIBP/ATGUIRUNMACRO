@@ -1,0 +1,132 @@
+SUBROUTINE ATGUIRUNMACRO(MACRO, SUBST, ERRORS, STATE)
+**************************************************************************
+*Copyright (c) 1999-2008 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUIRUNMACRO
+* AUTHOR: PJS
+* VERSION: 5.3.3
+* CREATED: 11/01/1999
+* UPDATED: 05/29/2008
+*
+* MAINTENANCE RECORD:
+*
+* 5.3.3
+*  PJS 05/29/2008
+*   Fix macro error checking. Previously, if any errors were reported
+*   from running cached macro, the macro was run again, updating the
+*   cache. Problem is, the macro cache may have been OK, but the macro
+*   contents may have produced errors. Now we check only if the macro
+*   command itself has an error, and if not, and the cache is not stale,
+*   just return the errors produced by the macro contents. If the cache
+*   is stale, or if there is an error in the macro command, run the
+*   macro again, updating the cache.
+*
+* 5.3.2
+*  PJS 07/31/2006
+*   When loading a project template (not macro), update the current
+*   scale mode from the template header. This fixes a problem that
+*   causes objects created on the fly to use the wrong scale units,
+*   if a scale mode other than characters is used in the project.
+*
+* 5.3.1
+*  PJS 06/12/2006
+*   Updated to use new version of FTOBJREQ, which requires that
+*   the PARAMS and CLIENV arrays be completely initialized. Add
+*   error check after first call to FTOBJREQ.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI MANAGER - RUN MACRO
+*
+* CALL THIS SUBROUTINE TO PLAY A MACRO.
+*
+* INPUT:
+*
+*  MACRO      macro created by ATGUIBEGINMACRO / ATGUIENDMACRO
+*               or template created by form designer
+*  SUBST      list of recorded ID's and thier run-time substitute ID's
+*
+* OUTPUT:
+*  ERRORS     ERRORS<1> is non-zero if errors have occurred
+*
+* OTHER:
+*  STATE      internal use only - do not modify
+*
+**************************************************************************
+*
+$INCLUDE ATGUIEQUATES
+EQU THISPGM TO 'ATGUIRUNMACRO'
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30), CLIENV(10)
+ERRORS = GRSUCCESS
+FOR I = 1 TO 30
+ PARAMS(I) = STATE<20,I>
+NEXT I
+FOR I = 1 TO 10
+ CLIENV(I) = STATE<20+I>
+NEXT I
+IF NOT(STATE<1>) THEN
+ CALL ATGUIERROR(3, THISPGM, '', 0, GRFATAL, '', ERRORS)
+ RETURN
+END
+*
+* VALIDATE PARAMETERS
+*
+IF MACRO<1,1> NE 'MACRO' AND MACRO<1,1> NE 'TEMPLATE' THEN
+ CALL ATGUIERROR(2, THISPGM, '', 'MACRO', GRINVARG, '', ERRORS)
+ RETURN
+END
+*
+* CHECK IF RECORDING MACRO
+*
+IF STATE<2> THEN
+ STATE = STATE : AM : DELETE(MACRO, 1)
+ RETURN
+END
+*
+* SAVE CURRENT SCALE MODE
+*
+IF MACRO<1,1> EQ 'TEMPLATE' THEN
+ STATE<3> = MACRO<2,3>
+END
+*
+* IF MACRO HAS AN ID, CHECK CACHE FIRST
+*
+IF MACRO<1,3> NE '' THEN
+ REC = GCMACRO : VM : '0' : VM : MACRO<1>
+ IF SUBST NE '' THEN REC<1,7> = SUBST<1,1>
+ CALL FTOBJREQ('g', REC, RSP, 0, MAT PARAMS, MAT CLIENV)
+ IF RSP<1,1,1> EQ 0 AND RSP<1,2> EQ 1 THEN
+  * MACRO RAN FROM CACHE - CHECK FOR ERRORS IN MACRO EXECUTION
+  CALL ATGUIERRORS(RSP, ERRORS)
+  RETURN
+ END 
+ * THERE IS AN ERROR IN THE MACRO COMMAND OR THE CACHE IS STALE.
+ * IN EITHER CASE, TRY RUNNING MACRO AGAIN, UPDATING THE CACHE.
+END
+*
+* UPDATE MACRO CACHE / RUN MACRO
+*
+IF MACRO<1,3> NE '' THEN
+ REC = GCMACRO : VM : '1' : VM : MACRO
+END ELSE
+ REC = GCMACRO : VM : '2' : VM : MACRO
+END
+IF SUBST NE '' THEN REC<1,7> = SUBST<1,1>
+CALL FTOBJREQ('g', REC, RSP, 0, MAT PARAMS, MAT CLIENV) ;* RUN & CACHE MACRO
+CALL ATGUIERRORS(RSP, ERRORS)
+RETURN
+*
+END

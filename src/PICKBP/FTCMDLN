@@ -1,0 +1,161 @@
+SUBROUTINE FTCMDLN(MAXITMS,CMDLINE,VERB,FILENAME,ITMLST,OPTIONS,STAT)
+**************************************************************************
+*Copyright (c) 2011-2012 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTCMDLN
+* AUTHOR: PJS
+* VERSION: 7.0.2
+* CREATED: 02/11/2011
+* UPDATED: 05/29/2012
+*
+* MAINTENANCE RECORD:
+*
+* 7.0.2
+*  PJS 05/29/2012
+*   Changed variable name LOWCASE to LC for jBase reserved word.
+*
+**************************************************************************
+**************************************************************************
+*
+* PARSE COMMAND LINE INTO VERB, FILE NAME, ITEM LIST & OPTIONS
+*
+* This routine may convert command line to upper-case for some
+* platforms which support simple verb/file case insensitivity.
+*
+**************************************************************************
+**************************************************************************
+*
+VERB = ''
+FILENAME = ''
+ITMLST = ''
+ITMCNT = 0
+OPTIONS = ''
+STAT = ''
+FVOP = 0
+LINE = CMDLINE
+*
+* GET THE VERB
+GOSUB 1000; IF TOKEN = '' THEN STAT = 'Command missing'; RETURN
+VERB = TOKEN
+*
+* GET THE FILE NAME
+GOSUB 1000; IF TOKEN = '' THEN STAT = 'File name missing'; RETURN
+FILENAME = TOKEN
+IF OCONV(FILENAME,'MCU') = 'DICT' THEN
+ GOSUB 1000; IF TOKEN = '' THEN STAT = 'File name missing'; RETURN
+ FILENAME = FILENAME:' ':TOKEN
+END
+*
+* CHECK FOR SIMPLE UPPER-CASE CONVERSION
+LC=0;*#DEFAULT#*
+*#MVBASE#*LC=1
+*#QM#*LC=1
+IF LC THEN
+ OPEN FILENAME TO FV THEN
+  FVOP = 1
+  LC = 0
+ END ELSE
+  * FAILED TO OPEN FILENAME AS ENTERED - TRY UPPER CASE FORM
+  OPEN OCONV(FILENAME,'MCU') TO FV THEN
+   * SUCCESS OPENING FILENAME CONVERTED TO UPPER CASE
+   VERB = OCONV(VERB,'MCU')
+   FILENAME = OCONV(FILENAME,'MCU')
+   FVOP = 1
+  END ELSE
+   LC = 0
+  END
+ END
+END
+IF LC THEN
+ * IF REST OF COMMAND LINE IS LOWER CASE, CONVERT TO UPPER CASE
+ IF LINE = OCONV(LINE,'MCL') AND INDEX(LINE,'"',1) = 0 AND INDEX(LINE,"'",1) = 0 THEN
+  LINE = OCONV(LINE,'MCU')
+ END
+END
+*
+* GET REMAINING TOKENS
+LOOP
+ GOSUB 1000
+UNTIL TOKEN = '' DO
+ ITMCNT = ITMCNT + 1
+ ITMLST<ITMCNT> = TOKEN
+REPEAT
+*
+* GRAB OPTIONS
+IF ITMCNT > 1 THEN
+ TOKEN = ITMLST<ITMCNT>
+ IF TOKEN[1,1] EQ '(' THEN
+  OPTIONS = OCONV(TOKEN[2,9999],'MCU')
+  ITMLST = DELETE(ITMLST,ITMCNT)
+  ITMCNT = ITMCNT - 1
+ END
+END
+*
+* EXPAND THE ITEM LIST FROM ACTIVE SELECT LIST, OR SELECT ALL ITEMS IN FILE
+IF MAXITMS <> 0 THEN
+ IF ITMCNT = 0 THEN
+  * GET ITEM LIST FROM ACTIVE SELECT LIST
+  DONE = 0
+  LOOP
+   READNEXT ID ELSE DONE = 1
+  UNTIL DONE DO
+   ITMCNT = ITMCNT + 1
+   IF ITMCNT > MAXITMS AND MAXITMS > 0 THEN
+*#QM#*    CLEARSELECT
+    STAT = 'Too many items'
+    RETURN
+   END
+   ITMLST<ITMCNT> = ID
+  REPEAT
+ END ELSE
+  IF ITMCNT = 1 AND ITMLST<1> = '*' THEN
+   * SELECT ITEMS FROM FILE
+   ITMLST = ''
+   ITMCNT = 0
+   IF FVOP = 0 THEN
+    OPEN FILENAME TO FV ELSE STAT = 'Bad file name'; RETURN
+    FVOP = 1
+   END
+   LV = 0
+   SELECT FV TO LV
+   DONE = 0
+   LOOP
+    READNEXT ID FROM LV ELSE DONE = 1
+   UNTIL DONE DO
+    ITMCNT = ITMCNT + 1
+    IF ITMCNT > MAXITMS AND MAXITMS > 0 THEN
+*#QM#*     CLEARSELECT LV
+     STAT = 'Too many items'
+     RETURN
+    END
+    ITMLST<ITMCNT> = ID
+   REPEAT
+  END
+ END
+END
+*
+RETURN
+*
+1000 * GET NEXT TOKEN FROM LINE
+*
+TOKEN = ''
+LOOP WHILE LINE[1,1] EQ ' ' DO LINE = LINE[2,9999] REPEAT
+IF LINE = '' THEN RETURN
+DELIM = LINE[1,1]
+IF DELIM EQ '"' OR DELIM EQ "'" THEN
+ LINE = LINE[2,9999]
+ TOKEN = FIELD(LINE,DELIM,1)
+END ELSE
+ TOKEN = FIELD(LINE,' ',1)
+END
+IF COL2() THEN LINE = LINE[COL2()+1,9999] ELSE LINE = ''
+RETURN
+*
+END

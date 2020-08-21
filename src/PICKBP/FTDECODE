@@ -1,0 +1,167 @@
+SUBROUTINE FTDECODE(REC, Xlate, BUFSZ)
+**************************************************************************
+*Copyright (c) 1998-2015 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTDECODE
+* AUTHOR: PJS
+* VERSION: 7.2.1
+* CREATED: 01/01/1998
+* UPDATED: 03/18/2015
+*
+* MAINTENANCE RECORD:
+*
+* 7.2.1
+*  PJS 03/18/2015
+*   Allow new values (4 to 7) for Xlate argument, indicating ECS support is
+*   enabled.
+*
+* 5.3.1
+*  PJS 06/12/2006
+*   Enable decoding tagged delimiter characters regardless of Xlate
+*   setting. The tag seqeuence is invalid in previous versions of
+*   this routine anyway, so always decoding this seqeuence causes
+*   no harm.
+*
+* 5.2.2
+*  PJS 01/11/2005
+*   Fixed bug in tagged delimiter decoding where current chunk of
+*   data ended with incomplete tagged sequence. Now sets MORE
+*   variable if partial tagged sequence found.
+*
+* 5.2.1
+*  PJS 01/06/2005
+*   Added support for tagged system delimiters (Xlate=2 or 3), which are
+*   useful when passing DBCS characters to Windows apps.
+*
+* 4.0.2
+*  PJS 09/29/2004
+*   Changed max string length from 9999999 to 999999999
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM PRINTABLE TO BINARY DECODER
+*
+**************************************************************************
+**************************************************************************
+*
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252), CR TO CHAR(13), LF TO CHAR(10)
+*
+Out=''
+IF Xlate=1 OR Xlate=3 OR Xlate=5 OR Xlate=7 THEN XCR=AM; XLF='' ELSE XCR=CR; XLF=LF
+*
+NX=LEN(REC)
+FOR NI=1 TO NX STEP BUFSZ
+ INBUF=REC[NI,BUFSZ]
+ *HANDLE CR/LF IN TIGHT LOOP, SINCE THIS SEQUENCE IS MOST COMMON...
+ LOOP I=INDEX(INBUF,'^M^J',1) WHILE I DO INBUF=INBUF[1,I-1]:XCR:XLF:INBUF[I+4,999999999] REPEAT
+ *HANDLE TAGGED SYSTEM DELIMITERS NEXT
+ IF INDEX(INBUF,'^<',1) > 0 THEN
+  IF INDEX(INBUF,'^^<',1) = 0 THEN
+   LOOP I=INDEX(INBUF,'^<AM>',1) WHILE I DO INBUF=INBUF[1,I-1]:AM:INBUF[I+5,999999999] REPEAT
+   LOOP I=INDEX(INBUF,'^<VM>',1) WHILE I DO INBUF=INBUF[1,I-1]:VM:INBUF[I+5,999999999] REPEAT
+   LOOP I=INDEX(INBUF,'^<SM>',1) WHILE I DO INBUF=INBUF[1,I-1]:SVM:INBUF[I+5,999999999] REPEAT
+  END
+ END
+ OUTBUF=''
+ LOOP
+  I=INDEX(INBUF,'^',1)
+  J=INDEX(INBUF,'\',1)
+ WHILE I+J DO
+  IF J>0 AND (I=0 OR I>J) THEN I=J
+  J=I
+  OUTBUF=OUTBUF:INBUF[1,I-1]
+  C=INBUF[I,1]
+  MORE=0
+  O.CHAR=''
+  BEGIN CASE
+   CASE C='^'
+    I=I+1
+    C=INBUF[I,1]
+    IF C='' THEN MORE=1 ELSE
+     K=SEQ(C)
+     BEGIN CASE
+      CASE K=60
+       * DECODE TAGGED DELIMITERS
+       C=INBUF[I,4]
+       IF LEN(C) < 4 THEN
+        MORE = 1 ;* INCOMPLETE TAG SEQUENCE
+       END ELSE
+        BEGIN CASE
+         CASE C='<AM>'
+          O.CHAR=AM
+         CASE C='<VM>'
+          O.CHAR=VM
+         CASE C='<SM>'
+          O.CHAR=SVM
+        END CASE
+        I=I+3
+       END
+      CASE K=63
+       O.CHAR=CHAR(127)
+      CASE K=77 OR K=109
+       O.CHAR=XCR
+      CASE K=74 OR K=106
+       O.CHAR=XLF
+      CASE K=94
+       O.CHAR='^'
+      CASE 1
+       IF K>95 THEN O.CHAR=CHAR(K-96) ELSE O.CHAR=CHAR(K-64)
+     END CASE
+    END
+   CASE C='\'
+    I=I+1
+    C=INBUF[I,1]
+    IF C='' THEN MORE=1 ELSE
+     K=SEQ(C)
+     BEGIN CASE
+      CASE K=94
+       I=I+1
+       C=INBUF[I,1]
+       IF C='' THEN MORE=1 ELSE
+        K=SEQ(C)
+        BEGIN CASE
+         CASE K=60
+          O.CHAR=CHAR(220)
+         CASE K=62
+          O.CHAR=CHAR(222)
+         CASE K=63
+          O.CHAR=CHAR(255)
+         CASE 1
+          O.CHAR=CHAR(REM(K,32)+128)
+        END CASE
+       END
+      CASE K=92
+       O.CHAR='\'
+      CASE 1
+       IF K<128 THEN O.CHAR=CHAR(K+128) ELSE O.CHAR=C
+     END CASE
+    END
+   CASE 1
+    O.CHAR=C
+  END CASE
+  IF MORE THEN
+   NI=NI-(LEN(INBUF)-J+1)
+   INBUF=''
+  END ELSE
+   OUTBUF=OUTBUF:O.CHAR
+   INBUF=INBUF[I+1,999999999]
+  END
+ REPEAT
+ Out=Out:OUTBUF:INBUF
+NEXT NI
+*
+REC=Out
+RETURN
+END

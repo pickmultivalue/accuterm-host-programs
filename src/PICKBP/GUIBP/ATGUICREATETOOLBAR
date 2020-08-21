@@ -1,0 +1,114 @@
+SUBROUTINE ATGUICREATETOOLBAR(APPID, FORMID, CTLID, POSITION, STYLE, ITEMS, ERRORS, STATE)
+**************************************************************************
+*Copyright (c) 1999-2006 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUICREATETOOLBAR
+* AUTHOR: PJS
+* VERSION: 7.0.1
+* CREATED: 11/01/1999
+* UPDATED: 01/12/2011
+*
+* MAINTENANCE RECORD:
+*
+* 7.0.1
+*  PJS 01/12/2011
+*   Updated style range check to allow styles from 0 to 3 allowing
+*   for new icon+caption toolbar styles.
+*
+* 5.3.1
+*  PJS 06/12/2006
+*   Updated to use new version of FTOBJREQ, which requires that
+*   the PARAMS and CLIENV arrays be completely initialized.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI MANAGER - CREATE TOOLBAR
+*
+* CALL THIS SUBROUTINE TO CREATE A TOOLBAR.
+*
+* INPUT:
+*  APPID      application identifier
+*  FORMID     form identifier
+*  CTLID      toolbar identifier (unique within scope of form)
+*  POSITION   0 = floating, 1 = top, 2 = bottom, 3 = left, 4 = right
+*  STYLE      0 = small icons, 1 = large icons, 2 = small icon with caption
+*               3 = large icon with caption
+*  ITEMS      toolbar items separated by VM; items may be pre-defined
+*               icon numbers, or bitmap file names for custom buttons
+*
+* OUTPUT:
+*  ERRORS     ERRORS<1> is non-zero if errors have occurred
+*
+* OTHER:
+*  STATE      internal use only - do not modify
+*
+**************************************************************************
+*
+$INCLUDE ATGUIEQUATES
+EQU THISPGM TO 'ATGUICREATETOOLBAR'
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30), CLIENV(10)
+ERRORS = GRSUCCESS
+FOR I = 1 TO 30
+ PARAMS(I) = STATE<20,I>
+NEXT I
+FOR I = 1 TO 10
+ CLIENV(I) = STATE<20+I>
+NEXT I
+IF NOT(STATE<1>) THEN
+ CALL ATGUIERROR(3, THISPGM, '', 0, GRFATAL, '', ERRORS)
+ RETURN
+END
+*
+* VALIDATE PARAMETERS
+*
+IF APPID EQ '' OR FORMID EQ '' OR CTLID EQ '' THEN
+ CALL ATGUIERROR(2, THISPGM, FORMID, '', GRNOID, '', ERRORS)
+ RETURN
+END
+IF POSITION < 0 OR POSITION > 4 THEN
+ CALL ATGUIERROR(2, THISPGM, CTLID, 'POSITION', GRINVARG, '', ERRORS)
+ RETURN
+END
+IF STYLE < 0 OR STYLE > 3 THEN
+ CALL ATGUIERROR(2, THISPGM, CTLID, 'STYLE', GRINVARG, '', ERRORS)
+ RETURN
+END
+ID = APPID : '*' : FORMID : '*' : CTLID
+REC = GCCREATE : VM : ID : VM : '' : VM : GXTOOLBAR : VM : 0 : VM : 0 : VM : 0 : VM : 0 : VM : GECLICK
+IF POSITION NE 1 THEN
+ REC = REC : AM : GCSETPROP : VM : VM : GPALIGN : VM :VM : VM : POSITION
+END
+IF STYLE > 0 THEN
+ REC = REC : AM : GCSETPROP : VM : VM : GPSTYLE : VM :VM : VM : STYLE
+END
+IF ITEMS NE '' THEN
+ REC = REC : AM : GCSETPROP : VM : VM : GPITEMS : VM : VM : VM : ITEMS
+END
+*
+* CHECK IF RECORDING MACRO
+*
+IF STATE<2> THEN
+ STATE = STATE : AM : REC ;* APPEND TO MACRO
+ RETURN
+END
+*
+* SEND COMMAND TO SERVER
+*
+CALL FTOBJREQ('g', REC, RSP, 0, MAT PARAMS, MAT CLIENV)
+CALL ATGUIERRORS(RSP, ERRORS)
+RETURN
+*
+END

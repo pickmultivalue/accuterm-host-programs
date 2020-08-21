@@ -1,0 +1,165 @@
+SUBROUTINE FTENCODE(REC, Xlate, BUFSZ, MCPFLG)
+**************************************************************************
+*Copyright (c) 1998-2015 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: FTENCODE
+* AUTHOR: PJS
+* VERSION: 7.2.1
+* CREATED: 01/01/1998
+* UPDATED: 02/12/2015
+*
+* MAINTENANCE RECORD:
+*
+* 7.2.2
+*  PJS 03/18/2015
+*   Allow new values (4 to 7) for Xlate argument, indicating ECS support is
+*   enabled, blocking encoding of characters above 127.
+*
+* 7.1.1
+*  PJS 03/17/2012
+*   Added ECS support for QM UTF-8 encoding.
+*
+* 5.2.3
+*  PJS 01/13/2005
+*   Fixed character-at-a-time encoding (was not converting
+*   VM & SVM properly).
+*
+* 5.2.2
+*  PJS 01/11/2005
+*   Fixed typo in variable name (XVSM should be XSVM).
+*
+* 5.2.1
+*  PJS 01/06/2005
+*   Added support for tagged system delimiters (Xlate=2 or 3), which are
+*   useful when passing DBCS characters to Windows apps.
+*
+* 4.0.2
+*  PJS 09/29/2004
+*   Changed max string length from 9999999 to 999999999
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM BINARY TO PRINTABLE ENCODER
+*
+**************************************************************************
+**************************************************************************
+*
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252), CR TO CHAR(13), LF TO CHAR(10)
+*
+ECSFLG=(Xlate>=4);*#DEFAULT#*
+*#QM_ECS#*ECSFLG=SYSTEM(1044)
+*
+Out=''
+*
+BEGIN CASE
+ CASE Xlate=1 OR Xlate=5
+  XAM='^M^J' ;* AM -> CR/LF
+  XVM='\}'    ;* VM -> CHAR(253)
+  XSVM='\|'   ;* SVM -> CHAR(252)
+ CASE Xlate=2 OR Xlate=6
+  XAM='^<AM>' ;* TAGGED <AM>
+  XVM='^<VM>' ;* TAGGED <VM>
+  XSVM='^<SM>';* TAGGED <SVM>
+ CASE Xlate=3 OR Xlate=7
+  XAM='^M^J'  ;* AM -> CR/LF
+  XVM='^<VM>' ;* TAGGED <VM>
+  XSVM='^<SM>';* TAGGED <SVM>
+ CASE 1
+  XAM='\~'    ;* AM -> CHAR(254)
+  XVM='\}'    ;* VM -> CHAR(253)
+  XSVM='\|'   ;* SVM -> CHAR(252)
+END CASE
+*
+NI=LEN(REC)
+FOR NX=1 TO NI STEP BUFSZ
+ INBUF=REC[NX,BUFSZ]
+ OUTBUF=''
+ IF MCPFLG OR ECSFLG THEN
+  J=1;LOOP K=INDEX(INBUF,'\',J) WHILE K DO INBUF=INBUF[1,K]:INBUF[K,999999999]; J=J+2 REPEAT
+  J=1;LOOP K=INDEX(INBUF,'^',J) WHILE K DO INBUF=INBUF[1,K]:INBUF[K,999999999]; J=J+2 REPEAT
+  LOOP K=INDEX(INBUF,AM,1) WHILE K DO INBUF=INBUF[1,K-1]:XAM:INBUF[K+1,999999999] REPEAT
+  LOOP K=INDEX(INBUF,VM,1) WHILE K DO INBUF=INBUF[1,K-1]:XVM:INBUF[K+1,999999999] REPEAT
+  LOOP K=INDEX(INBUF,SVM,1) WHILE K DO INBUF=INBUF[1,K-1]:XSVM:INBUF[K+1,999999999] REPEAT
+  CHECK.PREFIX=0
+  IF MCPFLG THEN GOSUB 1000 ELSE GOSUB 2000
+ END ELSE
+  CHECK.PREFIX=1
+  GOSUB 2000
+ END
+ Out=Out:OUTBUF
+NEXT NX
+*
+REC=Out
+RETURN
+*
+1000 * TRANSLATE VALUE & APPEND TO OUTBUF
+*
+IF OCONV(INBUF,'MCP')<>INBUF THEN
+ GOTO 2000
+END ELSE
+ OUTBUF=OUTBUF:INBUF
+END
+RETURN
+*
+2000 * TRANSLATE VALUE ONE CHARACTER AT A TIME
+*
+* INPUT VALUE: INBUF
+* OUTPUT VALUE: CONCATENATE TO OUTBUF
+*
+I=0
+LOOP
+ I=I+1
+ C=INBUF[I,1]
+UNTIL C='' DO
+ K=SEQ(C) ;* Note: U2 uses UNISEQ instead of SEQ in NLS mode
+ BEGIN CASE
+  CASE (K = 92 OR K = 94) AND CHECK.PREFIX
+   C=C:C
+  CASE K >= 32 AND K <= 126
+   NULL
+  CASE K = 30
+   C="^~"
+  CASE K < 32
+   C="^":CHAR(K+64)
+  CASE K = 127
+   C="^?"
+  CASE 1
+   * In ECS mode, do not encode any characters above 127
+   IF NOT(ECSFLG) THEN
+    BEGIN CASE
+     CASE K = 156 OR K = 158
+      C="\^":CHAR(K-32)
+     CASE K = 220 OR K = 222
+      C="\^":CHAR(K-160)
+     CASE K = 255
+      C="\^?"
+     CASE K >= 128 AND K <= 159
+      C="\^":CHAR(K-64)
+     CASE K=254
+      C=XAM
+     CASE K=253
+      C=XVM
+     CASE K=252
+      C=XSVM
+     CASE 1
+      C="\":CHAR(K-128)
+    END CASE
+   END
+ END CASE
+ OUTBUF=OUTBUF:C
+REPEAT
+*
+RETURN
+END
