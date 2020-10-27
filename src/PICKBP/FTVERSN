@@ -13,7 +13,7 @@ SUBROUTINE FTVERSN(VERSN)
 * AUTHOR: PJS
 * VERSION: 8.0.11
 * CREATED: 02/17/2002
-* UPDATED: 08/14/2020
+* UPDATED: 10/27/2020
 *
 **************************************************************************
 **************************************************************************
@@ -428,8 +428,11 @@ RETURN
 * 05/30/2020 - 8.0.10
 *  Updated FTSVRSUB to initialize ERRCD & ERMSG before RCS hook calls.
 *
-* 08/14/2020 - 8.0.11
-*  Updated FTCLISVR to fix endless loop bug for clients not using packet protocol.
+* 10/27/2020 - 8.0.11
+*  Updated FTCLISVR to fix endless loop bug for clients not using packet
+*  protocol. Fixed bug returning ERRCD for protocol errors.
+*  Updated FTFSI to use an "include files" list from line 3 of
+*  MVCONNECTION.OPTIONS.
 *
 **************************************************************************
 *

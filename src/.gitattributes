@@ -1,0 +1,3 @@
+# PICKBP source encoding is ANSI (cp1252)
+# (some programs have embedded VM in strings)
+* working-tree-encoding=cp1252
