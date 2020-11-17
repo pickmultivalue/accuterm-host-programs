@@ -14,6 +14,7 @@
       "**/node_modules": true,
       "**/pom.xml": true},
     "files.eol":"\n",
+    "editor.wordSeparators":"`~!#%^&*()-=+[{]}\\|;:'\",<>/?",
     "MVBasic.ServerName":"<SESSIONID>",
     "MVBasic.Account":"<ACCOUNT>",
     "MVBasic.RestPath":"http://localhost:3181/mvsvr/restfs",
