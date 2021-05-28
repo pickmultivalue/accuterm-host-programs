@@ -1,6 +1,6 @@
 SUBROUTINE FTVERSN(VERSN)
 **************************************************************************
-*Copyright (c) 2005-2020 Zumasys,Inc. as an unpublished work. All rights *
+*Copyright (c) 2005-2021 Zumasys,Inc. as an unpublished work. All rights *
 *reserved. This work is the property of and embodies trade secrets and   *
 *confidential information proprietary to Zumasys, Inc.  It may not be    *
 *reproduced, copied, used, disclosed, transferred, adapted or modified   *
@@ -11,9 +11,9 @@ SUBROUTINE FTVERSN(VERSN)
 *
 * MODULE: FTVERSN
 * AUTHOR: PJS
-* VERSION: 8.0.11
+* VERSION: 8.0.12
 * CREATED: 02/17/2002
-* UPDATED: 10/27/2020
+* UPDATED: 05/18/2021
 *
 **************************************************************************
 **************************************************************************
@@ -42,7 +42,7 @@ SUBROUTINE FTVERSN(VERSN)
 * NOTE THE ZEROS - THIS IS SO THAT VERSION 5.009 IS LOWER THAN 5.010
 * WHEN USING NUMERIC COMPARISONS...
 *
-VERSN = '8.000.011'
+VERSN = '8.000.012'
 RETURN
 *
 **************************************************************************
@@ -433,6 +433,10 @@ RETURN
 *  protocol. Fixed bug returning ERRCD for protocol errors.
 *  Updated FTFSI to use an "include files" list from line 3 of
 *  MVCONNECTION.OPTIONS.
+*
+* 05/18/2021 - 8.0.12
+*  Updated ATGUIEQUATES & ATGUIERRMSG to include new message codes
+*  which ATWebGUI might return.
 *
 **************************************************************************
 *

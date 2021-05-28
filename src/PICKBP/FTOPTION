@@ -1,6 +1,6 @@
 SUBROUTINE FTOPTION(OPTS,CNF,MAT PARAMS,FV)
 **************************************************************************
-*Copyright (c) 1993-2020 Zumasys,Inc. as an unpublished work. All rights *
+*Copyright (c) 1993-2021 Zumasys,Inc. as an unpublished work. All rights *
 *reserved. This work is the property of and embodies trade secrets and   *
 *confidential information proprietary to Zumasys, Inc.  It may not be    *
 *reproduced, copied, used, disclosed, transferred, adapted or modified   *
@@ -11,11 +11,15 @@ SUBROUTINE FTOPTION(OPTS,CNF,MAT PARAMS,FV)
 *
 * MODULE: FTOPTION
 * AUTHOR: PJS
-* VERSION: 8.0.1
+* VERSION: 8.0.2
 * CREATED: 01/01/1993
-* UPDATED: 02/11/2020
+* UPDATED: 02/16/2021
 *
 * MAINTENANCE RECORD:
+*
+* 8.0.2
+*  PJS 02/16/2021
+*   Fixed case-sensitive comparison matching option with choice.
 *
 * 8.0.1
 *  PJS 02/11/2020
@@ -190,7 +194,7 @@ UNTIL OPT EQ '' DO
     OK=0
     K=LEN(VAL); IF K > 2 THEN K=2
     FOR I=0 TO FIELD(DEFAULTS<J>,',',4)
-     IF OCONV(VAL[1,K],'MCU')=FIELD(CHOICES,';',I+1)[1,K] THEN Z=I; I=99; OK=1
+     IF OCONV(VAL[1,K],'MCU')=OCONV(FIELD(CHOICES,';',I+1)[1,K],'MCU') THEN Z=I; I=99; OK=1
     NEXT I
     IF OK=0 AND CD EQ 'X' THEN
      * VALIDATE HEX STRING

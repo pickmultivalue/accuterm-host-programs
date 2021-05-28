@@ -13,14 +13,15 @@ SUBROUTINE FTCLISVR(SVC, MODE, MSGOUT, MSGIN, Xlate, ERRCD, ERRMSG, MAT PARAMS, 
 * AUTHOR: PJS
 * VERSION: 8.0.2
 * CREATED: 06/12/2006
-* UPDATED: 08/14/2020
+* UPDATED: 09/17/2020
 *
 * MAINTENANCE RECORD:
 *
 * 8.0.2
-*  PJS 08/14/2020
+*  PJS 09/17/2020
 *   Fixed bug causing endless loop when client does not support packetized
-*   messages or streaming messages.
+*   messages or streaming messages. Fixed bug returning ERRCD for protocol
+*   errors.
 *
 * 8.0.1
 *  PJS 02/11/2020
@@ -410,6 +411,7 @@ LOOP
     * protocol error from last SEND.MESSAGE
     PKT.ERR = FIELD(LINE,' ',2)
     IF NOT(PKT.ERR MATCHES '1N0N' OR PKT.ERR MATCHES '-1N0N') THEN PKT.ERR = -109
+    ERRCD = PKT.ERR
     ERRMSG = LINE[INDEX(LINE,' ',2)+1,999]
     IF ERRMSG = '' THEN ERRMSG = 'Client/server protocol error!'
     ERRCNT = 1

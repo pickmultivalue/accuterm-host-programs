@@ -1,6 +1,6 @@
 SUBROUTINE ATGUIERRMSG(MSGTYP, MSGNUM, MSGTXT)
 **************************************************************************
-*Copyright (c) 2010 Zumasys,Inc. as an unpublished work. All rights      *
+*Copyright (c) 2020 Zumasys,Inc. as an unpublished work. All rights      *
 *reserved. This work is the property of and embodies trade secrets and   *
 *confidential information proprietary to Zumasys, Inc.  It may not be    *
 *reproduced, copied, used, disclosed, transferred, adapted or modified   *
@@ -11,11 +11,15 @@ SUBROUTINE ATGUIERRMSG(MSGTYP, MSGNUM, MSGTXT)
 *
 * MODULE: ATGUIERRMSG
 * AUTHOR: PJS
-* VERSION: 7.0.2
+* VERSION: 8.0.1
 * CREATED: 11/15/2009
-* UPDATED: 03/25/2010
+* UPDATED: 12/18/2020
 *
 * MAINTENANCE RECORD:
+*
+* 8.0.1
+*  PJS 12/18/2020
+*   Added messages for new error codes for AccuTermIO-GUI.
 *
 * 7.0.2
 *  PJS 03/25/2010
@@ -38,7 +42,7 @@ BEGIN CASE
  CASE MSGTYP = 'ERROR'
   * ERROR MESSAGE
   IF MSGNUM >= GRFATAL AND MSGNUM <= GRLAST THEN
-   ON MSGNUM - GRFATAL + 1 GOSUB 5001,5002,5003,5004,5005,5006,5007,5008,5009,5010,5011,5012,5013,5014,5015,5016,5017,5018,5019,5020,5021,5022,5023,5024,5025,5026,5027,5028,5029
+   ON MSGNUM - GRFATAL + 1 GOSUB 5001,5002,5003,5004,5005,5006,5007,5008,5009,5010,5011,5012,5013,5014,5015,5016,5017,5018,5019,5020,5021,5022,5023,5024,5025,5026,5027,5028,5029,5030,5031,5032
   END
  CASE MSGTYP = 'PROPERTY'
   * PROPERTY DESCRIPTION
@@ -70,7 +74,7 @@ RETURN
 *
 *ERROR MESSAGE TABLE
 5001 MSGTXT='GUI environment not initialized'; RETURN
-5002 MSGTXT='Invalid property value'; RETURN
+5002 MSGTXT='Invalid property code'; RETURN
 5003 MSGTXT='Invalid argument value'; RETURN
 5004 MSGTXT='Object ID is missing or invalid'; RETURN
 5005 MSGTXT='Project or macro specifies an invalid version or is corrupt or invalid'; RETURN
@@ -98,6 +102,9 @@ RETURN
 5027 MSGTXT='Unable to show a disabled dialog form'; RETURN
 5028 MSGTXT='Unable to show dialog form when containing app is hidden'; RETURN
 5029 MSGTXT='Property or function does not support optional Item ID'; RETURN
+5030 MSGTXT='Object, property, method or function is not implemented'; RETURN
+5031 MSGTXT='Invalid method code'; RETURN
+5032 MSGTXT='File not found'; RETURN
 *
 *PROPERTY DESCRIPTION TABLE
 10000 MSGTXT='DefVal'; RETURN
