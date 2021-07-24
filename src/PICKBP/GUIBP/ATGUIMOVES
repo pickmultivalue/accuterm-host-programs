@@ -1,0 +1,116 @@
+SUBROUTINE ATGUIMOVES(APPID, FORMID, CTLIDS, LeftS, TOPS, WIDTHS, HEIGHTS, ERRORS, STATE)
+**************************************************************************
+*Copyright (c) 1999-2006 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUIMOVES
+* AUTHOR: PJS
+* VERSION: 7.3A
+* CREATED: 11/01/1999
+* UPDATED: 07/02/2021
+*
+* MAINTENANCE RECORD:
+*
+* 7.3A
+*  Sean Clark 07/02/2021
+*   Based on ATGUIMOVE and modified to allow multiple Control IDs
+*   to be moved in one call in the style of ATGUISETPROPS
+***********multi-control version, below updates for ATGUIMOVE*************
+* 5.3.1
+*  PJS 06/12/2006
+*   Updated to use new version of FTOBJREQ, which requires that
+*   the PARAMS and CLIENV arrays be completely initialized.
+*
+* 4.0.1
+*  PJS 09/25/2000
+*   CLEANUP FOR ACCUTERM 2000 RELEASE
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI MANAGER - MOVE/RESIZE FORM OR CONTROL
+*
+* CALL THIS SUBROUTINE TO MOVE/RESIZE SEVERAL FORMS OR CONTROLS
+*
+* INPUT:
+*  APPID      application identifier (use same ID when deleting app)
+*  FORMID     form identifier of form being created
+*  CTLIDS     control identifiers (unique within scope of form)
+*  LeftS      new left coordinates
+*  TOPS       new top coordinates
+*  WIDTHS     new widths (use zero to keep original size)
+*  HEIGHTS    new heights (use zero to keep original size)
+*
+* OUTPUT:
+*  ERRORS     ERRORS<1> is non-zero if errors have occurred
+*
+* OTHER:
+*  STATE      internal use only - do not modify
+*
+$INCLUDE GUIBP ATGUIEQUATES
+EQU THISPGM TO 'ATGUIMOVES'
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30), CLIENV(10)
+ERRORS = GRSUCCESS
+FOR I = 1 TO 30
+ PARAMS(I) = STATE<20,I>
+NEXT I
+FOR I = 1 TO 10
+ CLIENV(I) = STATE<20+I>
+NEXT I
+IF NOT(STATE<1>) THEN
+ CALL ATGUIERROR(3, THISPGM, '', 0, GRFATAL, '', ERRORS)
+ RETURN
+END
+IF FORMID NE '' THEN
+ ID = APPID : '*' : FORMID
+END ELSE
+ ID = APPID
+END
+*IF CTLIDS = '' THEN
+ ** We must be moving forms - is this function from props appropriate for moves?
+ ** I don't think this is needed, so this commented code should be removed.
+ ** Ref 6/4/2014 change in ATGUISETPROPS
+ *N.LEFT   = DCOUNT(LeftS,AM)
+ *N.TOP    = DCOUNT(TOPS,AM)
+ *N.WIDTH  = DCOUNT(WIDTHS,AM)
+ *N.HEIGHT = DCOUNT(HEIGHTS,AM)
+ *N = N.LEFT
+ *IF N.TOP    > N THEN N = N.TOP
+ *IF N.WIDTH  > N THEN N = N.WIDTH
+ *IF N.HEIGHT > N THEN N = N.HEIGHT
+*END ELSE
+ * We can do 1 form (single null control ID), and multiple controls
+ * so we only need to DCOUNT the control IDs right?
+ N = DCOUNT(CTLIDS,AM)
+*END
+REC = ''
+FOR I = 1 TO N
+ IF I > 1 THEN REC = REC : AM
+ IF CTLIDS<I> EQ '' THEN
+  REC = REC : GCMETHOD : VM : ID : VM : GMMOVE : VM : LeftS<I> : VM : TOPS<I> : VM : WIDTHS<I> : VM : HEIGHTS<I>
+ END ELSE
+  REC = REC : GCMETHOD : VM : ID : '*' : CTLIDS<I> : VM : GMMOVE : VM : LeftS<I> : VM : TOPS<I> : VM : WIDTHS<I> : VM : HEIGHTS<I>
+ END
+NEXT I
+*
+* CHECK IF RECORDING MACRO
+*
+IF STATE<2> THEN
+ STATE = STATE : AM : REC ;* APPEND TO MACRO
+ RETURN
+END
+*
+* SEND COMMAND TO SERVER
+*
+CALL FTOBJREQ('g', REC, RSP, 0, MAT PARAMS, MAT CLIENV)
+CALL ATGUIERRORS(RSP, ERRORS)
+RETURN
+*
+END
