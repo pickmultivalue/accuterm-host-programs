@@ -1,0 +1,134 @@
+SUBROUTINE ATGUISETGRIDPROPS(APPID, FORMID, CTLIDS, PROPS, COL, ROW, VALUES, ERRORS, STATE)
+**************************************************************************
+*Copyright (c) 2004-2014 Zumasys,Inc. as an unpublished work. All rights *
+*reserved. This work is the property of and embodies trade secrets and   *
+*confidential information proprietary to Zumasys, Inc.  It may not be    *
+*reproduced, copied, used, disclosed, transferred, adapted or modified   *
+*without the express written approval of Zumasys, Inc., except as        *
+*provided for in the accompanying warranty notice and licensing          *
+*agreement.                                                              *
+**************************************************************************
+*
+* MODULE: ATGUISETGRIDPROPS
+* AUTHOR: PJS
+* VERSION: 7.1.2
+* CREATED: 11/11/2004
+* UPDATED: 06/04/2014
+*
+* MAINTENANCE RECORD:
+*
+* 7.3A
+*  Sean Clark 08/05/2021
+*   Modify ATGUISETPROPS to allow for COL and ROW property setting so
+*   that grid settings like color can be set in the same multi-property
+*   command that populates the grid. Operates identically to ATGUISETPROPS
+*   for attributes where COL and ROW are null.
+*
+*   Only one row/col propery can be set per attribute as FTOBJREQ doesn't
+*   allow for a SVM list. Grid data must be populated in an earlier
+*   attributes than property setting for those row as no attempt at
+*   re-ordering is made.
+**************************************************************************
+* 7.1.2
+*  PJS 06/04/2014
+*   Another change to DCOUNT(). Discovered a case where user was passing
+*   CTLIDS but null for PROPS. Since GPVALUE = 0, null PROPS set the
+*   Value property. The 7.1.1 change broke that (undocumented) behavior.
+*   New fix is to check CTLIDS for null and DCOUNT(PROPS...) in that case,
+*   otherwise DCOUNT(CTLIDS...).
+*
+* 7.1.1
+*  PJS 08/22/2012
+*   Changed CTLIDS to PROPS in DCOUNT() to allow passing null
+*   NULL for CTLIDS when setting multiple properties on a
+*   form or app.
+*
+* 5.3.1
+*  PJS 06/12/2006
+*   Updated to use new version of FTOBJREQ, which requires that
+*   the PARAMS and CLIENV arrays be completely initialized.
+*
+* 5.1.3
+*  PJS 07/07/2005
+*   Fixed problem using this routine to set form properties. For form
+*   properties, do not include separator (*) before missing (null)
+*   control ID.
+*
+* 5.1.2
+*  PJS 11/10/2004
+*   New subroutine introduced with GUI version 1.2 allows multiple
+*   properties of multiple controls to be set in one call.
+*
+**************************************************************************
+**************************************************************************
+*
+* ACCUTERM GUI MANAGER - SET PROPERTIES FOR CONTROLS AND/OR GRIDS
+*
+* CALL THIS SUBROUTINE TO SET PROPERTIES OF SEVERAL CONTROLS/GRIDS.
+*
+* INPUT:
+*  APPID      application identifier
+*  FORMID     form identifier
+*  CTLIDS     control identifiers whose properties are to be set separated by AM
+*             Pass null to set Form or App properties.
+*  PROPS      property identifiers corresponding to CTLIDS, separated by AM
+*  COL        grid column property (can be null)
+*  ROW        grid row property (can be null)
+*  VALUES     property values corresponding to CTLIDS, separated by AM
+*
+* OUTPUT:
+*  ERRORS     ERRORS<1> is non-zero if errors have occurred
+*
+* OTHER:
+*  STATE      internal use only - do not modify
+*
+**************************************************************************
+*
+$INCLUDE GUIBP ATGUIEQUATES
+EQU THISPGM TO 'ATGUISETPROPS'
+EQU AM TO CHAR(254), VM TO CHAR(253), SVM TO CHAR(252)
+DIM PARAMS(30), CLIENV(10)
+ERRORS = GRSUCCESS
+FOR I = 1 TO 30
+ PARAMS(I) = STATE<20,I>
+NEXT I
+FOR I = 1 TO 10
+ CLIENV(I) = STATE<20+I>
+NEXT I
+IF NOT(STATE<1>) THEN
+ CALL ATGUIERROR(3, THISPGM, '', 0, GRFATAL, '', ERRORS)
+ RETURN
+END
+ID = APPID
+IF FORMID NE '' THEN
+ ID = ID : '*' : FORMID
+END
+REC = ''
+IF CTLIDS = '' THEN
+ N = DCOUNT(PROPS, AM)
+END ELSE
+ N = DCOUNT(CTLIDS, AM)
+END
+FOR I = 1 TO N
+ IF I > 1 THEN REC = REC : AM
+ IF CTLIDS<I> EQ '' THEN
+  REC = REC : GCSETPROP : VM : ID : VM : PROPS<I> : VM : VM : VM : VALUES<I>
+ END ELSE
+  REC = REC : GCSETPROP : VM : ID : '*' : CTLIDS<I> : VM : PROPS<I> : VM : COL<I>: VM : ROW<I> : VM : VALUES<I>
+ END
+NEXT I
+*
+* CHECK IF RECORDING MACRO
+*
+IF STATE<2> THEN
+ STATE = STATE : AM : REC ;* APPEND TO MACRO
+ RETURN
+END
+*
+* SEND COMMAND TO SERVER
+*
+CALL FTOBJREQ('g', REC, RSP, 0, MAT PARAMS, MAT CLIENV)
+CALL ATGUIERRORS(RSP, ERRORS)
+RETURN
+*
+END
